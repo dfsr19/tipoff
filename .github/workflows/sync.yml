@@ -1,0 +1,29 @@
+name: Quoten aktualisieren
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Daten abrufen
+        env:
+          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+        run: node sync.js
+      - name: Änderungen speichern
+        run: |
+          git config user.name "tipoff-bot"
+          git config user.email "actions@github.com"
+          git add data.json
+          git diff --staged --quiet || git commit -m "Quoten aktualisiert"
+          git push

@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>TIPOFF</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --night:#0A0F12; --stand:#131A1F; --raise:#1A242B; --line:#233039;
+  --chalk:#E8EDEE; --muted:#7C8E97; --flood:#FFC53D; --pitch:#3FBF7F; --corner:#E24B3F;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  background:var(--night);color:var(--chalk);
+  font-family:'Archivo',system-ui,sans-serif;font-variation-settings:'wdth' 100;
+  -webkit-font-smoothing:antialiased;display:flex;justify-content:center;min-height:100vh;
+}
+.app{width:100%;max-width:460px;min-height:100vh;
+  background:radial-gradient(120% 55% at 50% -8%,rgba(255,197,61,.10),transparent 60%),var(--night);
+  border-inline:1px solid var(--line);display:flex;flex-direction:column;position:relative}
+button{font:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--flood);outline-offset:2px}
+
+/* ══ Kopf ══ */
+header{padding:20px 18px 14px;border-bottom:1px solid var(--line);display:flex;align-items:flex-start;gap:12px}
+.back{background:none;border:1px solid var(--line);border-radius:7px;color:var(--chalk);
+  width:34px;height:34px;font-size:17px;line-height:1;flex-shrink:0}
+.hd{flex:1;min-width:0}
+.eyebrow{font:500 10px/1 'DM Mono',monospace;letter-spacing:.2em;text-transform:uppercase;color:var(--muted)}
+.wordmark{font-variation-settings:'wdth' 68,'wght' 900;font-size:33px;line-height:.92;
+  text-transform:uppercase;margin:7px 0 0}
+.wordmark span{color:var(--flood)}
+.title{font-variation-settings:'wdth' 76,'wght' 800;font-size:21px;text-transform:uppercase;
+  letter-spacing:.02em;margin-top:5px;line-height:1.1}
+
+/* ══ Startmenü ══ */
+.home{padding:18px 14px 40px}
+.sec{font:500 10px/1 'DM Mono',monospace;letter-spacing:.2em;text-transform:uppercase;
+  color:var(--muted);margin:24px 4px 10px}
+.sec:first-child{margin-top:4px}
+.round{width:100%;text-align:left;background:var(--stand);border:1px solid var(--line);
+  border-radius:12px;padding:15px;margin-bottom:10px;color:var(--chalk);display:block;
+  transition:border-color .15s}
+.round:hover{border-color:#3A5261}
+.round .top{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.round .nm{font-variation-settings:'wdth' 82,'wght' 800;font-size:17px;text-transform:uppercase;letter-spacing:.02em}
+.round .arrow{margin-left:auto;color:var(--muted);font:500 15px/1 'DM Mono',monospace}
+.round .row{display:flex;gap:14px;font:400 11px/1.4 'DM Mono',monospace;color:var(--muted)}
+.round .row b{color:var(--chalk);font-weight:500;display:block;font-size:14px;margin-bottom:2px}
+.round .row b.hot{color:var(--flood)}
+.tag{font:500 9px/1 'DM Mono',monospace;letter-spacing:.1em;padding:4px 6px;border-radius:3px;text-transform:uppercase}
+.tag.fb{background:rgba(63,191,127,.14);color:var(--pitch)}
+.tag.mma{background:rgba(226,75,63,.14);color:var(--corner)}
+.tag.warn{background:rgba(255,197,61,.14);color:var(--flood)}
+.new{width:100%;background:none;border:1px dashed var(--line);border-radius:12px;padding:15px;
+  color:var(--muted);font-size:13px}
+.new:hover{color:var(--chalk);border-color:#3A5261}
+
+/* ══ Status / Schlüssel ══ */
+.status{background:var(--stand);border:1px solid var(--line);border-radius:12px;padding:14px}
+.status .line{display:flex;align-items:center;gap:9px;font:400 11px/1.5 'DM Mono',monospace;
+  color:var(--muted);padding:5px 0}
+.dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.dot.ok{background:var(--pitch)} .dot.warn{background:var(--flood)} .dot.off{background:var(--corner)}
+.keyrow{display:flex;gap:7px;margin-top:11px}
+.keyrow input{flex:1;background:var(--raise);border:1px solid var(--line);border-radius:7px;
+  color:var(--chalk);font:400 12px 'DM Mono',monospace;padding:10px}
+.keyrow button{background:var(--raise);border:1px solid var(--line);border-radius:7px;
+  color:var(--chalk);padding:0 14px;font-size:12px}
+.note{font:400 11px/1.55 'DM Mono',monospace;color:var(--muted);margin-top:10px}
+
+/* ══ Reiter ══ */
+nav{display:flex;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:6;background:var(--night)}
+nav button{flex:1;background:none;border:0;border-bottom:2px solid transparent;color:var(--muted);
+  font-size:12px;font-variation-settings:'wdth' 85,'wght' 700;letter-spacing:.12em;
+  text-transform:uppercase;padding:14px 4px}
+nav button[aria-selected="true"]{color:var(--chalk);border-bottom-color:var(--flood)}
+
+/* ══ Spieltagsleiste ══ */
+.days{display:flex;gap:6px;overflow-x:auto;padding:12px 14px;border-bottom:1px solid var(--line);
+  position:sticky;top:45px;z-index:5;background:var(--night);scrollbar-width:none}
+.days::-webkit-scrollbar{display:none}
+.days button{flex:0 0 auto;background:var(--stand);border:1px solid var(--line);border-radius:6px;
+  color:var(--muted);font:500 12px/1 'DM Mono',monospace;padding:9px 11px;min-width:38px}
+.days button[aria-current="true"]{background:var(--flood);border-color:var(--flood);color:var(--night)}
+.days button.played{color:#4A5A64}
+
+/* ══ Budget ══ */
+.budget{display:flex;align-items:center;gap:10px;padding:11px 14px;background:var(--stand);
+  border-bottom:1px solid var(--line);position:sticky;top:100px;z-index:4}
+.budget .lbl{font:500 10px/1 'DM Mono',monospace;letter-spacing:.14em;color:var(--muted);text-transform:uppercase}
+.bar{flex:1;height:5px;background:var(--line);border-radius:3px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--flood);transition:width .3s}
+.budget .num{font:500 13px/1 'DM Mono',monospace;color:var(--flood)}
+.budget.empty .num{color:var(--pitch)}
+
+.view{display:none;padding:14px} .view.on{display:block}
+main{flex:1;padding-bottom:110px}
+
+/* ══ Spielkarte ══ */
+.match{background:var(--stand);border:1px solid var(--line);border-radius:11px;padding:12px;margin-bottom:9px}
+.match .when{display:flex;align-items:center;gap:7px;font:400 10px/1 'DM Mono',monospace;
+  color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
+.src{font:500 8px/1 'DM Mono',monospace;letter-spacing:.08em;padding:3px 5px;border-radius:3px;
+  margin-left:auto;text-transform:uppercase}
+.src.mkt{background:rgba(63,191,127,.13);color:var(--pitch)}
+.src.mdl{background:rgba(124,142,151,.15);color:var(--muted)}
+.match .who{font-size:15px;font-variation-settings:'wdth' 88,'wght' 700;margin:7px 0 11px;line-height:1.3}
+.match .who em{font-style:normal;color:var(--muted);font-variation-settings:'wdth' 88,'wght' 400}
+.odds{display:flex;gap:6px}
+.odds button{flex:1;background:var(--raise);border:1px solid var(--line);border-radius:7px;
+  padding:9px 4px;color:var(--chalk);display:flex;flex-direction:column;align-items:center;gap:3px;
+  transition:border-color .15s,background .15s}
+.odds button:hover{border-color:#3A5261}
+.odds .side{font:500 9px/1 'DM Mono',monospace;letter-spacing:.1em;color:var(--muted);text-transform:uppercase}
+.odds .q{font:500 15px/1 'DM Mono',monospace}
+.odds button[aria-pressed="true"]{background:rgba(255,197,61,.13);border-color:var(--flood)}
+.odds button[aria-pressed="true"] .q,.odds button[aria-pressed="true"] .side{color:var(--flood)}
+
+/* ══ Ergebniswette ══ */
+.exact{margin-top:9px}
+.exact>summary{list-style:none;cursor:pointer;font:500 10px/1 'DM Mono',monospace;
+  letter-spacing:.12em;text-transform:uppercase;color:var(--muted);padding:8px 0;display:flex;gap:6px;align-items:center}
+.exact>summary::-webkit-details-marker{display:none}
+.exact>summary::before{content:'▸';transition:transform .15s;display:inline-block}
+.exact[open]>summary::before{transform:rotate(90deg)}
+.exact[open]>summary{color:var(--flood)}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;padding:4px 0 2px}
+.grid button{background:var(--raise);border:1px solid var(--line);border-radius:6px;padding:8px 2px;
+  color:var(--chalk);display:flex;flex-direction:column;gap:3px;align-items:center}
+.grid .s{font:500 12px/1 'DM Mono',monospace}
+.grid .o{font:400 10px/1 'DM Mono',monospace;color:var(--muted)}
+.grid button[aria-pressed="true"]{background:rgba(255,197,61,.13);border-color:var(--flood)}
+.grid button[aria-pressed="true"] .s,.grid button[aria-pressed="true"] .o{color:var(--flood)}
+.axis{font:400 9px/1 'DM Mono',monospace;color:var(--muted);letter-spacing:.1em;
+  text-transform:uppercase;margin:8px 0 2px}
+
+/* ══ Einsatz ══ */
+.stake{display:none;align-items:center;gap:10px;margin-top:11px;padding-top:11px;border-top:1px dashed var(--line)}
+.stake.on{display:flex}
+.stake input[type=range]{flex:1;accent-color:var(--flood)}
+.stake .val{font:500 12px/1 'DM Mono',monospace;color:var(--muted);white-space:nowrap}
+.stake .val b{color:var(--flood);font-weight:500}
+.match.hit{border-color:rgba(63,191,127,.5)} .match.miss{opacity:.5}
+.result{display:flex;justify-content:space-between;margin-top:10px;padding-top:10px;
+  border-top:1px solid var(--line);font:500 11px/1 'DM Mono',monospace}
+.result .out{color:var(--muted);text-transform:uppercase}
+.result .pts{font-size:14px} .hit .pts{color:var(--pitch)} .miss .pts{color:var(--corner)}
+
+/* ══ Tabelle ══ */
+.rank{display:flex;align-items:center;gap:12px;padding:13px 12px;border-bottom:1px solid var(--line)}
+.rank:first-child{border-top:1px solid var(--line)}
+.rank .pos{font:500 12px/1 'DM Mono',monospace;color:var(--muted);width:18px}
+.rank.lead .pos{color:var(--flood)}
+.rank .nm{flex:1;font-size:15px;font-variation-settings:'wdth' 88,'wght' 600}
+.rank.me .nm::after{content:'DU';font:500 8px/1 'DM Mono',monospace;letter-spacing:.14em;
+  background:var(--flood);color:var(--night);padding:3px 4px;border-radius:2px;margin-left:8px;vertical-align:2px}
+.rank .delta{font:400 11px/1 'DM Mono',monospace;color:var(--pitch);opacity:0;transition:opacity .3s}
+.rank .delta.show{opacity:1}
+.flap{font:500 17px/1 'DM Mono',monospace;background:var(--raise);border:1px solid var(--line);
+  border-radius:4px;padding:7px 9px;min-width:76px;text-align:right;position:relative;overflow:hidden;
+  box-shadow:inset 0 -1px 0 rgba(0,0,0,.5)}
+.flap::after{content:'';position:absolute;inset:50% 0 auto;height:1px;background:rgba(0,0,0,.45)}
+.rank.lead .flap{color:var(--flood);border-color:rgba(255,197,61,.4)}
+
+/* ══ Karten ══ */
+.card{background:var(--stand);border:1px solid var(--line);border-radius:11px;padding:14px;margin-bottom:11px}
+.card h3{font-size:12px;font-variation-settings:'wdth' 82,'wght' 800;letter-spacing:.14em;
+  text-transform:uppercase;margin-bottom:9px}
+.card p{font-size:13px;line-height:1.6;color:var(--muted)}
+textarea{width:100%;background:var(--raise);border:1px solid var(--line);border-radius:7px;
+  color:var(--chalk);font:inherit;font-size:13px;line-height:1.6;padding:11px;resize:vertical;min-height:88px}
+.members{display:flex;flex-wrap:wrap;gap:6px}
+.chip{background:var(--raise);border:1px solid var(--line);border-radius:20px;padding:6px 11px;font-size:12px}
+
+/* ══ Aktionsleiste ══ */
+.dock{position:fixed;bottom:0;width:100%;max-width:460px;
+  padding:12px 14px calc(12px + env(safe-area-inset-bottom));
+  background:linear-gradient(to top,var(--night) 62%,transparent)}
+.cta{width:100%;border:0;border-radius:8px;padding:15px;background:var(--flood);color:var(--night);
+  font-size:13px;font-variation-settings:'wdth' 85,'wght' 800;letter-spacing:.14em;text-transform:uppercase}
+.cta:disabled{background:var(--raise);color:var(--muted);cursor:not-allowed}
+.cta.ghost{background:none;border:1px solid var(--line);color:var(--chalk)}
+.dockmsg{font:400 11px/1.5 'DM Mono',monospace;color:var(--muted);text-align:center;margin-bottom:9px}
+.empty{text-align:center;padding:44px 20px;color:var(--muted);font-size:13px;line-height:1.7}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="app" id="app"></div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════════
+   FLUTLICHT — Tippspiel für Freundesrunden
+   Bundesliga und UFC laufen als getrennte Runden mit eigener Tabelle.
+
+   DATENQUELLEN
+   1) Spielplan Bundesliga  → OpenLigaDB, kostenlos, ohne Schlüssel
+                              api.openligadb.de/getmatchdata/bl1/2026
+   2) Quoten + UFC-Kämpfe   → The Odds API, Schlüssel nötig
+                              api.the-odds-api.com/v4/...
+   3) Ergebnisquoten        → aus den 1X2-Quoten hergeleitet (Poisson)
+
+   Ohne Schlüssel läuft alles mit Modellquoten weiter — die Runde
+   funktioniert, die Zahlen stimmen nur nicht mit dem Markt überein.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+const CFG = {
+  season: 2026,
+  league: 'bl1',
+  dataUrl: 'https://raw.githubusercontent.com/dfsr19/tipoff/main/data.json',
+  budget: 100,                                    // Tipp-Punkte je Spieltag
+  vig1x2: 0.06,                                   // Marge Siegwette
+  vigExact: 0.16                                  // Marge Ergebniswette (höher, wie am Markt)
+};
+
+/* ─── Vereine 2026/27 mit Angriffs-/Abwehrwerten für das Modell ─── */
+const CLUBS = {
+  'FC Bayern München':1, 'Bayer 04 Leverkusen':1, 'Borussia Dortmund':1, 'RB Leipzig':1,
+  'Eintracht Frankfurt':1, 'VfB Stuttgart':1, 'SC Freiburg':1, 'TSG Hoffenheim':1,
+  '1. FSV Mainz 05':1, 'Werder Bremen':1, 'Borussia Mönchengladbach':1, '1. FC Union Berlin':1,
+  'FC Augsburg':1, '1. FC Köln':1, 'Hamburger SV':1, 'FC Schalke 04':1,
+  'SC Paderborn 07':1, 'SV 07 Elversberg':1
+};
+const RATING = {
+  'FC Bayern München':[2.15,.72],'Bayer 04 Leverkusen':[1.72,.98],'Borussia Dortmund':[1.68,1.05],
+  'RB Leipzig':[1.58,1.06],'Eintracht Frankfurt':[1.66,1.28],'VfB Stuttgart':[1.54,1.20],
+  'SC Freiburg':[1.34,1.24],'TSG Hoffenheim':[1.36,1.44],'1. FSV Mainz 05':[1.28,1.24],
+  'Werder Bremen':[1.36,1.48],'Borussia Mönchengladbach':[1.30,1.34],'1. FC Union Berlin':[1.10,1.22],
+  'FC Augsburg':[1.14,1.40],'1. FC Köln':[1.20,1.46],'Hamburger SV':[1.20,1.44],
+  'FC Schalke 04':[1.16,1.48],'SC Paderborn 07':[1.04,1.56],'SV 07 Elversberg':[1.00,1.60]
+};
+const short = n => n.replace(/^(1\.|SV 07|SC|FC|VfB|VfL|TSG|SG|BV 09)\s+/,'')
+                    .replace(' München','').replace('Borussia ','').replace(' 04','')
+                    .replace(' 05','').replace(' 07','');
+
+/* ═══════════════ 1. WAHRSCHEINLICHKEITSMODELL ═══════════════
+   Poisson-Modell: aus zwei Torerwartungen folgt die komplette
+   Ergebnisverteilung — und damit jede Ergebnisquote.            */
+
+function poisson(k,l){ let f=1; for(let i=2;i<=k;i++) f*=i; return Math.exp(-l)*Math.pow(l,k)/f; }
+
+function scoreMatrix(lh,la,max=6){
+  const m=[];
+  for(let i=0;i<=max;i++){ m[i]=[]; for(let j=0;j<=max;j++) m[i][j]=poisson(i,lh)*poisson(j,la); }
+  return m;
+}
+function probs1X2(m){
+  let h=0,d=0,a=0;
+  m.forEach((row,i)=>row.forEach((p,j)=>{ i>j?h+=p : i<j?a+=p : d+=p; }));
+  const s=h+d+a; return {h:h/s,d:d/s,a:a/s};
+}
+/* Marge rausrechnen: aus Buchmacherquoten echte Wahrscheinlichkeiten */
+function devig(qs){
+  const raw=qs.map(q=>1/q), s=raw.reduce((a,b)=>a+b,0);
+  return raw.map(r=>r/s);
+}
+/* Umkehrung: welche Torerwartungen passen zu diesen 1X2-Quoten?
+   Grobes Raster reicht — der Fehler liegt unter einem Prozentpunkt. */
+function fitLambdas(pH,pD,pA){
+  let best=null,err=1e9;
+  for(let lh=0.30;lh<=3.60;lh+=0.05)
+    for(let la=0.25;la<=3.20;la+=0.05){
+      const p=probs1X2(scoreMatrix(lh,la,6));
+      const e=(p.h-pH)**2+(p.d-pD)**2+(p.a-pA)**2;
+      if(e<err){err=e;best=[lh,la];}
+    }
+  return best;
+}
+/* Modellquoten, wenn kein Markt vorliegt (z.B. 30. Spieltag im August) */
+function modelLambdas(home,away){
+  const [ah,dh]=RATING[home]||[1.3,1.35], [aa,da]=RATING[away]||[1.3,1.35];
+  return [ah*da*0.95, aa*dh*0.80];
+}
+const price = (p,vig) => Math.max(1.01, Math.round((1-vig)/p*100)/100);
+
+/* Bündelt alles zu einem tippbaren Spiel */
+function buildFootball(raw){
+  let lh,la,source;
+  if(raw.market){                                   // echte Quoten vorhanden
+    const [pH,pD,pA]=devig([raw.market.h,raw.market.d,raw.market.a]);
+    [lh,la]=fitLambdas(pH,pD,pA); source='mkt';
+  }else{
+    [lh,la]=modelLambdas(raw.home,raw.away); source='mdl';
+  }
+  const m=scoreMatrix(lh,la,6), p=probs1X2(m);
+  const sides=[
+    {key:'1',label:'1',q: raw.market? raw.market.h : price(p.h,CFG.vig1x2)},
+    {key:'X',label:'X',q: raw.market? raw.market.d : price(p.d,CFG.vig1x2)},
+    {key:'2',label:'2',q: raw.market? raw.market.a : price(p.a,CFG.vig1x2)}
+  ];
+  const exact=[];                                   // 0:0 bis 3:3
+  for(let i=0;i<=3;i++) for(let j=0;j<=3;j++)
+    exact.push({key:`${i}:${j}`,label:`${i}:${j}`,q:price(m[i][j],CFG.vigExact)});
+  return {...raw, sport:'fb', sides, exact, source};
+}
+
+/* ═══════════════ 2. DATEN LADEN ═══════════════ */
+
+const net = {data:'lade', updated:null};
+
+/* Eine einzige Datei, fertig aufbereitet vom wöchentlichen Abruf auf GitHub:
+   Spielplan (OpenLigaDB) + Marktquoten (Odds API) + hergeleitete Ergebnisquoten.
+   Kein Schlüssel im Browser, nichts einzugeben. */
+async function loadData(){
+  try{
+    const r=await fetch(CFG.dataUrl+'?t='+Date.now(), {cache:'no-store'});
+    if(!r.ok) throw new Error(r.status);
+    const d=await r.json();
+    if(!Array.isArray(d.matches)||!d.matches.length) throw new Error('leer');
+    net.data='live'; net.updated=d.updated?new Date(d.updated):null;
+    return {
+      matches:d.matches.map(m=>({...m, sport:'fb', start:new Date(m.start),
+                                 finished:false, score:null})),
+      fights:(d.fights||[]).map((f,i)=>({...f, sport:'mma', day:1,
+                                 start:new Date(f.start), finished:false}))
+    };
+  }catch(e){
+    net.data='offline';
+    return { matches:generateSchedule().map(buildFootball), fights:demoFights() };
+  }
+}
+
+/* Notfallplan, falls GitHub nicht erreichbar ist: Rundenturnier aus den
+   echten 18 Vereinen. Die Paarungen sind erzeugt, nicht der DFL-Spielplan. */
+function generateSchedule(){
+  const t=Object.keys(CLUBS), n=t.length, out=[];
+  const first=new Date('2026-08-28T20:30:00+02:00');
+  const rot=t.slice(1);
+  for(let d=0;d<34;d++){
+    const half=d%17, back=d>=17;
+    const order=[t[0],...rot.slice(half).concat(rot.slice(0,half))];
+    for(let i=0;i<n/2;i++){
+      let h=order[i], a=order[n-1-i];
+      if((i+d)%2) [h,a]=[a,h];
+      if(back) [h,a]=[a,h];
+      const start=new Date(first.getTime()+d*7*864e5+i*36e5*4);
+      out.push({id:`gen${d}-${i}`,day:d+1,start,home:h,away:a,finished:false,score:null});
+    }
+  }
+  return out;
+}
+const demoFights = () => DEMO_UFC.map((f,i)=>({id:'mma'+i,day:1,sport:'mma',
+  start:new Date(f.t), home:f.a, away:f.b, source:'mdl', finished:false,
+  sides:[{key:'A',label:f.a.split(' ').pop(),q:f.qa},
+         {key:'B',label:f.b.split(' ').pop(),q:f.qb}]}));
+const DEMO_UFC=[
+  {a:'Ilia Topuria',      b:'Arman Tsarukyan', qa:1.72,qb:2.15,t:'2026-08-30T04:00:00Z'},
+  {a:'Alexandre Pantoja', b:'Brandon Royval',  qa:1.48,qb:2.70,t:'2026-08-30T03:30:00Z'},
+  {a:'Jiri Prochazka',    b:'Carlos Ulberg',   qa:2.05,qb:1.80,t:'2026-08-30T03:00:00Z'},
+  {a:'Paddy Pimblett',    b:'Justin Gaethje',  qa:2.60,qb:1.50,t:'2026-08-30T02:30:00Z'}
+];
+
+/* ═══════════════ 3. ZUSTAND ═══════════════ */
+
+const S = {
+  screen:'home',                 // home | round
+  roundId:null,
+  tab:'tippen',
+  day:1,
+  matches:[],                    // Bundesliga, ganze Saison
+  fights:[],                     // UFC
+  ready:false
+};
+
+const ROUNDS = {
+  buli:{id:'buli',sport:'fb',name:'Kellerkinder',competition:'Bundesliga 2026/27',
+    rules:'Alle 34 Spieltage. 100 Punkte pro Spieltag, frei verteilbar auf Siegwette oder Ergebnis. Wer am 22. Mai vorne steht, gewinnt.',
+    members:[{id:'me',name:'Du',pts:0},{id:'jo',name:'Jonas',pts:0},{id:'le',name:'Leo',pts:0},
+             {id:'ma',name:'Marie',pts:0},{id:'ti',name:'Timo',pts:0},{id:'ni',name:'Nils',pts:0}],
+    picks:{}, settled:{}},
+  ufc:{id:'ufc',sport:'mma',name:'Octagon Club',competition:'UFC',
+    rules:'Jeder Kampfabend zählt einzeln. 100 Punkte pro Event, nur Siegwette.',
+    members:[{id:'me',name:'Du',pts:0},{id:'ke',name:'Kevin',pts:0},{id:'sa',name:'Sami',pts:0},
+             {id:'da',name:'Dana',pts:0},{id:'fl',name:'Flo',pts:0}],
+    picks:{}, settled:{}}
+};
+
+const R    = () => ROUNDS[S.roundId];
+const pool = () => S.roundId==='buli' ? S.matches.filter(m=>m.day===S.day) : S.fights;
+const dayPicks = () => { const ids=new Set(pool().map(m=>m.id));
+  return Object.entries(R().picks).filter(([k])=>ids.has(k)); };
+const used = () => dayPicks().reduce((s,[,p])=>s+p.stake,0);
+const left = () => CFG.budget - used();
+const isSettled = () => !!R().settled[S.roundId==='buli'?S.day:1];
+
+const fmt  = n => n.toLocaleString('de-DE',{minimumFractionDigits:1,maximumFractionDigits:1});
+const fmtQ = n => n.toLocaleString('de-DE',{minimumFractionDigits:2,maximumFractionDigits:2});
+const when = d => d.toLocaleString('de-DE',{weekday:'short',day:'2-digit',month:'2-digit',
+                                            hour:'2-digit',minute:'2-digit'}).replace(',','');
+
+/* ═══════════════ 4. PUNKTE ═══════════════
+   Treffer → Einsatz × eingefrorene Quote. Fehltipp → 0.            */
+function scorePicks(picks, results){
+  let t=0;
+  for(const [id,p] of Object.entries(picks)){
+    const res=results[id]; if(res===undefined) continue;
+    if(p.market==='exact' ? res.exact===p.side : res.side===p.side) t+=p.stake*p.q;
+  }
+  return t;
+}
+/* Simulation: Tore aus dem Poisson-Modell ziehen.
+   Live liefert das der /scores-Endpunkt bzw. OpenLigaDB.            */
+function simulate(events){
+  const out={};
+  events.forEach(ev=>{
+    if(ev.sport==='mma'){
+      const w=ev.sides.map(s=>1/s.q), sum=w.reduce((a,b)=>a+b,0); let x=Math.random()*sum;
+      out[ev.id]={side:ev.sides.find((_,i)=>(x-=w[i])<=0)?.key||'A'};
+    }else{
+      const [lh,la]=ev.market
+        ? fitLambdas(...devig([ev.market.h,ev.market.d,ev.market.a]))
+        : modelLambdas(ev.home,ev.away);
+      const g=l=>{let k=0,p=Math.exp(-l),c=p,u=Math.random();
+                  while(u>c&&k<9){k++;p*=l/k;c+=p;} return k;};
+      const h=g(lh), a=g(la);
+      out[ev.id]={side:h>a?'1':h<a?'2':'X', exact:`${h}:${a}`, text:`${h}:${a}`};
+    }
+  });
+  return out;
+}
+function botPicks(events){
+  const p={}; let rest=CFG.budget;
+  const pick=[...events].sort(()=>Math.random()-.5).slice(0,3+Math.floor(Math.random()*4));
+  pick.forEach((ev,i)=>{
+    const stake = i===pick.length-1 ? rest
+                : Math.max(5,Math.round(rest/(pick.length-i)*(.6+Math.random()*.7)/5)*5);
+    if(stake>rest||stake<=0) return;
+    const exact = ev.exact && Math.random()<0.25;
+    const opts  = exact ? ev.exact : ev.sides;
+    const s     = opts[Math.floor(Math.random()*opts.length)];
+    p[ev.id]={side:s.key,stake,q:s.q,market:exact?'exact':'h2h'}; rest-=stake;
+  });
+  return p;
+}
+
+/* ═══════════════ 5. OBERFLÄCHE ═══════════════ */
+const app=document.getElementById('app');
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function render(){ S.screen==='home' ? renderHome() : renderRound(); }
+
+/* ─── Startmenü ─── */
+function renderHome(){
+  const nextDay = S.matches.find(m=>!m.finished && m.start>new Date())?.day ?? 1;
+  const nextM   = S.matches.find(m=>m.day===nextDay);
+  const nextF   = S.fights[0];
+  const rank = r => {
+    const s=[...r.members].sort((a,b)=>b.pts-a.pts);
+    return s.findIndex(m=>m.id==='me')+1;
+  };
+  app.innerHTML=`
+  <header><div class="hd">
+    <div class="eyebrow">Tippspiel für Freundesrunden</div>
+    <h1 class="wordmark">Tip<span>off</span></h1>
+  </div></header>
+  <div class="home">
+    <div class="sec">Deine Runden</div>
+
+    <button class="round" data-go="buli">
+      <div class="top"><span class="tag fb">Fußball</span>
+        <span class="nm">Kellerkinder</span><span class="arrow">→</span></div>
+      <div class="row">
+        <div><b>Platz ${rank(ROUNDS.buli)}</b>von ${ROUNDS.buli.members.length}</div>
+        <div><b>${fmt(ROUNDS.buli.members[0].pts)}</b>Punkte</div>
+        <div><b class="hot">Spieltag ${nextDay}</b>${nextM?when(nextM.start).split(' ').slice(0,2).join(' '):'—'}</div>
+      </div>
+    </button>
+
+    <button class="round" data-go="ufc">
+      <div class="top"><span class="tag mma">Kampfsport</span>
+        <span class="nm">Octagon Club</span><span class="arrow">→</span></div>
+      <div class="row">
+        <div><b>Platz ${rank(ROUNDS.ufc)}</b>von ${ROUNDS.ufc.members.length}</div>
+        <div><b>${fmt(ROUNDS.ufc.members[0].pts)}</b>Punkte</div>
+        <div><b class="hot">${S.fights.length} Kämpfe</b>${nextF?when(nextF.start).split(' ').slice(0,2).join(' '):'—'}</div>
+      </div>
+    </button>
+
+    <button class="new" id="newround">+ Neue Runde — eine Sportart pro Runde</button>
+
+    <div class="sec">Datenlage</div>
+    <div class="status">
+      <div class="line"><span class="dot ${net.data==='live'?'ok':net.data==='lade'?'warn':'off'}"></span>
+        ${net.data==='live'?'Spielplan und Quoten geladen'
+         :net.data==='lade'?'wird geladen …'
+         :'GitHub nicht erreichbar — Ersatzplan mit Modellquoten aktiv'}</div>
+      <div class="line"><span class="dot ${net.updated?'ok':'warn'}"></span>
+        Stand: ${net.updated?when(net.updated):'—'}</div>
+      <div class="line"><span class="dot ok"></span>
+        ${S.matches.length} Spiele · ${S.fights.length} Kämpfe</div>
+      <div class="keyrow"><button id="reload" style="flex:1;padding:10px">Jetzt neu laden</button></div>
+      <p class="note">Die Quoten holt ein Automatik-Lauf jeden Montag früh und legt sie
+      auf GitHub ab. Diese App liest sie nur noch — du musst nichts eintragen.
+      Ergebnisquoten werden aus der Siegwette hergeleitet.</p>
+    </div>
+  </div>`;
+
+  app.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>{
+    S.roundId=b.dataset.go; S.screen='round'; S.tab='tippen';
+    if(S.roundId==='buli'){
+      const d=S.matches.find(m=>!m.finished && m.start>new Date());
+      S.day=d?d.day:1;
+    }
+    render();
+  });
+  app.querySelector('#newround').onclick=()=>alert(
+    'Beim Anlegen wählst du genau eine Sportart. Bundesliga und UFC bleiben getrennt — '+
+    'eigene Mitglieder, eigenes Budget, eigene Tabelle.');
+  app.querySelector('#reload').onclick=async()=>{
+    net.data='lade'; render();
+    const d=await loadData(); S.matches=d.matches; S.fights=d.fights; render();
+  };
+}
+
+/* ─── Runde ─── */
+function renderRound(){
+  const r=R(), fb=r.sport==='fb';
+  app.innerHTML=`
+  <header>
+    <button class="back" id="back" aria-label="Zurück">←</button>
+    <div class="hd">
+      <div class="eyebrow">${esc(r.competition)}</div>
+      <div class="title">${esc(r.name)}</div>
+    </div>
+  </header>
+  <nav role="tablist">
+    <button role="tab" data-tab="tippen"  aria-selected="${S.tab==='tippen'}">Tippen</button>
+    <button role="tab" data-tab="tabelle" aria-selected="${S.tab==='tabelle'}">Tabelle</button>
+    <button role="tab" data-tab="runde"   aria-selected="${S.tab==='runde'}">Runde</button>
+  </nav>
+  ${S.tab==='tippen'&&fb?'<div class="days" id="days"></div>':''}
+  ${S.tab==='tippen'?'<div class="budget" id="budget"></div>':''}
+  <main>
+    <section class="view ${S.tab==='tippen'?'on':''}" id="v-tippen"></section>
+    <section class="view ${S.tab==='tabelle'?'on':''}" id="v-tabelle"></section>
+    <section class="view ${S.tab==='runde'?'on':''}" id="v-runde"></section>
+  </main>
+  <div class="dock" id="dock"></div>`;
+
+  app.querySelector('#back').onclick=()=>{S.screen='home';render();};
+  app.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{S.tab=b.dataset.tab;render();});
+
+  if(S.tab==='tippen'){ if(fb) renderDays(); renderBudget(); renderEvents(); }
+  if(S.tab==='tabelle') renderBoard();
+  if(S.tab==='runde')   renderInfo();
+  renderDock();
+}
+
+function renderDays(){
+  const el=app.querySelector('#days'); el.innerHTML='';
+  for(let d=1;d<=34;d++){
+    const b=document.createElement('button');
+    b.textContent=d;
+    b.setAttribute('aria-current', d===S.day);
+    if(S.matches.some(m=>m.day===d&&m.finished)) b.classList.add('played');
+    b.onclick=()=>{S.day=d;render();};
+    el.appendChild(b);
+  }
+  requestAnimationFrame(()=>{
+    const cur=el.querySelector('[aria-current="true"]');
+    if(cur) el.scrollLeft=cur.offsetLeft-140;
+  });
+}
+
+function renderBudget(){
+  const el=app.querySelector('#budget'), l=left(), done=isSettled();
+  el.className='budget'+(l===0?' empty':'');
+  el.innerHTML = done
+    ? `<span class="lbl">Ausgewertet</span><span class="bar"><i style="width:100%"></i></span>
+       <span class="num">${fmt(R().settled[S.roundId==='buli'?S.day:1].me)} P</span>`
+    : `<span class="lbl">Budget</span><span class="bar"><i style="width:${l/CFG.budget*100}%"></i></span>
+       <span class="num">${l} / ${CFG.budget}</span>`;
+}
+
+function renderEvents(){
+  const wrap=app.querySelector('#v-tippen'), evs=pool();
+  wrap.innerHTML='';
+  if(!S.ready){ wrap.innerHTML='<div class="empty">Spielplan wird geladen …</div>'; return; }
+  if(!evs.length){ wrap.innerHTML='<div class="empty">Für diesen Spieltag liegen noch keine Ansetzungen vor.</div>'; return; }
+  evs.sort((a,b)=>a.start-b.start).forEach(ev=>wrap.appendChild(card(ev)));
+}
+
+function card(ev){
+  const r=R(), pick=r.picks[ev.id], done=isSettled();
+  const res = done ? r.settled[S.roundId==='buli'?S.day:1].results[ev.id] : null;
+  const el=document.createElement('article'); el.className='match';
+  const sep = ev.sport==='mma' ? '<em> vs </em>' : '<em> — </em>';
+  el.innerHTML=`
+    <div class="when">${when(ev.start)}
+      <span class="src ${ev.source==='mkt'?'mkt':'mdl'}">${ev.source==='mkt'?'Marktquote':'Modellquote'}</span></div>
+    <div class="who">${esc(ev.sport==='fb'?short(ev.home):ev.home)}${sep}${esc(ev.sport==='fb'?short(ev.away):ev.away)}</div>
+    <div class="odds"></div>`;
+
+  const odds=el.querySelector('.odds');
+  ev.sides.forEach(s=>{
+    const b=document.createElement('button');
+    b.setAttribute('aria-pressed', pick&&pick.market==='h2h'&&pick.side===s.key);
+    b.innerHTML=`<span class="side">${esc(s.label)}</span><span class="q">${fmtQ(s.q)}</span>`;
+    if(!done) b.onclick=()=>choose(ev,s,'h2h');
+    if(res && res.side===s.key) b.style.borderColor='var(--pitch)';
+    odds.appendChild(b);
+  });
+
+  /* Ergebniswette — nur Fußball, deutlich höhere Quoten */
+  if(ev.exact && !done){
+    const d=document.createElement('details'); d.className='exact';
+    if(pick&&pick.market==='exact') d.open=true;
+    d.innerHTML=`<summary>Genaues Ergebnis · bis ${fmtQ(Math.max(...ev.exact.map(e=>e.q)))}</summary>
+                 <div class="axis">${esc(short(ev.home))} : ${esc(short(ev.away))}</div>
+                 <div class="grid"></div>`;
+    const g=d.querySelector('.grid');
+    ev.exact.forEach(s=>{
+      const b=document.createElement('button');
+      b.setAttribute('aria-pressed', pick&&pick.market==='exact'&&pick.side===s.key);
+      b.innerHTML=`<span class="s">${s.label}</span><span class="o">${fmtQ(s.q)}</span>`;
+      b.onclick=e=>{e.preventDefault();choose(ev,s,'exact');};
+      g.appendChild(b);
+    });
+    el.appendChild(d);
+  }
+
+  const st=document.createElement('div'); st.className='stake';
+  if(pick && !done){
+    st.classList.add('on');
+    const max=Math.min(CFG.budget, pick.stake+left());
+    st.innerHTML=`<input type="range" min="5" max="${max}" step="5" value="${pick.stake}"
+                    aria-label="Einsatz">
+                  <span class="val"><b>${pick.stake}</b> P → ${fmt(pick.stake*pick.q)} P</span>`;
+    const inp=st.querySelector('input');
+    inp.oninput=e=>{ pick.stake=+e.target.value;
+      st.querySelector('.val').innerHTML=`<b>${pick.stake}</b> P → ${fmt(pick.stake*pick.q)} P`;
+      renderBudget(); };
+    inp.onchange=()=>render();
+    el.appendChild(st);
+  }else if(pick && done){
+    st.classList.add('on');
+    st.innerHTML=`<span class="val">${pick.market==='exact'?'Ergebnis':'Siegwette'}
+      <b>${esc(pick.side)}</b> · ${pick.stake} P · Quote ${fmtQ(pick.q)}</span>`;
+    el.appendChild(st);
+  }
+
+  if(done && res){
+    const hit = pick && (pick.market==='exact' ? res.exact===pick.side : res.side===pick.side);
+    if(pick) el.classList.add(hit?'hit':'miss');
+    const d=document.createElement('div'); d.className='result';
+    d.innerHTML=`<span class="out">${res.text||res.side}</span>
+                 <span class="pts">${pick?(hit?'+'+fmt(pick.stake*pick.q):'0,0')+' P':'nicht getippt'}</span>`;
+    el.appendChild(d);
+  }
+  return el;
+}
+
+function choose(ev,s,market){
+  const r=R(), cur=r.picks[ev.id];
+  if(cur && cur.market===market && cur.side===s.key){ delete r.picks[ev.id]; }
+  else if(cur){ cur.side=s.key; cur.q=s.q; cur.market=market; }
+  else{
+    if(left()<5) return;
+    r.picks[ev.id]={side:s.key,q:s.q,market,stake:Math.min(10,left())};
+  }
+  render();
+}
+
+function renderBoard(){
+  const r=R();
+  const rows=[...r.members].sort((a,b)=>b.pts-a.pts);
+  const v=app.querySelector('#v-tabelle');
+  v.innerHTML=rows.map((m,i)=>`
+    <div class="rank${i===0?' lead':''}${m.id==='me'?' me':''}">
+      <span class="pos">${i+1}</span><span class="nm">${esc(m.name)}</span>
+      <span class="delta"></span><span class="flap" data-id="${m.id}">${fmt(m.pts)}</span>
+    </div>`).join('')
+    + `<p class="note" style="padding:16px 4px">Saisonpunkte dieser Runde.
+       ${r.sport==='fb'?'Bundesliga und UFC werden getrennt gewertet.':'Eigene Wertung, unabhängig von der Fußballrunde.'}</p>`;
+}
+
+function renderInfo(){
+  const r=R();
+  app.querySelector('#v-runde').innerHTML=`
+    <div class="card"><h3>Regeln der Runde</h3>
+      <textarea id="rules">${esc(r.rules)}</textarea>
+      <p class="note">Frei formulierbar, sichtbar für alle beim Beitritt.
+      Die App wertet ausschließlich Punkte aus.</p></div>
+    <div class="card"><h3>Mitglieder</h3>
+      <div class="members">${r.members.map(m=>`<span class="chip">${esc(m.name)}</span>`).join('')}</div></div>
+    <div class="card"><h3>So entstehen die Quoten</h3>
+      <p>Siegwette: bester Preis über alle Buchmacher der Odds API, sonst Modellwert.
+      Ergebniswette: aus der Siegwette hergeleitet — die Marge wird rausgerechnet, daraus
+      folgen zwei Torerwartungen, daraus die Wahrscheinlichkeit jedes Ergebnisses.
+      Deshalb liegen die Quoten dort deutlich höher.</p>
+      <p class="note">Beim Tippen wird die Quote eingefroren. Bewegt sie sich danach,
+      ändert das deine Punkte nicht mehr.</p></div>`;
+  app.querySelector('#rules').onchange=e=>r.rules=e.target.value;
+}
+
+function renderDock(){
+  const d=app.querySelector('#dock');
+  if(S.tab!=='tippen'){ d.innerHTML=''; return; }
+  const key=S.roundId==='buli'?S.day:1, r=R();
+  if(r.settled[key]){
+    d.innerHTML=`<div class="dockmsg">Ausgewertet · <b style="color:var(--flood)">+${fmt(r.settled[key].me)} Punkte</b></div>
+                 <button class="cta ghost" id="go">Zurücksetzen</button>`;
+    d.querySelector('#go').onclick=()=>{
+      const s=r.settled[key];
+      r.members.forEach(m=>m.pts-=s.gain[m.id]||0);
+      delete r.settled[key];
+      pool().forEach(ev=>delete r.picks[ev.id]);
+      render();
+    };
+    return;
+  }
+  const n=dayPicks().length, l=left();
+  d.innerHTML=`<div class="dockmsg">${n?`${n} Tipps · ${used()} von ${CFG.budget} Punkten gesetzt`
+                :'Tippe auf eine Quote — oder klapp das genaue Ergebnis auf'}</div>
+               <button class="cta" id="go" ${n===0||l>0?'disabled':''}>Auswerten</button>`;
+  if(n&&l===0) d.querySelector('#go').onclick=settle;
+}
+
+function settle(){
+  const r=R(), evs=pool(), key=S.roundId==='buli'?S.day:1;
+  const results=simulate(evs);
+  const mine=Object.fromEntries(dayPicks());
+  const gain={me:scorePicks(mine,results)};
+  r.members.filter(m=>m.id!=='me').forEach(m=>gain[m.id]=scorePicks(botPicks(evs),results));
+  r.members.forEach(m=>m.pts+=gain[m.id]||0);
+  r.settled[key]={results,gain,me:gain.me};
+  S.tab='tabelle'; render(); roll(gain);
+}
+
+/* Signatur: Fallblattanzeige — Punkte rollen hoch wie am Stadionturm. */
+function roll(gain){
+  app.querySelectorAll('.flap').forEach(el=>{
+    const id=el.dataset.id, to=+R().members.find(m=>m.id===id).pts, g=gain[id]||0, from=to-g;
+    const row=el.closest('.rank'), delta=row.querySelector('.delta'), t0=performance.now();
+    (function step(t){
+      const k=Math.min(1,(t-t0)/1100), e=1-Math.pow(1-k,3);
+      el.textContent=fmt(from+(to-from)*e);
+      if(k<1) requestAnimationFrame(step);
+      else{ el.textContent=fmt(to); delta.textContent='+'+fmt(g); delta.classList.add('show'); }
+    })(t0);
+  });
+}
+
+/* ═══════════════ 6. START ═══════════════ */
+(async()=>{
+  render();
+  const d=await loadData();
+  S.matches=d.matches; S.fights=d.fights; S.ready=true;
+  render();
+})();
+</script>
+</body>
+</html>

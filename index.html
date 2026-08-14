@@ -2,755 +2,2217 @@
 <html lang="de">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>TIPOFF</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#08090B">
+<meta name="description" content="Tipoff — Tippspiel für Freundesrunden. Bundesliga, UFC und eigene Ligen.">
+<title>Tipoff</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@600;700;800&display=swap" rel="stylesheet">
 <style>
 :root{
-  --night:#0A0F12; --stand:#131A1F; --raise:#1A242B; --line:#233039;
-  --chalk:#E8EDEE; --muted:#7C8E97; --flood:#FFC53D; --pitch:#3FBF7F; --corner:#E24B3F;
+  --bg:#08090B;         /* Kopf, tiefster Grund */
+  --surface:#101317;    /* Inhaltsfläche, etwas heller */
+  --card:#181C22;
+  --raise:#212630;
+  --line:#2A303A;
+  --line-2:#363E4A;
+  --text:#F3F5F7;
+  --muted:#8A939E;
+  --blue:#50AAF0;
+  --blue-dk:#2B7FC4;
+  --blue-gl:rgba(80,170,240,.14);
+  --win:#34D399;
+  --warn:#FBBF24;
+  --bad:#F87171;
+  --r:16px;
 }
-*{box-sizing:border-box;margin:0;padding:0}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
 body{
-  background:var(--night);color:var(--chalk);
-  font-family:'Archivo',system-ui,sans-serif;font-variation-settings:'wdth' 100;
-  -webkit-font-smoothing:antialiased;display:flex;justify-content:center;min-height:100vh;
+  background:#000;color:var(--text);
+  font-family:'Inter',system-ui,-apple-system,sans-serif;
+  -webkit-font-smoothing:antialiased;
+  display:flex;justify-content:center;
 }
-.app{width:100%;max-width:460px;min-height:100vh;
-  background:radial-gradient(120% 55% at 50% -8%,rgba(255,197,61,.10),transparent 60%),var(--night);
-  border-inline:1px solid var(--line);display:flex;flex-direction:column;position:relative}
-button{font:inherit;cursor:pointer}
-:focus-visible{outline:2px solid var(--flood);outline-offset:2px}
+button{font:inherit;color:inherit;cursor:pointer;background:none;border:0}
+input,textarea,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.app{
+  width:100%;max-width:480px;min-height:100vh;background:var(--surface);
+  display:flex;flex-direction:column;position:relative;overflow-x:hidden;
+}
 
-/* ══ Kopf ══ */
-header{padding:20px 18px 14px;border-bottom:1px solid var(--line);display:flex;align-items:flex-start;gap:12px}
-.back{background:none;border:1px solid var(--line);border-radius:7px;color:var(--chalk);
-  width:34px;height:34px;font-size:17px;line-height:1;flex-shrink:0}
-.hd{flex:1;min-width:0}
-.eyebrow{font:500 10px/1 'DM Mono',monospace;letter-spacing:.2em;text-transform:uppercase;color:var(--muted)}
-.wordmark{font-variation-settings:'wdth' 68,'wght' 900;font-size:33px;line-height:.92;
-  text-transform:uppercase;margin:7px 0 0}
-.wordmark span{color:var(--flood)}
-.title{font-variation-settings:'wdth' 76,'wght' 800;font-size:21px;text-transform:uppercase;
-  letter-spacing:.02em;margin-top:5px;line-height:1.1}
+/* ═══════ LADESCREEN ═══════ */
+#splash{position:fixed;inset:0;z-index:200;background:#000;display:grid;place-items:center;
+  transition:opacity .55s ease}
+#splash.gone{opacity:0;pointer-events:none}
+#vid{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000;
+  opacity:0;transition:opacity .35s}
+#vid.on{opacity:1}
+.smark{position:relative;z-index:2;display:flex;font-family:'Poppins';font-weight:800;
+  font-size:clamp(36px,12vw,52px);letter-spacing:-.02em;color:#fff;
+  filter:drop-shadow(0 0 22px rgba(255,255,255,.4));transition:opacity .3s;
+  opacity:0;pointer-events:none}
+.smark.show{opacity:1}
+.smark span{position:relative;animation:sIn .5s backwards}
+.smark span:nth-child(2){animation-delay:.06s}.smark span:nth-child(3){animation-delay:.12s}
+.smark span:nth-child(4){animation-delay:.18s}.smark span:nth-child(5){animation-delay:.24s}
+.smark span:nth-child(6){animation-delay:.3s}
+@keyframes sIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+.sl::after{content:'';position:absolute;width:.16em;height:.6em;background:var(--blue);
+  transform:skewX(-16deg);border-radius:1px;animation:slIn .4s .45s backwards}
+.s-i::after{left:.02em;bottom:-.13em}
+.s-o::after{left:.33em;top:-.09em}
+@keyframes slIn{from{opacity:0;transform:skewX(-16deg) translateY(-14px)}to{opacity:1}}
+.sload{position:absolute;bottom:14%;width:120px;height:3px;border-radius:2px;
+  background:rgba(255,255,255,.14);overflow:hidden;z-index:2}
+.sload i{display:block;height:100%;width:38%;background:var(--blue);border-radius:2px;
+  animation:sSlide 1.15s infinite ease-in-out}
+@keyframes sSlide{from{transform:translateX(-110%)}to{transform:translateX(380%)}}
 
-/* ══ Startmenü ══ */
-.home{padding:18px 14px 40px}
-.sec{font:500 10px/1 'DM Mono',monospace;letter-spacing:.2em;text-transform:uppercase;
-  color:var(--muted);margin:24px 4px 10px}
-.sec:first-child{margin-top:4px}
-.round{width:100%;text-align:left;background:var(--stand);border:1px solid var(--line);
-  border-radius:12px;padding:15px;margin-bottom:10px;color:var(--chalk);display:block;
-  transition:border-color .15s}
-.round:hover{border-color:#3A5261}
-.round .top{display:flex;align-items:center;gap:8px;margin-bottom:10px}
-.round .nm{font-variation-settings:'wdth' 82,'wght' 800;font-size:17px;text-transform:uppercase;letter-spacing:.02em}
-.round .arrow{margin-left:auto;color:var(--muted);font:500 15px/1 'DM Mono',monospace}
-.round .row{display:flex;gap:14px;font:400 11px/1.4 'DM Mono',monospace;color:var(--muted)}
-.round .row b{color:var(--chalk);font-weight:500;display:block;font-size:14px;margin-bottom:2px}
-.round .row b.hot{color:var(--flood)}
-.tag{font:500 9px/1 'DM Mono',monospace;letter-spacing:.1em;padding:4px 6px;border-radius:3px;text-transform:uppercase}
-.tag.fb{background:rgba(63,191,127,.14);color:var(--pitch)}
-.tag.mma{background:rgba(226,75,63,.14);color:var(--corner)}
-.tag.warn{background:rgba(255,197,61,.14);color:var(--flood)}
-.new{width:100%;background:none;border:1px dashed var(--line);border-radius:12px;padding:15px;
-  color:var(--muted);font-size:13px}
-.new:hover{color:var(--chalk);border-color:#3A5261}
+/* ═══════ WORTMARKE ═══════ */
+.mark{display:flex;font-family:'Poppins';font-weight:800;letter-spacing:-.02em;line-height:1}
+.mark span{position:relative}
 
-/* ══ Status / Schlüssel ══ */
-.status{background:var(--stand);border:1px solid var(--line);border-radius:12px;padding:14px}
-.status .line{display:flex;align-items:center;gap:9px;font:400 11px/1.5 'DM Mono',monospace;
-  color:var(--muted);padding:5px 0}
-.dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
-.dot.ok{background:var(--pitch)} .dot.warn{background:var(--flood)} .dot.off{background:var(--corner)}
-.keyrow{display:flex;gap:7px;margin-top:11px}
-.keyrow input{flex:1;background:var(--raise);border:1px solid var(--line);border-radius:7px;
-  color:var(--chalk);font:400 12px 'DM Mono',monospace;padding:10px}
-.keyrow button{background:var(--raise);border:1px solid var(--line);border-radius:7px;
-  color:var(--chalk);padding:0 14px;font-size:12px}
-.note{font:400 11px/1.55 'DM Mono',monospace;color:var(--muted);margin-top:10px}
+/* ═══════ KOPF ═══════ */
+header{background:var(--bg);padding:16px 16px 18px;position:relative;
+  border-bottom:1px solid var(--line)}
+header::after{content:'';position:absolute;left:0;right:0;bottom:-1px;height:1px;
+  background:linear-gradient(90deg,transparent,var(--blue),transparent);opacity:.35}
+.hrow{display:flex;align-items:center;gap:12px}
+.hrow .mark{font-size:24px}
+.ico{width:40px;height:40px;flex-shrink:0;border:1px solid var(--line-2);border-radius:12px;
+  display:grid;place-items:center;background:var(--raise);transition:background .15s}
+.ico:active{background:var(--line)}
+.ico.b{background:var(--blue);border-color:var(--blue);color:#04121F;font-weight:700}
+.burger{display:flex;flex-direction:column;gap:3.5px;align-items:center}
+.burger i{width:16px;height:2px;background:var(--text);border-radius:2px}
+.sub{font-size:12px;color:var(--muted);margin-top:10px;font-weight:500}
+.htitle{font-family:'Poppins';font-weight:700;font-size:20px;line-height:1.2}
+.hsub{font-size:11px;color:var(--muted);font-weight:600;letter-spacing:.08em;text-transform:uppercase}
 
-/* ══ Reiter ══ */
-nav{display:flex;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:6;background:var(--night)}
-nav button{flex:1;background:none;border:0;border-bottom:2px solid transparent;color:var(--muted);
-  font-size:12px;font-variation-settings:'wdth' 85,'wght' 700;letter-spacing:.12em;
-  text-transform:uppercase;padding:14px 4px}
-nav button[aria-selected="true"]{color:var(--chalk);border-bottom-color:var(--flood)}
+/* ═══════ MENÜ ═══════ */
+.scrim{position:fixed;inset:0;background:rgba(0,0,0,.62);z-index:90;animation:fade .2s;
+  backdrop-filter:blur(2px)}
+@keyframes fade{from{opacity:0}}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:80%;max-width:320px;background:var(--bg);
+  z-index:91;border-left:1px solid var(--line);display:flex;flex-direction:column;
+  animation:slideIn .26s cubic-bezier(.2,.8,.2,1);overflow-y:auto}
+@keyframes slideIn{from{transform:translateX(100%)}}
+.dhead{padding:22px 18px 18px;border-bottom:1px solid var(--line)}
+.avatar{width:50px;height:50px;border-radius:15px;background:var(--blue);color:#04121F;
+  display:grid;place-items:center;font-family:'Poppins';font-weight:800;font-size:21px}
+.dname{font-family:'Poppins';font-weight:700;font-size:17px;margin-top:11px}
+.dmail{font-size:12px;color:var(--muted);margin-top:2px;word-break:break-all}
+.dnav{padding:10px 10px 20px;flex:1}
+.dgrp{font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;
+  color:#5C6672;padding:15px 10px 7px}
+.ditem{width:100%;display:flex;align-items:center;gap:13px;padding:12px 10px;border-radius:11px;
+  font-size:14.5px;font-weight:500;text-align:left}
+.ditem:active{background:var(--card)}
+.ditem .em{width:24px;text-align:center;font-size:16px;flex-shrink:0}
+.ditem .tag{margin-left:auto;font-size:10px;font-weight:700;background:var(--blue);
+  color:#04121F;padding:2px 7px;border-radius:20px}
+.ditem.red{color:var(--bad)}
 
-/* ══ Spieltagsleiste ══ */
-.days{display:flex;gap:6px;overflow-x:auto;padding:12px 14px;border-bottom:1px solid var(--line);
-  position:sticky;top:45px;z-index:5;background:var(--night);scrollbar-width:none}
+/* ═══════ REITER ═══════ */
+nav{display:flex;gap:5px;padding:9px 12px;background:var(--bg);position:sticky;top:0;z-index:20;
+  border-bottom:1px solid var(--line)}
+nav button{flex:1;border-radius:10px;color:var(--muted);font-size:12px;font-weight:600;
+  padding:9px 2px;transition:all .15s}
+nav button[aria-selected="true"]{background:var(--blue-gl);color:var(--blue)}
+
+main{flex:1;padding:16px 14px 110px}
+.sec{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);
+  margin:24px 3px 11px;display:flex;align-items:center;gap:9px}
+.sec:first-child{margin-top:2px}
+.sec .ln{flex:1;height:1px;background:var(--line)}
+
+/* ═══════ BAUSTEINE ═══════ */
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:15px}
+.btn{width:100%;border-radius:13px;background:var(--blue);color:#04121F;font-weight:700;
+  font-size:15px;padding:15px;transition:transform .08s,opacity .15s}
+.btn:active{transform:scale(.985)}
+.btn.ghost{background:var(--raise);color:var(--text);border:1px solid var(--line-2)}
+.btn.dark{background:var(--bg);color:var(--text);border:1px solid var(--line-2)}
+.btn.red{background:transparent;color:var(--bad);border:1px solid rgba(248,113,113,.35)}
+.btn:disabled{background:var(--raise);color:#5C6672;cursor:not-allowed}
+.pill{display:inline-flex;align-items:center;gap:5px;border-radius:20px;padding:4px 9px;
+  font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+  background:var(--raise);border:1px solid var(--line-2);color:var(--muted)}
+.pill.b{background:var(--blue-gl);border-color:rgba(80,170,240,.35);color:var(--blue)}
+.pill.g{background:rgba(52,211,153,.13);border-color:rgba(52,211,153,.3);color:var(--win)}
+.pill.solid{background:var(--blue);border-color:var(--blue);color:#04121F}
+.hint{font-size:12.5px;color:var(--muted);line-height:1.6;margin-top:10px}
+.hint b{color:var(--text);font-weight:600}
+label{display:block;font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;
+  color:var(--muted);margin:16px 0 7px}
+input[type=text],input[type=password],input[type=email],textarea,select{
+  width:100%;background:var(--raise);border:1px solid var(--line-2);border-radius:12px;
+  padding:13px;font-size:15px;transition:border-color .15s}
+input:focus,textarea:focus{border-color:var(--blue);outline:none}
+input::placeholder,textarea::placeholder{color:#5C6672}
+textarea{min-height:88px;resize:vertical;line-height:1.55}
+.err{display:none;color:var(--bad);font-size:12.5px;font-weight:600;margin-top:12px;
+  background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.25);
+  border-radius:10px;padding:10px 12px;line-height:1.45}
+.chips{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px}
+.chip{background:var(--raise);border:1px solid var(--line-2);border-radius:20px;
+  padding:7px 12px;font-size:12.5px;font-weight:500;display:flex;gap:7px;align-items:center}
+.chip button{color:var(--muted);font-size:15px;line-height:1}
+.empty{text-align:center;padding:48px 20px;color:var(--muted);font-size:13.5px;line-height:1.65}
+.toast{position:fixed;bottom:92px;left:50%;transform:translateX(-50%);background:var(--raise);
+  border:1px solid var(--line-2);border-radius:24px;padding:11px 20px;font-size:13.5px;
+  font-weight:600;z-index:150;box-shadow:0 8px 28px rgba(0,0,0,.5);animation:tUp .28s;max-width:90%}
+@keyframes tUp{from{opacity:0;transform:translate(-50%,12px)}}
+
+/* ═══════ AUTH ═══════ */
+.authwrap{min-height:100vh;display:flex;flex-direction:column;justify-content:center;
+  padding:32px 22px;background:radial-gradient(120% 55% at 50% 0%,rgba(80,170,240,.1),transparent 62%),var(--surface)}
+.authwrap .mark{font-size:40px;justify-content:center;margin-bottom:9px}
+.authtag{text-align:center;color:var(--muted);font-size:13.5px;margin-bottom:30px}
+.seg{display:flex;background:var(--raise);border:1px solid var(--line-2);border-radius:13px;
+  padding:4px;margin-bottom:6px}
+.seg button{flex:1;padding:10px;border-radius:9px;font-size:13.5px;font-weight:600;color:var(--muted)}
+.seg button[aria-selected="true"]{background:var(--blue);color:#04121F}
+.legalnote{text-align:center;font-size:11.5px;color:#5C6672;line-height:1.6;margin-top:18px}
+.legalnote button{color:var(--muted);text-decoration:underline;font-size:11.5px}
+
+/* ═══════ WILLKOMMEN ═══════ */
+.welcome{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:34px 26px;text-align:center;
+  background:radial-gradient(110% 50% at 50% 22%,rgba(80,170,240,.16),transparent 65%),var(--surface)}
+.wring{width:88px;height:88px;border-radius:50%;background:var(--blue-gl);
+  border:1px solid rgba(80,170,240,.35);display:grid;place-items:center;font-size:38px;
+  margin-bottom:26px;animation:wPop .55s cubic-bezier(.2,1.3,.4,1)}
+@keyframes wPop{from{opacity:0;transform:scale(.6)}}
+.welcome h1{font-family:'Poppins';font-weight:700;font-size:27px;line-height:1.25;
+  animation:wUp .5s .12s backwards}
+.welcome .slogan{font-family:'Poppins';font-weight:700;font-size:21px;color:var(--blue);
+  margin-top:12px;animation:wUp .5s .24s backwards}
+.welcome p{color:var(--muted);font-size:14px;line-height:1.65;margin-top:18px;max-width:330px;
+  animation:wUp .5s .36s backwards}
+.welcome .btn{margin-top:34px;max-width:330px;animation:wUp .5s .48s backwards}
+@keyframes wUp{from{opacity:0;transform:translateY(14px)}}
+
+/* ═══════ RUNDEN-KACHEL ═══════ */
+.round{width:100%;text-align:left;background:var(--card);border:1px solid var(--line);
+  border-radius:var(--r);padding:15px;margin-bottom:11px;display:block;transition:all .15s}
+.round:active{transform:scale(.99);border-color:var(--line-2)}
+.round .top{display:flex;align-items:center;gap:8px;margin-bottom:13px}
+.round .nm{font-family:'Poppins';font-weight:700;font-size:16.5px;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis}
+.round .arw{margin-left:auto;color:var(--muted);font-size:18px;flex-shrink:0}
+.round .row{display:flex;gap:20px}
+.round .row div{font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;
+  letter-spacing:.06em}
+.round .row b{display:block;font-family:'Poppins';font-size:17px;font-weight:700;color:var(--text);
+  margin-bottom:2px;letter-spacing:-.01em}
+.round .row b.hot{color:var(--blue)}
+.round.dash{background:transparent;border-style:dashed;color:var(--muted)}
+.round.dash .nm{color:var(--text)}
+
+/* ═══════ TEILEN ═══════ */
+.share{display:flex;gap:12px;align-items:center;width:100%;text-align:left;
+  background:linear-gradient(135deg,rgba(80,170,240,.13),rgba(80,170,240,.04));
+  border:1px solid rgba(80,170,240,.28);border-radius:var(--r);padding:14px;margin-bottom:12px}
+.share .ic{width:40px;height:40px;border-radius:12px;background:var(--blue);color:#04121F;
+  display:grid;place-items:center;font-size:17px;flex-shrink:0}
+.share b{display:block;font-size:14.5px;font-weight:600}
+.share small{font-size:11.5px;color:var(--muted)}
+
+/* ═══════ PREMIUM ═══════ */
+.promo{border-radius:18px;padding:20px;position:relative;overflow:hidden;
+  background:linear-gradient(155deg,#152436,#0C1219 60%);border:1px solid rgba(80,170,240,.3)}
+.promo::before{content:'';position:absolute;top:-45%;right:-25%;width:78%;height:150%;
+  background:radial-gradient(circle,rgba(80,170,240,.22),transparent 68%)}
+.promo>*{position:relative;z-index:2}
+.promo h2{font-family:'Poppins';font-weight:700;font-size:22px;line-height:1.3;margin:12px 0 8px}
+.promo h2 em{color:var(--blue);font-style:normal}
+.promo p{font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:17px}
+.perks{display:flex;flex-direction:column;gap:13px;margin-bottom:19px}
+.perk{display:flex;gap:12px;align-items:flex-start;font-size:13.5px;font-weight:600}
+.perk i{width:30px;height:30px;flex-shrink:0;border-radius:10px;background:var(--blue-gl);
+  border:1px solid rgba(80,170,240,.3);display:grid;place-items:center;font-style:normal;font-size:14px}
+.perk small{display:block;font-weight:400;color:var(--muted);font-size:11.5px;margin-top:3px;line-height:1.5}
+.codebox{background:var(--bg);border:1px dashed var(--line-2);border-radius:12px;padding:13px;margin-bottom:15px}
+.codebox .cd{font-family:'Poppins';font-weight:800;font-size:21px;color:var(--blue);
+  letter-spacing:.1em;margin-top:5px}
+.price{display:flex;align-items:baseline;gap:7px;margin-bottom:5px}
+.price .p{font-family:'Poppins';font-weight:800;font-size:34px;letter-spacing:-.02em}
+.price .per{color:var(--muted);font-size:13px}
+
+/* ═══════ SPIELTAGE ═══════ */
+.days{display:flex;gap:6px;overflow-x:auto;padding:11px 12px;background:var(--bg);
+  border-bottom:1px solid var(--line);position:sticky;top:53px;z-index:19;scrollbar-width:none}
 .days::-webkit-scrollbar{display:none}
-.days button{flex:0 0 auto;background:var(--stand);border:1px solid var(--line);border-radius:6px;
-  color:var(--muted);font:500 12px/1 'DM Mono',monospace;padding:9px 11px;min-width:38px}
-.days button[aria-current="true"]{background:var(--flood);border-color:var(--flood);color:var(--night)}
-.days button.played{color:#4A5A64}
+.days button{flex:0 0 auto;min-width:40px;background:var(--raise);border:1px solid var(--line);
+  border-radius:10px;color:var(--muted);font-weight:600;font-size:13px;padding:8px 10px}
+.days button[aria-current="true"]{background:var(--blue);border-color:var(--blue);color:#04121F}
+.days button.done{opacity:.4}
 
-/* ══ Budget ══ */
-.budget{display:flex;align-items:center;gap:10px;padding:11px 14px;background:var(--stand);
-  border-bottom:1px solid var(--line);position:sticky;top:100px;z-index:4}
-.budget .lbl{font:500 10px/1 'DM Mono',monospace;letter-spacing:.14em;color:var(--muted);text-transform:uppercase}
-.bar{flex:1;height:5px;background:var(--line);border-radius:3px;overflow:hidden}
-.bar i{display:block;height:100%;background:var(--flood);transition:width .3s}
-.budget .num{font:500 13px/1 'DM Mono',monospace;color:var(--flood)}
-.budget.empty .num{color:var(--pitch)}
+/* ═══════ BUDGET ═══════ */
+.budget{display:flex;align-items:center;gap:11px;background:var(--card);border:1px solid var(--line);
+  border-radius:13px;padding:12px 14px;margin-bottom:14px}
+.budget .lb{font-size:10px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+.bar{flex:1;height:6px;background:var(--raise);border-radius:4px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--blue);border-radius:4px;transition:width .3s}
+.budget .nm{font-family:'Poppins';font-weight:700;font-size:14px;color:var(--blue)}
 
-.view{display:none;padding:14px} .view.on{display:block}
-main{flex:1;padding-bottom:110px}
+/* ═══════ SPIELKARTE ═══════ */
+.match{background:var(--card);border:1px solid var(--line);border-radius:var(--r);
+  padding:14px;margin-bottom:11px}
+.mtop{display:flex;align-items:center;gap:8px;font-size:10.5px;font-weight:600;
+  letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.src{margin-left:auto;font-size:9.5px;padding:3px 7px;border-radius:20px;font-weight:700;
+  background:var(--raise);border:1px solid var(--line-2)}
+.src.mkt{background:var(--blue-gl);border-color:rgba(80,170,240,.3);color:var(--blue)}
+.who{font-family:'Poppins';font-weight:600;font-size:15.5px;margin:10px 0 13px;line-height:1.35}
+.who em{font-style:normal;color:var(--muted);font-weight:400}
+.odds{display:flex;gap:7px}
+.odds button{flex:1;background:var(--raise);border:1px solid var(--line-2);border-radius:12px;
+  padding:10px 3px;display:flex;flex-direction:column;align-items:center;gap:3px;transition:all .13s}
+.odds .sd{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.odds .q{font-family:'Poppins';font-size:16px;font-weight:700;letter-spacing:-.02em}
+.odds button[aria-pressed="true"]{background:var(--blue);border-color:var(--blue);color:#04121F}
+.odds button[aria-pressed="true"] .sd{color:rgba(4,18,31,.7)}
+.odds button.win{border-color:var(--win)}
 
-/* ══ Spielkarte ══ */
-.match{background:var(--stand);border:1px solid var(--line);border-radius:11px;padding:12px;margin-bottom:9px}
-.match .when{display:flex;align-items:center;gap:7px;font:400 10px/1 'DM Mono',monospace;
-  color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
-.src{font:500 8px/1 'DM Mono',monospace;letter-spacing:.08em;padding:3px 5px;border-radius:3px;
-  margin-left:auto;text-transform:uppercase}
-.src.mkt{background:rgba(63,191,127,.13);color:var(--pitch)}
-.src.mdl{background:rgba(124,142,151,.15);color:var(--muted)}
-.match .who{font-size:15px;font-variation-settings:'wdth' 88,'wght' 700;margin:7px 0 11px;line-height:1.3}
-.match .who em{font-style:normal;color:var(--muted);font-variation-settings:'wdth' 88,'wght' 400}
-.odds{display:flex;gap:6px}
-.odds button{flex:1;background:var(--raise);border:1px solid var(--line);border-radius:7px;
-  padding:9px 4px;color:var(--chalk);display:flex;flex-direction:column;align-items:center;gap:3px;
-  transition:border-color .15s,background .15s}
-.odds button:hover{border-color:#3A5261}
-.odds .side{font:500 9px/1 'DM Mono',monospace;letter-spacing:.1em;color:var(--muted);text-transform:uppercase}
-.odds .q{font:500 15px/1 'DM Mono',monospace}
-.odds button[aria-pressed="true"]{background:rgba(255,197,61,.13);border-color:var(--flood)}
-.odds button[aria-pressed="true"] .q,.odds button[aria-pressed="true"] .side{color:var(--flood)}
+/* ═══════ ERGEBNIS ═══════ */
+.exact{margin-top:12px;border-top:1px solid var(--line);padding-top:12px}
+.exhead{display:flex;align-items:center;gap:8px;width:100%;font-size:12px;font-weight:600;
+  color:var(--blue);padding:3px 0}
+.exhead .cr{margin-left:auto;transition:transform .18s;font-size:13px}
+.exhead[aria-expanded="true"] .cr{transform:rotate(90deg)}
+.exlock{display:flex;align-items:center;gap:11px;width:100%;text-align:left}
+.exlock .t{flex:1}
+.exlock b{font-size:13px;font-weight:600;display:block}
+.exlock small{font-size:11.5px;color:var(--muted)}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:11px}
+.grid button{background:var(--raise);border:1px solid var(--line-2);border-radius:10px;
+  padding:8px 2px;display:flex;flex-direction:column;gap:2px;align-items:center}
+.grid .s{font-family:'Poppins';font-size:13px;font-weight:700}
+.grid .o{font-size:10px;color:var(--muted);font-weight:500}
+.grid button[aria-pressed="true"]{background:var(--blue);border-color:var(--blue);color:#04121F}
+.grid button[aria-pressed="true"] .o{color:rgba(4,18,31,.7)}
+.axis{font-size:10px;color:var(--muted);font-weight:600;letter-spacing:.06em;
+  text-transform:uppercase;margin-top:11px}
 
-/* ══ Ergebniswette ══ */
-.exact{margin-top:9px}
-.exact>summary{list-style:none;cursor:pointer;font:500 10px/1 'DM Mono',monospace;
-  letter-spacing:.12em;text-transform:uppercase;color:var(--muted);padding:8px 0;display:flex;gap:6px;align-items:center}
-.exact>summary::-webkit-details-marker{display:none}
-.exact>summary::before{content:'▸';transition:transform .15s;display:inline-block}
-.exact[open]>summary::before{transform:rotate(90deg)}
-.exact[open]>summary{color:var(--flood)}
-.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;padding:4px 0 2px}
-.grid button{background:var(--raise);border:1px solid var(--line);border-radius:6px;padding:8px 2px;
-  color:var(--chalk);display:flex;flex-direction:column;gap:3px;align-items:center}
-.grid .s{font:500 12px/1 'DM Mono',monospace}
-.grid .o{font:400 10px/1 'DM Mono',monospace;color:var(--muted)}
-.grid button[aria-pressed="true"]{background:rgba(255,197,61,.13);border-color:var(--flood)}
-.grid button[aria-pressed="true"] .s,.grid button[aria-pressed="true"] .o{color:var(--flood)}
-.axis{font:400 9px/1 'DM Mono',monospace;color:var(--muted);letter-spacing:.1em;
-  text-transform:uppercase;margin:8px 0 2px}
+/* ═══════ EINSATZ ═══════ */
+.stake{display:flex;align-items:center;gap:12px;margin-top:12px;padding-top:12px;
+  border-top:1px solid var(--line)}
+.stake input[type=range]{flex:1;accent-color:var(--blue);height:20px}
+.stake .v{font-size:12px;font-weight:600;white-space:nowrap;color:var(--muted)}
+.stake .v b{color:var(--blue);font-weight:700}
+.match.hit{border-color:rgba(52,211,153,.45)}
+.match.miss{opacity:.5}
+.res{display:flex;justify-content:space-between;align-items:center;gap:9px;margin-top:12px;
+  padding-top:11px;border-top:1px solid var(--line);font-size:12px;font-weight:500}
+.res .pt{font-family:'Poppins';font-size:15px;font-weight:700}
+.hit .pt{color:var(--win)}.miss .pt{color:var(--muted)}
+.tend{background:var(--blue-gl);border:1px solid rgba(80,170,240,.3);border-radius:6px;
+  padding:2px 7px;font-size:10px;font-weight:700;color:var(--blue);margin-left:6px}
 
-/* ══ Einsatz ══ */
-.stake{display:none;align-items:center;gap:10px;margin-top:11px;padding-top:11px;border-top:1px dashed var(--line)}
-.stake.on{display:flex}
-.stake input[type=range]{flex:1;accent-color:var(--flood)}
-.stake .val{font:500 12px/1 'DM Mono',monospace;color:var(--muted);white-space:nowrap}
-.stake .val b{color:var(--flood);font-weight:500}
-.match.hit{border-color:rgba(63,191,127,.5)} .match.miss{opacity:.5}
-.result{display:flex;justify-content:space-between;margin-top:10px;padding-top:10px;
-  border-top:1px solid var(--line);font:500 11px/1 'DM Mono',monospace}
-.result .out{color:var(--muted);text-transform:uppercase}
-.result .pts{font-size:14px} .hit .pts{color:var(--pitch)} .miss .pts{color:var(--corner)}
+/* ═══════ TABELLE ═══════ */
+.rank{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);
+  border-radius:13px;padding:12px 14px;margin-bottom:8px}
+.rank.lead{border-color:rgba(80,170,240,.4);background:linear-gradient(100deg,var(--blue-gl),var(--card) 55%)}
+.rank .ps{font-family:'Poppins';font-weight:700;font-size:14px;width:20px;color:var(--muted)}
+.rank.lead .ps{color:var(--blue)}
+.rank .nm{flex:1;font-weight:500;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rank .dl{font-size:11.5px;font-weight:700;color:var(--win);opacity:0;transition:opacity .3s}
+.rank .dl.on{opacity:1}
+.rank .pts{font-family:'Poppins';font-weight:700;font-size:16px;font-variant-numeric:tabular-nums}
+.rank.me .nm::after{content:'DU';font-size:9px;background:var(--blue);color:#04121F;padding:2px 6px;
+  border-radius:6px;margin-left:8px;vertical-align:1px;font-weight:700}
 
-/* ══ Tabelle ══ */
-.rank{display:flex;align-items:center;gap:12px;padding:13px 12px;border-bottom:1px solid var(--line)}
-.rank:first-child{border-top:1px solid var(--line)}
-.rank .pos{font:500 12px/1 'DM Mono',monospace;color:var(--muted);width:18px}
-.rank.lead .pos{color:var(--flood)}
-.rank .nm{flex:1;font-size:15px;font-variation-settings:'wdth' 88,'wght' 600}
-.rank.me .nm::after{content:'DU';font:500 8px/1 'DM Mono',monospace;letter-spacing:.14em;
-  background:var(--flood);color:var(--night);padding:3px 4px;border-radius:2px;margin-left:8px;vertical-align:2px}
-.rank .delta{font:400 11px/1 'DM Mono',monospace;color:var(--pitch);opacity:0;transition:opacity .3s}
-.rank .delta.show{opacity:1}
-.flap{font:500 17px/1 'DM Mono',monospace;background:var(--raise);border:1px solid var(--line);
-  border-radius:4px;padding:7px 9px;min-width:76px;text-align:right;position:relative;overflow:hidden;
-  box-shadow:inset 0 -1px 0 rgba(0,0,0,.5)}
-.flap::after{content:'';position:absolute;inset:50% 0 auto;height:1px;background:rgba(0,0,0,.45)}
-.rank.lead .flap{color:var(--flood);border-color:rgba(255,197,61,.4)}
+/* ═══════ CHAT ═══════ */
+.chat{display:flex;flex-direction:column;gap:12px}
+.msg{max-width:82%;display:flex;flex-direction:column;gap:4px}
+.msg.mine{align-self:flex-end;align-items:flex-end}
+.bub{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:10px 14px;
+  font-size:14px;line-height:1.4}
+.msg.mine .bub{background:var(--blue);border-color:var(--blue);color:#04121F}
+.msg .au{font-size:10.5px;font-weight:600;color:var(--muted);padding:0 5px}
+.stk{font-size:50px;line-height:1}
+.stk.word{font-family:'Poppins';font-weight:800;font-size:26px;background:var(--blue-gl);
+  border:1px solid rgba(80,170,240,.35);color:var(--blue);padding:9px 17px;border-radius:14px;
+  letter-spacing:.02em}
+.composer{position:fixed;bottom:0;width:100%;max-width:480px;background:var(--bg);
+  border-top:1px solid var(--line);padding:11px 12px calc(11px + env(safe-area-inset-bottom));
+  display:flex;gap:8px;z-index:31}
+.composer input{flex:1;min-width:0;border-radius:12px;padding:12px 14px}
+.composer button{width:46px;flex-shrink:0;border-radius:12px;background:var(--blue);color:#04121F;
+  font-size:17px;display:grid;place-items:center}
+.composer button.gh{background:var(--raise);border:1px solid var(--line-2);color:var(--text)}
+.picker{position:fixed;bottom:0;width:100%;max-width:480px;background:var(--bg);
+  border-top:1px solid var(--line);z-index:30;display:grid;grid-template-columns:repeat(4,1fr);
+  gap:9px;padding:15px 12px calc(82px + env(safe-area-inset-bottom))}
+.picker button{aspect-ratio:1;border:1px solid var(--line-2);border-radius:14px;background:var(--raise);
+  font-size:28px;display:grid;place-items:center}
+.picker button.w{font-family:'Poppins';font-weight:800;font-size:13px;color:var(--blue);
+  background:var(--blue-gl);border-color:rgba(80,170,240,.3)}
 
-/* ══ Karten ══ */
-.card{background:var(--stand);border:1px solid var(--line);border-radius:11px;padding:14px;margin-bottom:11px}
-.card h3{font-size:12px;font-variation-settings:'wdth' 82,'wght' 800;letter-spacing:.14em;
-  text-transform:uppercase;margin-bottom:9px}
-.card p{font-size:13px;line-height:1.6;color:var(--muted)}
-textarea{width:100%;background:var(--raise);border:1px solid var(--line);border-radius:7px;
-  color:var(--chalk);font:inherit;font-size:13px;line-height:1.6;padding:11px;resize:vertical;min-height:88px}
-.members{display:flex;flex-wrap:wrap;gap:6px}
-.chip{background:var(--raise);border:1px solid var(--line);border-radius:20px;padding:6px 11px;font-size:12px}
+/* ═══════ AUSWAHL / ANFRAGE ═══════ */
+.opt{width:100%;text-align:left;background:var(--card);border:1px solid var(--line);
+  border-radius:var(--r);padding:17px;margin-bottom:11px;display:block;transition:all .15s}
+.opt:active{border-color:var(--blue);transform:scale(.99)}
+.opt b{display:block;font-family:'Poppins';font-size:16px;font-weight:700;margin-bottom:6px}
+.opt p{font-size:12.5px;color:var(--muted);line-height:1.6}
+.opt .pill{margin-bottom:10px}
+.toggle{display:flex;gap:8px;margin-top:8px}
+.toggle button{flex:1;background:var(--raise);border:1px solid var(--line-2);border-radius:12px;
+  padding:12px 8px;text-align:center}
+.toggle button[aria-pressed="true"]{background:var(--blue-gl);border-color:var(--blue);color:var(--blue)}
+.toggle .t{display:block;font-size:13.5px;font-weight:600}
+.toggle .d{display:block;font-size:10.5px;color:var(--muted);margin-top:3px}
+.toggle button[aria-pressed="true"] .d{color:rgba(80,170,240,.75)}
+.reqrow{display:flex;align-items:center;gap:11px;background:var(--card);border:1px solid var(--line);
+  border-radius:13px;padding:12px;margin-bottom:9px}
+.reqrow .nm{flex:1;font-size:14px;font-weight:500}
+.mini{padding:8px 13px;border-radius:10px;font-size:12.5px;font-weight:600}
+.mini.ok{background:var(--blue);color:#04121F}
+.mini.no{background:var(--raise);border:1px solid var(--line-2);color:var(--muted)}
 
-/* ══ Aktionsleiste ══ */
-.dock{position:fixed;bottom:0;width:100%;max-width:460px;
-  padding:12px 14px calc(12px + env(safe-area-inset-bottom));
-  background:linear-gradient(to top,var(--night) 62%,transparent)}
-.cta{width:100%;border:0;border-radius:8px;padding:15px;background:var(--flood);color:var(--night);
-  font-size:13px;font-variation-settings:'wdth' 85,'wght' 800;letter-spacing:.14em;text-transform:uppercase}
-.cta:disabled{background:var(--raise);color:var(--muted);cursor:not-allowed}
-.cta.ghost{background:none;border:1px solid var(--line);color:var(--chalk)}
-.dockmsg{font:400 11px/1.5 'DM Mono',monospace;color:var(--muted);text-align:center;margin-bottom:9px}
-.empty{text-align:center;padding:44px 20px;color:var(--muted);font-size:13px;line-height:1.7}
+/* ═══════ RECHTSTEXTE ═══════ */
+.legal{font-size:13.5px;line-height:1.72;color:#C3CAD2}
+.legal h3{font-family:'Poppins';font-size:15px;font-weight:700;color:var(--text);margin:24px 0 9px}
+.legal h3:first-child{margin-top:0}
+.legal p{margin-bottom:11px}
+.legal ul{margin:0 0 11px 18px}
+.legal li{margin-bottom:6px}
+.legal .ph{color:var(--warn);font-weight:600}
+.banner{background:rgba(251,191,36,.09);border:1px solid rgba(251,191,36,.3);border-radius:12px;
+  padding:13px;font-size:12.5px;line-height:1.6;color:#E8D5A8;margin-bottom:20px}
+
+/* ═══════ AKTIONSLEISTE ═══════ */
+.dock{position:fixed;bottom:0;width:100%;max-width:480px;z-index:15;
+  padding:14px 14px calc(14px + env(safe-area-inset-bottom));
+  background:linear-gradient(to top,var(--surface) 62%,transparent)}
+.dockmsg{font-size:12px;color:var(--muted);text-align:center;margin-bottom:10px;font-weight:500}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
 <body>
+
+<div id="splash">
+  <video id="vid" muted playsinline preload="auto"></video>
+  <div class="smark" id="smark"><span>T</span><span class="sl s-i">i</span><span>p</span><span
+    class="sl s-o">o</span><span>f</span><span>f</span></div>
+</div>
+
 <div class="app" id="app"></div>
 
 <script>
-/* ═══════════════════════════════════════════════════════════════════════
-   FLUTLICHT — Tippspiel für Freundesrunden
-   Bundesliga und UFC laufen als getrennte Runden mit eigener Tabelle.
+/* ══════════════════════════════════════════════════════════════════════════════
+   TIPOFF
+   Tippspiel für Fußball, Kampfsport und eigene Ligen.
 
-   DATENQUELLEN
-   1) Spielplan Bundesliga  → OpenLigaDB, kostenlos, ohne Schlüssel
-                              api.openligadb.de/getmatchdata/bl1/2026
-   2) Quoten + UFC-Kämpfe   → The Odds API, Schlüssel nötig
-                              api.the-odds-api.com/v4/...
-   3) Ergebnisquoten        → aus den 1X2-Quoten hergeleitet (Poisson)
-
-   Ohne Schlüssel läuft alles mit Modellquoten weiter — die Runde
-   funktioniert, die Zahlen stimmen nur nicht mit dem Markt überein.
-   ═══════════════════════════════════════════════════════════════════════ */
+   Daten:   data.json — wird wöchentlich von GitHub Actions erzeugt
+            (Spielplan: OpenLigaDB · Quoten: The Odds API)
+   Konten:  Firebase Authentication, sobald FIREBASE_CONFIG ausgefüllt ist.
+            Vorher läuft ein lokaler Demo-Modus, damit der Ablauf testbar bleibt.
+   Premium: simuliert — ein Schalter, kein echtes Abo, keine Zahlung.
+   ══════════════════════════════════════════════════════════════════════════════ */
 
 const CFG = {
-  season: 2026,
-  league: 'bl1',
-  dataUrl: 'https://raw.githubusercontent.com/dfsr19/tipoff/main/data.json',
-  budget: 100,                                    // Tipp-Punkte je Spieltag
-  vig1x2: 0.06,                                   // Marge Siegwette
-  vigExact: 0.16                                  // Marge Ergebniswette (höher, wie am Markt)
+  dataUrl:'https://raw.githubusercontent.com/dfsr19/tipoff/main/data.json',
+  shareUrl:'https://dfsr19.github.io/tipoff',
+  intro:'intro.mp4',
+  budget:100,          // Tipp-Punkte je Spieltag
+  amateurPts:10,       // eigene Ligen ohne Quoten: fester Wert je Treffer
+  freeRounds:5,        // wie viele Runden ohne Premium
+  price:'4,99 €'
 };
 
-/* ─── Vereine 2026/27 mit Angriffs-/Abwehrwerten für das Modell ─── */
-const CLUBS = {
-  'FC Bayern München':1, 'Bayer 04 Leverkusen':1, 'Borussia Dortmund':1, 'RB Leipzig':1,
-  'Eintracht Frankfurt':1, 'VfB Stuttgart':1, 'SC Freiburg':1, 'TSG Hoffenheim':1,
-  '1. FSV Mainz 05':1, 'Werder Bremen':1, 'Borussia Mönchengladbach':1, '1. FC Union Berlin':1,
-  'FC Augsburg':1, '1. FC Köln':1, 'Hamburger SV':1, 'FC Schalke 04':1,
-  'SC Paderborn 07':1, 'SV 07 Elversberg':1
+/* ─── Firebase: Werte aus der Firebase-Konsole hier eintragen ───
+   Projekteinstellungen → "Deine Apps" → Web-App (</>) → Konfiguration kopieren.
+   Diese Werte sind nicht geheim; abgesichert wird über die Firebase-Konsole.
+   Solange "DEIN-" stehen bleibt, läuft der lokale Demo-Modus.              */
+const FIREBASE_CONFIG = {
+  apiKey:"AIzaSyB4N8b8eJzcYgx3e-SFYLwN0OF0synKXVw",
+  authDomain:"tipoff-865be.firebaseapp.com",
+  projectId:"tipoff-865be",
+  storageBucket:"tipoff-865be.firebasestorage.app",
+  messagingSenderId:"1039073175720",
+  appId:"1:1039073175720:web:4deee3e805d49167a5fa9d"
 };
-const RATING = {
-  'FC Bayern München':[2.15,.72],'Bayer 04 Leverkusen':[1.72,.98],'Borussia Dortmund':[1.68,1.05],
-  'RB Leipzig':[1.58,1.06],'Eintracht Frankfurt':[1.66,1.28],'VfB Stuttgart':[1.54,1.20],
-  'SC Freiburg':[1.34,1.24],'TSG Hoffenheim':[1.36,1.44],'1. FSV Mainz 05':[1.28,1.24],
-  'Werder Bremen':[1.36,1.48],'Borussia Mönchengladbach':[1.30,1.34],'1. FC Union Berlin':[1.10,1.22],
-  'FC Augsburg':[1.14,1.40],'1. FC Köln':[1.20,1.46],'Hamburger SV':[1.20,1.44],
-  'FC Schalke 04':[1.16,1.48],'SC Paderborn 07':[1.04,1.56],'SV 07 Elversberg':[1.00,1.60]
+const FB_ON = !FIREBASE_CONFIG.apiKey.startsWith('DEIN');
+let FB=null;
+
+async function initAuth(){
+  if(!FB_ON) return null;
+  try{
+    const [{initializeApp},auth]=await Promise.all([
+      import('https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js'),
+      import('https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js')]);
+    return {auth:auth.getAuth(initializeApp(FIREBASE_CONFIG)),...auth};
+  }catch(e){ console.error('Firebase:',e); return null; }
+}
+const AUTH_ERR={
+  'auth/email-already-in-use':'Diese E-Mail ist schon registriert. Melde dich einfach an.',
+  'auth/invalid-email':'Das sieht nicht nach einer gültigen E-Mail-Adresse aus.',
+  'auth/weak-password':'Das Passwort braucht mindestens sechs Zeichen.',
+  'auth/wrong-password':'Das Passwort stimmt nicht.',
+  'auth/invalid-credential':'E-Mail oder Passwort stimmt nicht.',
+  'auth/user-not-found':'Zu dieser E-Mail gibt es noch kein Konto.',
+  'auth/too-many-requests':'Zu viele Versuche. Warte einen Moment.',
+  'auth/network-request-failed':'Keine Verbindung. Prüf dein Internet.'
 };
-const short = n => n.replace(/^(1\.|SV 07|SC|FC|VfB|VfL|TSG|SG|BV 09)\s+/,'')
-                    .replace(' München','').replace('Borussia ','').replace(' 04','')
-                    .replace(' 05','').replace(' 07','');
+const authErr=c=>AUTH_ERR[c]||'Da ist etwas schiefgelaufen. Versuch es nochmal.';
 
-/* ═══════════════ 1. WAHRSCHEINLICHKEITSMODELL ═══════════════
-   Poisson-Modell: aus zwei Torerwartungen folgt die komplette
-   Ergebnisverteilung — und damit jede Ergebnisquote.            */
-
-function poisson(k,l){ let f=1; for(let i=2;i<=k;i++) f*=i; return Math.exp(-l)*Math.pow(l,k)/f; }
-
-function scoreMatrix(lh,la,max=6){
-  const m=[];
-  for(let i=0;i<=max;i++){ m[i]=[]; for(let j=0;j<=max;j++) m[i][j]=poisson(i,lh)*poisson(j,la); }
-  return m;
-}
-function probs1X2(m){
-  let h=0,d=0,a=0;
-  m.forEach((row,i)=>row.forEach((p,j)=>{ i>j?h+=p : i<j?a+=p : d+=p; }));
-  const s=h+d+a; return {h:h/s,d:d/s,a:a/s};
-}
-/* Marge rausrechnen: aus Buchmacherquoten echte Wahrscheinlichkeiten */
-function devig(qs){
-  const raw=qs.map(q=>1/q), s=raw.reduce((a,b)=>a+b,0);
-  return raw.map(r=>r/s);
-}
-/* Umkehrung: welche Torerwartungen passen zu diesen 1X2-Quoten?
-   Grobes Raster reicht — der Fehler liegt unter einem Prozentpunkt. */
-function fitLambdas(pH,pD,pA){
-  let best=null,err=1e9;
-  for(let lh=0.30;lh<=3.60;lh+=0.05)
-    for(let la=0.25;la<=3.20;la+=0.05){
-      const p=probs1X2(scoreMatrix(lh,la,6));
-      const e=(p.h-pH)**2+(p.d-pD)**2+(p.a-pA)**2;
-      if(e<err){err=e;best=[lh,la];}
-    }
-  return best;
-}
-/* Modellquoten, wenn kein Markt vorliegt (z.B. 30. Spieltag im August) */
-function modelLambdas(home,away){
-  const [ah,dh]=RATING[home]||[1.3,1.35], [aa,da]=RATING[away]||[1.3,1.35];
-  return [ah*da*0.95, aa*dh*0.80];
-}
-const price = (p,vig) => Math.max(1.01, Math.round((1-vig)/p*100)/100);
-
-/* Bündelt alles zu einem tippbaren Spiel */
-function buildFootball(raw){
-  let lh,la,source;
-  if(raw.market){                                   // echte Quoten vorhanden
-    const [pH,pD,pA]=devig([raw.market.h,raw.market.d,raw.market.a]);
-    [lh,la]=fitLambdas(pH,pD,pA); source='mkt';
-  }else{
-    [lh,la]=modelLambdas(raw.home,raw.away); source='mdl';
-  }
-  const m=scoreMatrix(lh,la,6), p=probs1X2(m);
-  const sides=[
-    {key:'1',label:'1',q: raw.market? raw.market.h : price(p.h,CFG.vig1x2)},
-    {key:'X',label:'X',q: raw.market? raw.market.d : price(p.d,CFG.vig1x2)},
-    {key:'2',label:'2',q: raw.market? raw.market.a : price(p.a,CFG.vig1x2)}
-  ];
-  const exact=[];                                   // 0:0 bis 3:3
-  for(let i=0;i<=3;i++) for(let j=0;j<=3;j++)
-    exact.push({key:`${i}:${j}`,label:`${i}:${j}`,q:price(m[i][j],CFG.vigExact)});
-  return {...raw, sport:'fb', sides, exact, source};
+/* ══════════ WETTBEWERBE ══════════
+   Diese fünf stehen zur Auswahl, wenn jemand eine Runde erstellt.
+   Ergebnisse kommen für alle automatisch aus data.json.                       */
+const COMPS={
+  bl1:{name:'Bundesliga',       kurz:'BL',  sport:'fb', em:'⚽'},
+  bl2:{name:'2. Bundesliga',    kurz:'BL2', sport:'fb', em:'⚽'},
+  bl3:{name:'3. Liga',          kurz:'BL3', sport:'fb', em:'⚽', prem:true},
+  ucl:{name:'Champions League', kurz:'CL',  sport:'fb', em:'🏆', prem:true},
+  ufc:{name:'UFC',              kurz:'UFC', sport:'mma',em:'🥊'}
+};
+/* Steht dieser Wettbewerb gerade offen? */
+const compFrei=id=>!COMPS[id]?.prem||S.premium;
+const compName=id=>COMPS[id]?.name||'Eigene Runde';
+/* Beschriftung einer Runde — verträgt auch fehlende Wettbewerbsangaben. */
+function compTag(r,kurz){
+  if(r.custom||!COMPS[r.compId]) return '🏟 Eigene Liga';
+  const c=COMPS[r.compId];
+  return c.em+' '+(kurz?c.kurz:c.name);
 }
 
-/* ═══════════════ 2. DATEN LADEN ═══════════════ */
+/* ══════════ VEREINE (nur als Notfallplan ohne Netz) ══════════ */
+const CLUBS={
+ bl1:['FC Bayern München','Bayer 04 Leverkusen','Borussia Dortmund','RB Leipzig',
+ 'Eintracht Frankfurt','VfB Stuttgart','SC Freiburg','TSG Hoffenheim','1. FSV Mainz 05',
+ 'Werder Bremen','Borussia Mönchengladbach','1. FC Union Berlin','FC Augsburg','1. FC Köln',
+ 'Hamburger SV','FC Schalke 04','SC Paderborn 07','SV 07 Elversberg'],
+ bl2:['Hertha BSC','Fortuna Düsseldorf','1. FC Nürnberg','Karlsruher SC','Hannover 96',
+ 'SV Darmstadt 98','Holstein Kiel','VfL Bochum','1. FC Kaiserslautern','SC Preußen Münster',
+ 'Eintracht Braunschweig','SpVgg Greuther Fürth','1. FC Magdeburg','FC St. Pauli',
+ 'Arminia Bielefeld','Dynamo Dresden','VfL Osnabrück','SSV Ulm 1846']
+};
+const RATING={'FC Bayern München':[2.15,.72],'Bayer 04 Leverkusen':[1.72,.98],
+ 'Borussia Dortmund':[1.68,1.05],'RB Leipzig':[1.58,1.06],'Eintracht Frankfurt':[1.66,1.28],
+ 'VfB Stuttgart':[1.54,1.20],'SC Freiburg':[1.34,1.24],'TSG Hoffenheim':[1.36,1.44],
+ '1. FSV Mainz 05':[1.28,1.24],'Werder Bremen':[1.36,1.48],'Borussia Mönchengladbach':[1.30,1.34],
+ '1. FC Union Berlin':[1.10,1.22],'FC Augsburg':[1.14,1.40],'1. FC Köln':[1.20,1.46],
+ 'Hamburger SV':[1.20,1.44],'FC Schalke 04':[1.16,1.48],'SC Paderborn 07':[1.04,1.56],
+ 'SV 07 Elversberg':[1.00,1.60],
+ 'Hertha BSC':[1.42,1.30],'Fortuna Düsseldorf':[1.40,1.32],'1. FC Nürnberg':[1.30,1.38],
+ 'Karlsruher SC':[1.34,1.36],'Hannover 96':[1.32,1.34],'SV Darmstadt 98':[1.24,1.44],
+ 'Holstein Kiel':[1.38,1.42],'VfL Bochum':[1.26,1.40],'1. FC Kaiserslautern':[1.30,1.36],
+ 'SC Preußen Münster':[1.10,1.48],'Eintracht Braunschweig':[1.08,1.50],
+ 'SpVgg Greuther Fürth':[1.22,1.44],'1. FC Magdeburg':[1.36,1.38],'FC St. Pauli':[1.28,1.20],
+ 'Arminia Bielefeld':[1.20,1.34],'Dynamo Dresden':[1.18,1.42],'VfL Osnabrück':[1.06,1.52],
+ 'SSV Ulm 1846':[1.04,1.50]};
+const short=n=>n.replace(/^(1\.|SV 07|SC|FC|VfB|VfL|TSG)\s+/,'').replace(' München','')
+  .replace('Borussia ','').replace(' 04','').replace(' 05','').replace(' 07','');
 
-const net = {data:'lade', updated:null};
+/* ══════════ POISSON (Ersatzquoten + Simulation) ══════════ */
+const pois=(k,l)=>{let f=1;for(let i=2;i<=k;i++)f*=i;return Math.exp(-l)*l**k/f;};
+const mtx=(lh,la,m=6)=>{const o=[];for(let i=0;i<=m;i++){o[i]=[];
+  for(let j=0;j<=m;j++)o[i][j]=pois(i,lh)*pois(j,la);}return o;};
+function p1X2(m){let h=0,d=0,a=0;m.forEach((r,i)=>r.forEach((p,j)=>{i>j?h+=p:i<j?a+=p:d+=p}));
+  const s=h+d+a;return{h:h/s,d:d/s,a:a/s};}
+const price=(p,v)=>Math.max(1.01,Math.round((1-v)/p*100)/100);
+function fitL(pH,pD,pA){let best=[1.4,1.1],err=9e9;
+  for(let lh=.3;lh<=3.4;lh+=.1)for(let la=.25;la<=3;la+=.1){
+    const p=p1X2(mtx(lh,la));const e=(p.h-pH)**2+(p.d-pD)**2+(p.a-pA)**2;
+    if(e<err){err=e;best=[lh,la];}}return best;}
+function fallbackMatch(m){
+  const[ah,dh]=RATING[m.home]||[1.3,1.35],[aa,da]=RATING[m.away]||[1.3,1.35];
+  const M=mtx(ah*da*.95,aa*dh*.8),p=p1X2(M),exact=[];
+  for(let i=0;i<=3;i++)for(let j=0;j<=3;j++)
+    exact.push({key:`${i}:${j}`,label:`${i}:${j}`,q:price(M[i][j],.16)});
+  return{...m,sport:'fb',source:'mdl',exact,sides:[
+    {key:'1',label:'1',q:price(p.h,.06)},{key:'X',label:'X',q:price(p.d,.06)},
+    {key:'2',label:'2',q:price(p.a,.06)}]};
+}
 
-/* Eine einzige Datei, fertig aufbereitet vom wöchentlichen Abruf auf GitHub:
-   Spielplan (OpenLigaDB) + Marktquoten (Odds API) + hergeleitete Ergebnisquoten.
-   Kein Schlüssel im Browser, nichts einzugeben. */
+/* ══════════ DATEN ══════════ */
+const net={data:'lade',updated:null,comps:[]};
+/* Ergebnis: {bl1:[...], bl2:[...], ufc:[...]} — je Wettbewerb eine Liste. */
 async function loadData(){
   try{
-    const r=await fetch(CFG.dataUrl+'?t='+Date.now(), {cache:'no-store'});
-    if(!r.ok) throw new Error(r.status);
+    const r=await fetch(CFG.dataUrl+'?t='+Date.now(),{cache:'no-store'});
+    if(!r.ok) throw 0;
     const d=await r.json();
-    if(!Array.isArray(d.matches)||!d.matches.length) throw new Error('leer');
+    const ev={};
+    if(Array.isArray(d.competitions)&&d.competitions.length){
+      d.competitions.forEach(c=>{
+        if(!COMPS[c.id]||!Array.isArray(c.matches)) return;
+        ev[c.id]=c.matches.map(m=>({...m,sport:COMPS[c.id].sport,
+          day:m.day||1,start:new Date(m.start)}));
+      });
+    }else{
+      /* Ältere data.json ohne Wettbewerbsliste */
+      if(Array.isArray(d.matches)&&d.matches.length)
+        ev.bl1=d.matches.map(m=>({...m,sport:'fb',start:new Date(m.start)}));
+      if(Array.isArray(d.fights)&&d.fights.length)
+        ev.ufc=d.fights.map(f=>({...f,sport:'mma',day:1,start:new Date(f.start)}));
+    }
+    if(!Object.keys(ev).length) throw 0;
     net.data='live'; net.updated=d.updated?new Date(d.updated):null;
-    return {
-      matches:d.matches.map(m=>({...m, sport:'fb', start:new Date(m.start),
-                                 finished:false, score:null})),
-      fights:(d.fights||[]).map((f,i)=>({...f, sport:'mma', day:1,
-                                 start:new Date(f.start), finished:false}))
-    };
+    net.comps=Object.keys(ev);
+    return ev;
   }catch(e){
-    net.data='offline';
-    return { matches:generateSchedule().map(buildFootball), fights:demoFights() };
+    net.data='offline'; net.comps=['bl1','bl2','ufc'];
+    return{bl1:genPlan('bl1').map(fallbackMatch), bl2:genPlan('bl2').map(fallbackMatch),
+           ufc:demoFights()};
   }
 }
-
-/* Notfallplan, falls GitHub nicht erreichbar ist: Rundenturnier aus den
-   echten 18 Vereinen. Die Paarungen sind erzeugt, nicht der DFL-Spielplan. */
-function generateSchedule(){
-  const t=Object.keys(CLUBS), n=t.length, out=[];
-  const first=new Date('2026-08-28T20:30:00+02:00');
-  const rot=t.slice(1);
-  for(let d=0;d<34;d++){
-    const half=d%17, back=d>=17;
-    const order=[t[0],...rot.slice(half).concat(rot.slice(0,half))];
-    for(let i=0;i<n/2;i++){
-      let h=order[i], a=order[n-1-i];
-      if((i+d)%2) [h,a]=[a,h];
-      if(back) [h,a]=[a,h];
-      const start=new Date(first.getTime()+d*7*864e5+i*36e5*4);
-      out.push({id:`gen${d}-${i}`,day:d+1,start,home:h,away:a,finished:false,score:null});
-    }
-  }
+function genPlan(comp='bl1'){
+  const t=CLUBS[comp]||CLUBS.bl1,n=t.length,out=[],
+    first=new Date('2026-08-28T20:30:00+02:00'),rot=t.slice(1);
+  for(let d=0;d<34;d++){const half=d%17,back=d>=17;
+    const ord=[t[0],...rot.slice(half).concat(rot.slice(0,half))];
+    for(let i=0;i<n/2;i++){let h=ord[i],a=ord[n-1-i];
+      if((i+d)%2)[h,a]=[a,h]; if(back)[h,a]=[a,h];
+      out.push({id:`${comp}-g${d}-${i}`,day:d+1,home:h,away:a,
+        start:new Date(first.getTime()+d*7*864e5+i*144e5)});}}
   return out;
 }
-const demoFights = () => DEMO_UFC.map((f,i)=>({id:'mma'+i,day:1,sport:'mma',
-  start:new Date(f.t), home:f.a, away:f.b, source:'mdl', finished:false,
-  sides:[{key:'A',label:f.a.split(' ').pop(),q:f.qa},
-         {key:'B',label:f.b.split(' ').pop(),q:f.qb}]}));
-const DEMO_UFC=[
-  {a:'Ilia Topuria',      b:'Arman Tsarukyan', qa:1.72,qb:2.15,t:'2026-08-30T04:00:00Z'},
-  {a:'Alexandre Pantoja', b:'Brandon Royval',  qa:1.48,qb:2.70,t:'2026-08-30T03:30:00Z'},
-  {a:'Jiri Prochazka',    b:'Carlos Ulberg',   qa:2.05,qb:1.80,t:'2026-08-30T03:00:00Z'},
-  {a:'Paddy Pimblett',    b:'Justin Gaethje',  qa:2.60,qb:1.50,t:'2026-08-30T02:30:00Z'}
-];
+const UFC=[{a:'Ilia Topuria',b:'Arman Tsarukyan',qa:1.72,qb:2.15},
+ {a:'Alexandre Pantoja',b:'Brandon Royval',qa:1.48,qb:2.70},
+ {a:'Jiri Prochazka',b:'Carlos Ulberg',qa:2.05,qb:1.80},
+ {a:'Paddy Pimblett',b:'Justin Gaethje',qa:2.60,qb:1.50}];
+const demoFights=()=>UFC.map((f,i)=>({id:'m'+i,day:1,sport:'mma',source:'mdl',
+  start:new Date(Date.now()+(3+i*.02)*864e5),home:f.a,away:f.b,
+  sides:[{key:'A',label:f.a.split(' ').pop(),q:f.qa},{key:'B',label:f.b.split(' ').pop(),q:f.qb}]}));
 
-/* ═══════════════ 3. ZUSTAND ═══════════════ */
+/* ══════════ ZUSTAND ══════════ */
+const S={screen:'auth',authMode:'register',user:null,menu:false,
+         roundId:null,tab:'tippen',day:1,ev:{},ready:false,
+         premium:false,flow:null,picker:false,
+         draft:{teams:[],visibility:'private',compId:'bl1'},
+         joinTab:'suchen'};
+/* Alle Spiele eines Wettbewerbs */
+const evOf=id=>S.ev[id]||[];
 
-const S = {
-  screen:'home',                 // home | round
-  roundId:null,
-  tab:'tippen',
-  day:1,
-  matches:[],                    // Bundesliga, ganze Saison
-  fights:[],                     // UFC
-  ready:false
-};
+let SEQ=0;
+const code=()=>'TIP-'+Math.random().toString(36).slice(2,7).toUpperCase();
+const mkRound=(o)=>({id:o.id||'r'+(++SEQ),compId:o.compId||null,
+  sport:o.sport||(o.compId?COMPS[o.compId].sport:'fb'),name:o.name,
+  comp:o.comp||(o.compId?COMPS[o.compId].name:'Eigene Runde'),
+  rules:o.rules||'',members:o.members||[],picks:{},settled:{},chat:o.chat||[],
+  custom:!!o.custom,teams:o.teams||[],events:o.events||[],results:o.results||{},
+  visibility:o.visibility||'private',code:o.code||code(),owner:o.owner||'me',
+  requests:o.requests||[],joined:o.joined!==false});
 
-const ROUNDS = {
-  buli:{id:'buli',sport:'fb',name:'Kellerkinder',competition:'Bundesliga 2026/27',
-    rules:'Alle 34 Spieltage. 100 Punkte pro Spieltag, frei verteilbar auf Siegwette oder Ergebnis. Wer am 22. Mai vorne steht, gewinnt.',
+const ROUNDS={
+  buli:mkRound({id:'buli',compId:'bl1',name:'Kellerkinder',
+    visibility:'private',code:'TIP-KELLR',
+    rules:'Alle 34 Spieltage. 100 Punkte pro Spieltag, frei verteilbar auf Siegwette oder Ergebnis. Wer im Mai vorne steht, gewinnt.',
     members:[{id:'me',name:'Du',pts:0},{id:'jo',name:'Jonas',pts:0},{id:'le',name:'Leo',pts:0},
-             {id:'ma',name:'Marie',pts:0},{id:'ti',name:'Timo',pts:0},{id:'ni',name:'Nils',pts:0}],
-    picks:{}, settled:{}},
-  ufc:{id:'ufc',sport:'mma',name:'Octagon Club',competition:'UFC',
+      {id:'ma',name:'Marie',pts:0},{id:'ti',name:'Timo',pts:0},{id:'ni',name:'Nils',pts:0}],
+    requests:[{id:'x1',name:'Fabi_98'}],
+    chat:[{who:'jo',name:'Jonas',text:'Elversberg gegen Leverkusen — wer traut sich?',t:1},
+      {who:'ma',name:'Marie',text:'Ich setz alles auf die Auswärtssiege 😤',t:2},
+      {who:'le',name:'Leo',sticker:'clown',t:3}]}),
+  ufc:mkRound({id:'ufc',compId:'ufc',name:'Octagon Club',
+    visibility:'private',code:'TIP-OCTGN',
     rules:'Jeder Kampfabend zählt einzeln. 100 Punkte pro Event, nur Siegwette.',
     members:[{id:'me',name:'Du',pts:0},{id:'ke',name:'Kevin',pts:0},{id:'sa',name:'Sami',pts:0},
-             {id:'da',name:'Dana',pts:0},{id:'fl',name:'Flo',pts:0}],
-    picks:{}, settled:{}}
+      {id:'da',name:'Dana',pts:0},{id:'fl',name:'Flo',pts:0}],
+    chat:[{who:'ke',name:'Kevin',text:'Topuria beendet das in Runde 2.',t:1}]})
 };
 
-const R    = () => ROUNDS[S.roundId];
-const pool = () => S.roundId==='buli' ? S.matches.filter(m=>m.day===S.day) : S.fights;
-const dayPicks = () => { const ids=new Set(pool().map(m=>m.id));
-  return Object.entries(R().picks).filter(([k])=>ids.has(k)); };
-const used = () => dayPicks().reduce((s,[,p])=>s+p.stake,0);
-const left = () => CFG.budget - used();
-const isSettled = () => !!R().settled[S.roundId==='buli'?S.day:1];
+/* Öffentliche Runden anderer Nutzer — zum Entdecken und Beitreten */
+const DISCOVER=[
+  {id:'d1',code:'TIP-LIGA1',name:'Bundesliga Public League',compId:'bl1',
+   visibility:'public',members:428,owner:'Marek',desc:'Offen für alle. Jeder Spieltag zählt.'},
+  {id:'d2',code:'TIP-ZWEI',name:'Zweitliga-Kenner',compId:'bl2',
+   visibility:'public',members:63,owner:'Sven',desc:'Nur zweite Liga. Wer kennt sich wirklich aus?'},
+  {id:'d3',code:'TIP-FIGHT',name:'Fight Night Germany',compId:'ufc',
+   visibility:'public',members:154,owner:'Aylin',desc:'Jede nummerierte Card wird getippt.'},
+  {id:'d5',code:'TIP-EURO',name:'Euro Nights',compId:'ucl',
+   visibility:'public',members:211,owner:'Marco',desc:'Champions League, jede Woche neu.'},
+  {id:'d4',code:'TIP-ANLYT',name:'Analytics Only',compId:'bl1',
+   visibility:'private',members:12,owner:'Jonas K.',desc:'Nur Ergebnis-Tipps. Anfrage nötig.'}
+];
 
-const fmt  = n => n.toLocaleString('de-DE',{minimumFractionDigits:1,maximumFractionDigits:1});
-const fmtQ = n => n.toLocaleString('de-DE',{minimumFractionDigits:2,maximumFractionDigits:2});
-const when = d => d.toLocaleString('de-DE',{weekday:'short',day:'2-digit',month:'2-digit',
-                                            hour:'2-digit',minute:'2-digit'}).replace(',','');
+const STICKERS=[{id:'ball',e:'⚽'},{id:'glove',e:'🥊'},{id:'fire',e:'🔥'},{id:'trophy',e:'🏆'},
+ {id:'cry',e:'😭'},{id:'laugh',e:'🤣'},{id:'clown',e:'🤡'},{id:'goat',e:'🐐'},
+ {id:'tor',w:'TOOOR'},{id:'ko',w:'K.O.'},{id:'autsch',w:'AUTSCH'},{id:'glueck',w:'GLÜCK'}];
+const stk=i=>STICKERS.find(s=>s.id===i)||STICKERS[0];
 
-/* ═══════════════ 4. PUNKTE ═══════════════
-   Treffer → Einsatz × eingefrorene Quote. Fehltipp → 0.            */
-function scorePicks(picks, results){
-  let t=0;
-  for(const [id,p] of Object.entries(picks)){
-    const res=results[id]; if(res===undefined) continue;
-    if(p.market==='exact' ? res.exact===p.side : res.side===p.side) t+=p.stake*p.q;
+const R=()=>ROUNDS[S.roundId];
+const eventsOf=(r,d)=> r.custom ? r.events.filter(e=>e.day===d)
+  : !COMPS[r.compId] ? []
+  : r.sport==='mma' ? evOf(r.compId)
+  : evOf(r.compId).filter(m=>m.day===d);
+
+/* ══════════ ECHTE ERGEBNISSE ══════════
+   Bundesliga und UFC kommen aus data.json. Eigene Ligen haben keine Datenquelle —
+   dort trägt der Ersteller die Ergebnisse selbst ein.                          */
+function eventResult(ev,r){
+  if(r&&r.custom){
+    const x=r.results[ev.id];
+    if(!x) return null;
+    const h=+x.h,a=+x.a;
+    if(!isFinite(h)||!isFinite(a)) return null;
+    return{side:h>a?'1':h<a?'2':'X',exact:`${h}:${a}`,text:`Endstand ${h}:${a}`,real:true};
   }
-  return t;
+  if(!ev.finished) return null;
+  if(ev.sport==='mma'){
+    if(!ev.winner) return null;
+    const w=ev.sides.find(x=>x.key===ev.winner);
+    return{side:ev.winner,text:(w?w.label:'Sieger')+' gewinnt',real:true};
+  }
+  if(!ev.score) return null;
+  const h=ev.score.h,a=ev.score.a;
+  return{side:h>a?'1':h<a?'2':'X',exact:`${h}:${a}`,text:`Endstand ${h}:${a}`,real:true};
 }
-/* Simulation: Tore aus dem Poisson-Modell ziehen.
-   Live liefert das der /scores-Endpunkt bzw. OpenLigaDB.            */
-function simulate(events){
+/* Nur wenn für JEDES Spiel ein Ergebnis vorliegt, wird gewertet. */
+function allResults(evs,r){
   const out={};
-  events.forEach(ev=>{
-    if(ev.sport==='mma'){
-      const w=ev.sides.map(s=>1/s.q), sum=w.reduce((a,b)=>a+b,0); let x=Math.random()*sum;
-      out[ev.id]={side:ev.sides.find((_,i)=>(x-=w[i])<=0)?.key||'A'};
+  for(const ev of evs){const x=eventResult(ev,r);if(!x)return null;out[ev.id]=x;}
+  return out;
+}
+const started=ev=>ev.start<=new Date();
+const anyResult=(evs,r)=>evs.some(e=>eventResult(e,r));
+
+/* ══════════ RUNDENLIMIT ══════════ */
+const canAdd=()=>S.premium||myRounds().length<CFG.freeRounds;
+const limitLeft=()=>Math.max(0,CFG.freeRounds-myRounds().length);
+function needRoom(){
+  if(canAdd()) return true;
+  toast(`Ohne Premium sind ${CFG.freeRounds} Runden möglich`);
+  go('premium'); return false;
+}
+const myRounds=()=>Object.values(ROUNDS).filter(r=>r.joined);
+const pool=()=>{const r=R(); return r?eventsOf(r,S.day):[];};
+const dayKey=()=>R().sport==='mma'?1:S.day;
+const dayPicks=()=>{const ids=new Set(pool().map(e=>e.id));
+  return Object.entries(R().picks).filter(([k])=>ids.has(k));};
+const used=()=>dayPicks().reduce((s,[,p])=>s+p.stake,0);
+const left=()=>CFG.budget-used();
+const settled=()=>!!R().settled[dayKey()];
+function maxDay(r){
+  const list=r.custom?r.events:evOf(r.compId);
+  if(!list.length) return 1;
+  return Math.max(1,...list.map(e=>e.day||1));
+}
+/* Nächster noch nicht angepfiffener Spieltag einer Runde */
+function nextDayOf(r){
+  const list=r.custom?r.events:evOf(r.compId);
+  const n=list.find(e=>e.start>new Date());
+  return n?(n.day||1):1;
+}
+
+const fmt=n=>n.toLocaleString('de-DE',{minimumFractionDigits:1,maximumFractionDigits:1});
+const fq=n=>n.toLocaleString('de-DE',{minimumFractionDigits:2,maximumFractionDigits:2});
+const when=d=>d.toLocaleString('de-DE',{weekday:'short',day:'2-digit',month:'2-digit',
+  hour:'2-digit',minute:'2-digit'}).replace(',','');
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+/* ══════════ PUNKTE ══════════
+   Tendenz richtig            → Einsatz × Quote
+   Exaktes Ergebnis richtig   → Einsatz × Ergebnisquote (deutlich höher)
+   Ergebnis falsch, Tendenz richtig → trotzdem Tendenzpunkte
+   Eigene Ligen ohne Quoten   → fester Wert je Treffer                     */
+function ptsFor(pick,res,ev){
+  if(!res||!pick) return 0;
+  if(ev&&ev.noOdds) return res.side===pick.side?CFG.amateurPts:0;
+  if(pick.type==='exact'){
+    if(res.exact===pick.side) return pick.stake*pick.q;
+    const[h,a]=pick.side.split(':').map(Number);
+    const tend=h>a?'1':h<a?'2':'X';
+    if(tend===res.side) return pick.stake*(ev?.sides.find(s=>s.key===tend)?.q||1);
+    return 0;
+  }
+  return res.side===pick.side?pick.stake*pick.q:0;
+}
+const scoreAll=(picks,res,evs)=>Object.entries(picks)
+  .reduce((t,[id,p])=>t+ptsFor(p,res[id],evs.find(e=>e.id===id)),0);
+
+function simulate(evs){
+  const out={};
+  evs.forEach(ev=>{
+    if(ev.sport==='mma'||ev.noOdds){
+      const w=ev.sides.map(s=>1/s.q),sum=w.reduce((a,b)=>a+b,0);
+      let x=Math.random()*sum,win=ev.sides[0].key;
+      for(const s of ev.sides){x-=1/s.q;if(x<=0){win=s.key;break;}}
+      out[ev.id]={side:win,text:ev.sides.find(s=>s.key===win).label+' gewinnt'};
     }else{
-      const [lh,la]=ev.market
-        ? fitLambdas(...devig([ev.market.h,ev.market.d,ev.market.a]))
-        : modelLambdas(ev.home,ev.away);
+      const q=Object.fromEntries(ev.sides.map(s=>[s.key,s.q]));
+      const raw=[1/q['1'],1/q['X'],1/q['2']],sm=raw.reduce((a,b)=>a+b,0);
+      const[lh,la]=fitL(...raw.map(r=>r/sm));
       const g=l=>{let k=0,p=Math.exp(-l),c=p,u=Math.random();
-                  while(u>c&&k<9){k++;p*=l/k;c+=p;} return k;};
-      const h=g(lh), a=g(la);
-      out[ev.id]={side:h>a?'1':h<a?'2':'X', exact:`${h}:${a}`, text:`${h}:${a}`};
+        while(u>c&&k<9){k++;p*=l/k;c+=p;}return k;};
+      const h=g(lh),a=g(la);
+      out[ev.id]={side:h>a?'1':h<a?'2':'X',exact:`${h}:${a}`,text:`Endstand ${h}:${a}`};
     }
   });
   return out;
 }
-function botPicks(events){
-  const p={}; let rest=CFG.budget;
-  const pick=[...events].sort(()=>Math.random()-.5).slice(0,3+Math.floor(Math.random()*4));
-  pick.forEach((ev,i)=>{
-    const stake = i===pick.length-1 ? rest
-                : Math.max(5,Math.round(rest/(pick.length-i)*(.6+Math.random()*.7)/5)*5);
-    if(stake>rest||stake<=0) return;
-    const exact = ev.exact && Math.random()<0.25;
-    const opts  = exact ? ev.exact : ev.sides;
-    const s     = opts[Math.floor(Math.random()*opts.length)];
-    p[ev.id]={side:s.key,stake,q:s.q,market:exact?'exact':'h2h'}; rest-=stake;
+function botPicks(evs){
+  const p={};let rest=CFG.budget;
+  const sel=[...evs].sort(()=>Math.random()-.5).slice(0,3+Math.floor(Math.random()*4));
+  sel.forEach((ev,i)=>{
+    const st=i===sel.length-1?rest:Math.max(5,Math.round(rest/(sel.length-i)*(.6+Math.random()*.7)/5)*5);
+    if(st>rest||st<=0)return;
+    const ex=ev.exact&&Math.random()<.28;
+    const o=ex?ev.exact:ev.sides,s=o[Math.floor(Math.random()*o.length)];
+    p[ev.id]={side:s.key,q:s.q,stake:ev.noOdds?0:st,type:ex?'exact':'tendency'};
+    rest-=ev.noOdds?0:st;
   });
   return p;
 }
 
-/* ═══════════════ 5. OBERFLÄCHE ═══════════════ */
+/* ══════════ OBERFLÄCHE ══════════ */
 const app=document.getElementById('app');
-const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const go=(sc,x={})=>{Object.assign(S,{screen:sc,menu:false},x);window.scrollTo(0,0);render();};
+function toast(t){const d=document.createElement('div');d.className='toast';d.textContent=t;
+  document.body.appendChild(d);setTimeout(()=>d.remove(),2400);}
+const MARK=`<div class="mark"><span>T</span><span class="sl s-i">i</span><span>p</span><span
+  class="sl s-o">o</span><span>f</span><span>f</span></div>`;
+const initial=()=>(S.user?.displayName||S.user?.email||'?')[0].toUpperCase();
 
-function render(){ S.screen==='home' ? renderHome() : renderRound(); }
+const SCREENS={auth:vAuth,welcome:vWelcome,home:vHome,round:vRound,premium:vPremium,
+  create:vCreate,join:vJoin,profile:vProfile,settings:vSettings,legal:vLegal};
+function render(){ (SCREENS[S.screen]||vHome)(); if(S.menu) drawMenu(); }
 
-/* ─── Startmenü ─── */
-function renderHome(){
-  const nextDay = S.matches.find(m=>!m.finished && m.start>new Date())?.day ?? 1;
-  const nextM   = S.matches.find(m=>m.day===nextDay);
-  const nextF   = S.fights[0];
-  const rank = r => {
-    const s=[...r.members].sort((a,b)=>b.pts-a.pts);
-    return s.findIndex(m=>m.id==='me')+1;
-  };
-  app.innerHTML=`
-  <header><div class="hd">
-    <div class="eyebrow">Tippspiel für Freundesrunden</div>
-    <h1 class="wordmark">Tip<span>off</span></h1>
-  </div></header>
-  <div class="home">
-    <div class="sec">Deine Runden</div>
+/* ─── Kopfzeile für Unterseiten ─── */
+const head=(title,sub)=>`<header><div class="hrow">
+  <button class="ico" id="back" aria-label="Zurück">‹</button>
+  <div style="flex:1;min-width:0">
+    ${sub?`<div class="hsub">${esc(sub)}</div>`:''}
+    <div class="htitle">${esc(title)}</div></div>
+</div></header>`;
+const bindBack=(to='home')=>{const b=app.querySelector('#back');if(b)b.onclick=()=>go(to);};
 
-    <button class="round" data-go="buli">
-      <div class="top"><span class="tag fb">Fußball</span>
-        <span class="nm">Kellerkinder</span><span class="arrow">→</span></div>
-      <div class="row">
-        <div><b>Platz ${rank(ROUNDS.buli)}</b>von ${ROUNDS.buli.members.length}</div>
-        <div><b>${fmt(ROUNDS.buli.members[0].pts)}</b>Punkte</div>
-        <div><b class="hot">Spieltag ${nextDay}</b>${nextM?when(nextM.start).split(' ').slice(0,2).join(' '):'—'}</div>
-      </div>
-    </button>
-
-    <button class="round" data-go="ufc">
-      <div class="top"><span class="tag mma">Kampfsport</span>
-        <span class="nm">Octagon Club</span><span class="arrow">→</span></div>
-      <div class="row">
-        <div><b>Platz ${rank(ROUNDS.ufc)}</b>von ${ROUNDS.ufc.members.length}</div>
-        <div><b>${fmt(ROUNDS.ufc.members[0].pts)}</b>Punkte</div>
-        <div><b class="hot">${S.fights.length} Kämpfe</b>${nextF?when(nextF.start).split(' ').slice(0,2).join(' '):'—'}</div>
-      </div>
-    </button>
-
-    <button class="new" id="newround">+ Neue Runde — eine Sportart pro Runde</button>
-
-    <div class="sec">Datenlage</div>
-    <div class="status">
-      <div class="line"><span class="dot ${net.data==='live'?'ok':net.data==='lade'?'warn':'off'}"></span>
-        ${net.data==='live'?'Spielplan und Quoten geladen'
-         :net.data==='lade'?'wird geladen …'
-         :'GitHub nicht erreichbar — Ersatzplan mit Modellquoten aktiv'}</div>
-      <div class="line"><span class="dot ${net.updated?'ok':'warn'}"></span>
-        Stand: ${net.updated?when(net.updated):'—'}</div>
-      <div class="line"><span class="dot ok"></span>
-        ${S.matches.length} Spiele · ${S.fights.length} Kämpfe</div>
-      <div class="keyrow"><button id="reload" style="flex:1;padding:10px">Jetzt neu laden</button></div>
-      <p class="note">Die Quoten holt ein Automatik-Lauf jeden Montag früh und legt sie
-      auf GitHub ab. Diese App liest sie nur noch — du musst nichts eintragen.
-      Ergebnisquoten werden aus der Siegwette hergeleitet.</p>
+/* ═══════════ REGISTRIEREN / ANMELDEN ═══════════ */
+function vAuth(){
+  const reg=S.authMode==='register';
+  app.innerHTML=`<div class="authwrap">
+    ${MARK}
+    <div class="authtag">Tippen mit Freunden — Bundesliga, 2. und 3. Liga,
+      Champions League, UFC und deine eigene Runde.</div>
+    <div class="seg">
+      <button data-m="register" aria-selected="${reg}">Registrieren</button>
+      <button data-m="login" aria-selected="${!reg}">Anmelden</button>
     </div>
+    ${reg?`<label for="u">Nutzername</label>
+      <input type="text" id="u" placeholder="Wie sollen dich andere sehen?" autocomplete="nickname">`:''}
+    <label for="e">E-Mail</label>
+    <input type="email" id="e" placeholder="du@beispiel.de" autocomplete="email" inputmode="email">
+    <label for="p">Passwort</label>
+    <input type="password" id="p" placeholder="Mindestens sechs Zeichen"
+      autocomplete="${reg?'new-password':'current-password'}">
+    <div class="err" id="err"></div>
+    <button class="btn" id="sub" style="margin-top:22px">${reg?'Konto erstellen':'Anmelden'}</button>
+    ${reg?`<p class="legalnote">Mit dem Erstellen eines Kontos stimmst du den
+      <button data-l="agb">AGB</button> zu und bestätigst die
+      <button data-l="datenschutz">Datenschutzerklärung</button> gelesen zu haben.</p>`
+     :`<p class="legalnote">Noch kein Konto? Wechsle oben zu „Registrieren".</p>`}
+    ${!FB_ON?`<p class="legalnote" style="margin-top:22px;color:#5C6672">
+      Demo-Modus — es werden noch keine echten Konten gespeichert.</p>`:''}
   </div>`;
 
-  app.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>{
-    S.roundId=b.dataset.go; S.screen='round'; S.tab='tippen';
-    if(S.roundId==='buli'){
-      const d=S.matches.find(m=>!m.finished && m.start>new Date());
-      S.day=d?d.day:1;
+  app.querySelectorAll('[data-m]').forEach(b=>b.onclick=()=>{
+    S.authMode=b.dataset.m; render();});
+  app.querySelectorAll('[data-l]').forEach(b=>b.onclick=()=>
+    go('legal',{flow:b.dataset.l}));
+
+  const err=app.querySelector('#err'),btn=app.querySelector('#sub');
+  const fail=m=>{err.textContent=m;err.style.display='block';
+    btn.disabled=false;btn.textContent=reg?'Konto erstellen':'Anmelden';};
+
+  const submit=async()=>{
+    err.style.display='none';
+    const email=app.querySelector('#e').value.trim();
+    const pass=app.querySelector('#p').value;
+    const name=reg?app.querySelector('#u').value.trim():'';
+    if(reg&&!name) return fail('Bitte wähl einen Nutzernamen.');
+    if(!email||!pass) return fail('Bitte E-Mail und Passwort ausfüllen.');
+    if(reg&&pass.length<6) return fail('Das Passwort braucht mindestens sechs Zeichen.');
+    btn.disabled=true;btn.textContent='Einen Moment …';
+    if(!FB_ON){                                    // Demo-Modus
+      await new Promise(r=>setTimeout(r,550));
+      S.user={displayName:name||email.split('@')[0],email};
+      ROUNDS.buli.members[0].name=S.user.displayName;
+      ROUNDS.ufc.members[0].name=S.user.displayName;
+      return go(reg?'welcome':'home');
     }
-    render();
-  });
-  app.querySelector('#newround').onclick=()=>alert(
-    'Beim Anlegen wählst du genau eine Sportart. Bundesliga und UFC bleiben getrennt — '+
-    'eigene Mitglieder, eigenes Budget, eigene Tabelle.');
-  app.querySelector('#reload').onclick=async()=>{
-    net.data='lade'; render();
-    const d=await loadData(); S.matches=d.matches; S.fights=d.fights; render();
+    try{
+      if(reg){
+        const c=await FB.createUserWithEmailAndPassword(FB.auth,email,pass);
+        await FB.updateProfile(c.user,{displayName:name});
+        S.user={displayName:name,email};
+        go('welcome');
+      }else{
+        await FB.signInWithEmailAndPassword(FB.auth,email,pass);
+      }
+    }catch(e){ fail(authErr(e.code)); }
   };
+  btn.onclick=submit;
+  app.querySelectorAll('input').forEach(i=>i.onkeydown=e=>{if(e.key==='Enter')submit();});
 }
 
-/* ─── Runde ─── */
-function renderRound(){
-  const r=R(), fb=r.sport==='fb';
+/* ═══════════ WILLKOMMEN ═══════════ */
+function vWelcome(){
+  app.innerHTML=`<div class="welcome">
+    <div class="wring">👋</div>
+    <h1>Herzlich willkommen,<br>${esc(S.user?.displayName||'')}!</h1>
+    <div class="slogan">Lass dein Knowledge siegen.</div>
+    <p>Verteile jeden Spieltag 100 Punkte auf die Tipps, an die du wirklich glaubst.
+       Je mutiger die Quote, desto mehr springt raus.</p>
+    <button class="btn" id="start">Los geht's</button>
+  </div>`;
+  app.querySelector('#start').onclick=()=>go('home');
+}
+
+/* ═══════════ MENÜ ═══════════ */
+function drawMenu(){
+  const d=document.createElement('div');
+  d.innerHTML=`<div class="scrim" id="scrim"></div>
+  <aside class="drawer">
+    <div class="dhead">
+      <div class="avatar">${esc(initial())}</div>
+      <div class="dname">${esc(S.user?.displayName||'Gast')}</div>
+      <div class="dmail">${esc(S.user?.email||'')}</div>
+      ${S.premium?'<span class="pill b" style="margin-top:11px">★ Premium aktiv</span>':''}
+    </div>
+    <div class="dnav">
+      <div class="dgrp">Konto</div>
+      <button class="ditem" data-go="profile"><span class="em">👤</span>Mein Profil</button>
+      <button class="ditem" data-go="settings"><span class="em">⚙️</span>Einstellungen</button>
+      <div class="dgrp">Tippen</div>
+      <button class="ditem" data-go="home"><span class="em">🏠</span>Meine Runden</button>
+      <button class="ditem" data-go="join"><span class="em">🔍</span>Runde beitreten</button>
+      <button class="ditem" data-new><span class="em">➕</span>Runde erstellen
+        ${S.premium?'':`<span class="tag" style="background:var(--raise);color:var(--muted)">${
+          limitLeft()} frei</span>`}</button>
+      <button class="ditem" data-go="premium"><span class="em">★</span>Premium
+        ${S.premium?'<span class="tag">Aktiv</span>':''}</button>
+      <div class="dgrp">Rechtliches</div>
+      <button class="ditem" data-l="impressum"><span class="em">📄</span>Impressum</button>
+      <button class="ditem" data-l="agb"><span class="em">📋</span>AGB</button>
+      <button class="ditem" data-l="datenschutz"><span class="em">🔒</span>Datenschutz</button>
+      <div class="dgrp">&nbsp;</div>
+      <button class="ditem red" id="logout"><span class="em">⏻</span>Abmelden</button>
+    </div>
+  </aside>`;
+  document.body.appendChild(d);
+  const close=()=>{S.menu=false;d.remove();};
+  d.querySelector('#scrim').onclick=close;
+  d.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>{close();go(b.dataset.go);});
+  d.querySelectorAll('[data-l]').forEach(b=>b.onclick=()=>{close();go('legal',{flow:b.dataset.l});});
+  d.querySelector('[data-new]').onclick=()=>{close();
+    if(needRoom()) go('create',{flow:'comp',draft:{teams:[],visibility:'private',compId:'bl1'}});};
+  d.querySelector('#logout').onclick=()=>{close();logout();};
+}
+async function logout(){
+  if(FB_ON&&FB){ try{await FB.signOut(FB.auth);}catch(e){} }
+  S.user=null;S.premium=false;go('auth',{authMode:'login'});
+}
+
+/* ═══════════ STARTSEITE ═══════════ */
+function vHome(){
+  const rank=r=>[...r.members].sort((a,b)=>b.pts-a.pts).findIndex(m=>m.id==='me')+1;
+  const mine=myRounds();
+
   app.innerHTML=`
   <header>
-    <button class="back" id="back" aria-label="Zurück">←</button>
-    <div class="hd">
-      <div class="eyebrow">${esc(r.competition)}</div>
-      <div class="title">${esc(r.name)}</div>
+    <div class="hrow">${MARK}
+      <div style="margin-left:auto;display:flex;gap:9px;align-items:center">
+        ${S.premium?'<span class="pill b">★ Premium</span>':''}
+        <button class="ico" id="sh" aria-label="Teilen">↗</button>
+        <button class="ico" id="menu" aria-label="Menü"><span class="burger"><i></i><i></i><i></i></span></button>
+      </div>
     </div>
+    <div class="sub">Hallo ${esc(S.user?.displayName||'')} — bereit für den nächsten Spieltag?</div>
   </header>
-  <nav role="tablist">
-    <button role="tab" data-tab="tippen"  aria-selected="${S.tab==='tippen'}">Tippen</button>
-    <button role="tab" data-tab="tabelle" aria-selected="${S.tab==='tabelle'}">Tabelle</button>
-    <button role="tab" data-tab="runde"   aria-selected="${S.tab==='runde'}">Runde</button>
-  </nav>
-  ${S.tab==='tippen'&&fb?'<div class="days" id="days"></div>':''}
-  ${S.tab==='tippen'?'<div class="budget" id="budget"></div>':''}
   <main>
-    <section class="view ${S.tab==='tippen'?'on':''}" id="v-tippen"></section>
-    <section class="view ${S.tab==='tabelle'?'on':''}" id="v-tabelle"></section>
-    <section class="view ${S.tab==='runde'?'on':''}" id="v-runde"></section>
-  </main>
-  <div class="dock" id="dock"></div>`;
+    ${net.data==='offline'?`<div class="banner" style="margin-bottom:14px">
+      <b>Keine Verbindung zu den Live-Daten.</b> Du siehst gerade einen erzeugten
+      Ersatz-Spielplan, nicht den echten. Das passiert, wenn die Datei lokal geöffnet wird
+      statt über die Web-Adresse — öffne die App über
+      <b>dfsr19.github.io/tipoff</b>.</div>`:''}
+    <button class="share" id="share">
+      <span class="ic">↗</span>
+      <span style="flex:1"><b>Freunde einladen</b><small>Link teilen — sofort mittippen</small></span>
+      <span style="color:var(--blue)">›</span>
+    </button>
 
-  app.querySelector('#back').onclick=()=>{S.screen='home';render();};
-  app.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{S.tab=b.dataset.tab;render();});
+    <div class="sec">Meine Runden<span class="ln"></span></div>
+    ${mine.map(r=>{
+      const req=r.owner==='me'&&r.requests.length;
+      return `<button class="round" data-r="${r.id}">
+        <div class="top">
+          <span class="pill b">${esc(compTag(r))}</span>
+          ${r.visibility==='public'?'<span class="pill g">Öffentlich</span>':''}
+          ${req?`<span class="pill solid">${req} Anfrage${req>1?'n':''}</span>`:''}
+          <span class="arw">›</span>
+        </div>
+        <div class="nm" style="margin-bottom:12px">${esc(r.name)}</div>
+        <div class="row">
+          <div>Platz<b>${rank(r)}<span style="font-size:12px;color:var(--muted)">/${r.members.length}</span></b></div>
+          <div>Punkte<b>${fmt(r.members.find(m=>m.id==='me').pts)}</b></div>
+          <div>${r.sport==='mma'?'Kämpfe':'Als nächstes'}
+            <b class="hot">${r.sport==='mma'?eventsOf(r,1).length:'ST '+nextDayOf(r)}</b></div>
+        </div>
+      </button>`;}).join('')}
 
-  if(S.tab==='tippen'){ if(fb) renderDays(); renderBudget(); renderEvents(); }
-  if(S.tab==='tabelle') renderBoard();
-  if(S.tab==='runde')   renderInfo();
-  renderDock();
+    <button class="round dash" id="joinbtn">
+      <div class="top"><span class="pill">🔍 Beitreten</span><span class="arw">›</span></div>
+      <div class="nm">Runde suchen oder Code eingeben</div>
+      <div style="font-size:12.5px;color:var(--muted);margin-top:6px">
+        Öffentliche Runden durchstöbern oder per Einladungslink beitreten</div>
+    </button>
+
+    <button class="round dash" id="newbtn">
+      <div class="top"><span class="pill b">➕ Erstellen</span><span class="arw">›</span></div>
+      <div class="nm">Eigene Runde erstellen</div>
+      <div style="font-size:12.5px;color:var(--muted);margin-top:6px">
+        Kreisliga, Firmenturnier oder 5-gegen-5 — öffentlich oder privat</div>
+    </button>
+    ${S.premium?'':`<p class="hint" style="text-align:center;margin-top:2px">
+      ${myRounds().length} von ${CFG.freeRounds} Runden belegt${limitLeft()
+        ?'':' — mit Premium sind es unbegrenzt viele'}</p>`}
+
+    <div class="sec">${S.premium?'Dein Premium':'Mehr aus Tipoff holen'}<span class="ln"></span></div>
+    ${S.premium?activeCard():promoCard()}
+
+    <div class="sec">Datenlage<span class="ln"></span></div>
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:9px;font-size:13.5px;font-weight:600">
+        <span style="width:8px;height:8px;border-radius:50%;background:${
+          net.data==='live'?'var(--win)':net.data==='lade'?'var(--blue)':'var(--bad)'}"></span>
+        ${net.data==='live'?'Spielplan und Quoten geladen'
+          :net.data==='lade'?'Wird geladen …':'Offline — Ersatzdaten aktiv'}
+      </div>
+      <p class="hint">${net.comps.length
+        ? net.comps.map(c=>`${COMPS[c]?.kurz||c} ${evOf(c).length}`).join(' · ')
+        : 'noch nichts geladen'}${net.updated?`<br>Stand ${when(net.updated)}`:''}<br>
+        Der Abruf läuft automatisch jeden Montag früh.</p>
+      <button class="btn ghost" id="rl" style="margin-top:13px;padding:12px;font-size:13.5px">
+        Jetzt neu laden</button>
+    </div>
+
+    <p class="hint" style="text-align:center;margin-top:26px;font-size:11.5px">
+      <button data-l="impressum" style="color:var(--muted);text-decoration:underline">Impressum</button> ·
+      <button data-l="agb" style="color:var(--muted);text-decoration:underline">AGB</button> ·
+      <button data-l="datenschutz" style="color:var(--muted);text-decoration:underline">Datenschutz</button>
+    </p>
+  </main>`;
+
+  app.querySelectorAll('[data-r]').forEach(b=>b.onclick=()=>openRound(b.dataset.r));
+  app.querySelector('#menu').onclick=()=>{S.menu=true;drawMenu();};
+  app.querySelector('#sh').onclick=share;
+  app.querySelector('#share').onclick=share;
+  app.querySelector('#joinbtn').onclick=()=>go('join');
+  app.querySelector('#newbtn').onclick=()=>{
+    if(needRoom()) go('create',{flow:'comp',draft:{teams:[],visibility:'private',compId:'bl1'}});};
+  app.querySelector('#rl').onclick=async()=>{net.data='lade';render();
+    const d=await loadData();S.ev=d;
+    const n=autoSettle();render();
+    if(n) toast(`${n} Spieltag${n>1?'e':''} ausgewertet`);};
+  app.querySelectorAll('[data-l]').forEach(b=>b.onclick=()=>go('legal',{flow:b.dataset.l}));
+  const p=app.querySelector('#prem'); if(p) p.onclick=()=>go('premium');
+  const c=app.querySelector('#unprem'); if(c) c.onclick=()=>{S.premium=false;toast('Premium beendet');render();};
+}
+function openRound(id){
+  S.roundId=id;S.tab='tippen';
+  const r=ROUNDS[id];
+  S.day=r.sport==='mma'?1:nextDayOf(r);
+  go('round');
+}
+const promoCard=()=>`<div class="promo">
+  <span class="pill b">★ Premium</span>
+  <h2>Tipp auf <em>deine</em> Liga.</h2>
+  <p>Vier Dinge, die deine Runde besser machen.</p>
+  <div class="perks">
+    <div class="perk"><i>🏆</i><span>3. Liga und Champions League
+      <small>Tipp auf deine Mannschaft, nicht nur auf die großen Namen</small></span></div>
+    <div class="perk"><i>🎯</i><span>Exaktes Ergebnis tippen
+      <small>2:1 statt nur „Heimsieg" — viel höhere Quoten</small></span></div>
+    <div class="perk"><i>💬</i><span>Chatfunktion
+      <small>Lästern und feiern, direkt in der Runde</small></span></div>
+    <div class="perk"><i>🏟</i><span>Unbegrenzt viele Runden
+      <small>Ohne Premium sind es ${CFG.freeRounds} gleichzeitig</small></span></div>
+  </div>
+  <button class="btn" id="prem">Premium ansehen</button></div>`;
+const activeCard=()=>`<div class="promo">
+  <span class="pill b">★ Aktiv</span>
+  <h2>Alles <em>freigeschaltet.</em></h2>
+  <p>Alle Wettbewerbe, Ergebnis-Tipps, Chat und unbegrenzt viele Runden.</p>
+  <div class="codebox">
+    <div style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">
+      Dein Einladungscode</div>
+    <div class="cd">TIPOFF-${esc((S.user?.displayName||'DU').slice(0,4).toUpperCase())}</div>
+    <div style="font-size:11.5px;color:var(--muted);margin-top:6px;line-height:1.5">
+      Wer über deinen Code Premium holt, bringt dir einen Gratismonat.</div>
+  </div>
+  <button class="btn ghost" id="unprem">Simulation zurücksetzen</button></div>`;
+
+async function share(txt,url){
+  const data={title:'Tipoff',
+    text:txt||'Tipp mit uns Bundesliga, Champions League und UFC — Tipoff:',url:url||CFG.shareUrl};
+  try{ if(navigator.share){await navigator.share(data);return;} }catch(e){ if(e.name==='AbortError')return; }
+  try{ await navigator.clipboard.writeText(data.url); toast('Link kopiert'); }
+  catch(e){ prompt('Link kopieren:',data.url); }
 }
 
-function renderDays(){
-  const el=app.querySelector('#days'); el.innerHTML='';
-  for(let d=1;d<=34;d++){
+/* ═══════════ PREMIUM ═══════════ */
+function vPremium(){
+  app.innerHTML=head('Premium','Tipoff')+`
+  <main>
+    <div class="promo" style="margin-bottom:18px">
+      <div class="price"><span class="p">${CFG.price}</span><span class="per">/ Monat</span></div>
+      <p style="margin-bottom:0">Monatlich kündbar. Gilt für alle deine Runden gleichzeitig.</p>
+    </div>
+
+    <div class="sec">Was du bekommst<span class="ln"></span></div>
+
+    <div class="card" style="margin-bottom:11px">
+      <span class="pill b">🏆 Mehr Wettbewerbe</span>
+      <h3 style="font-family:'Poppins';font-size:16px;font-weight:700;margin:11px 0 7px">
+        Tipp auf deine Mannschaft</h3>
+      <p class="hint" style="margin:0">Bundesliga, 2. Bundesliga und UFC sind für alle offen.
+        Mit Premium kommen <b>3. Liga</b> und <b>Champions League</b> dazu — die Liga, in der
+        dein Verein wirklich spielt, und die Abende, an denen es um Europa geht.</p>
+      <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
+        <span class="pill">⚽ Bundesliga</span><span class="pill">⚽ 2. Liga</span>
+        <span class="pill b">⚽ 3. Liga</span><span class="pill b">🏆 Champions League</span>
+        <span class="pill">🥊 UFC</span>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:11px">
+      <span class="pill b">🎯 Tipp-Typen</span>
+      <h3 style="font-family:'Poppins';font-size:16px;font-weight:700;margin:11px 0 7px">
+        Exaktes Ergebnis tippen</h3>
+      <p class="hint" style="margin:0">Ohne Premium tippst du Sieg, Unentschieden oder Niederlage.
+        Mit Premium kommt das genaue Ergebnis dazu — deutlich höhere Quoten.
+        <b>Und liegst du beim Ergebnis daneben, hattest aber die richtige Tendenz,
+        bekommst du trotzdem die Tendenzpunkte.</b> Kein Totalverlust.</p>
+      <div class="odds" style="margin-top:14px;pointer-events:none">
+        <button><span class="sd">1</span><span class="q">1,95</span></button>
+        <button><span class="sd">X</span><span class="q">3,90</span></button>
+        <button aria-pressed="true"><span class="sd">2:1</span><span class="q">9,40</span></button>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:11px">
+      <span class="pill b">💬 Chatfunktion</span>
+      <h3 style="font-family:'Poppins';font-size:16px;font-weight:700;margin:11px 0 7px">
+        Reden, lästern, feiern</h3>
+      <p class="hint" style="margin:0">Ohne Premium wird nur getippt. Mit Premium bekommt
+        jede deiner Runden einen eigenen Chat — mit Stickern.</p>
+    </div>
+
+    <div class="card" style="margin-bottom:11px">
+      <span class="pill b">🏟 Mehr Runden</span>
+      <h3 style="font-family:'Poppins';font-size:16px;font-weight:700;margin:11px 0 7px">
+        So viele Runden, wie du willst</h3>
+      <p class="hint" style="margin:0">Eigene Runden erstellen kannst du immer, auch ohne Premium —
+        auf Bundesliga, 2. Liga, 3. Liga, Champions League und UFC, oder mit ganz eigenen
+        Mannschaften. Ohne Premium bist du in
+        <b>${CFG.freeRounds} Runden gleichzeitig</b>, egal ob selbst erstellt, per Einladung
+        beigetreten oder öffentlich. Mit Premium fällt diese Grenze weg.</p>
+      <p class="hint" style="background:var(--blue-gl);border:1px solid rgba(80,170,240,.28);
+        border-radius:11px;padding:11px 13px;margin-top:13px;color:#B8D9F5">
+        Für Amateurligen gibt es keine Buchmacherquoten. Dort zählt jeder richtige Tipp
+        gleich viel — ${CFG.amateurPts} Punkte, fair für alle.</p>
+    </div>
+
+    <div class="card" style="margin-bottom:11px">
+      <span class="pill b">🛠 Einrichtung durch uns</span>
+      <h3 style="font-family:'Poppins';font-size:16px;font-weight:700;margin:11px 0 7px">
+        Wir legen deine Liga an</h3>
+      <p class="hint" style="margin:0">Du hast eine Kreisliga mit zwanzig Mannschaften und
+        keine Lust, jedes Spiel einzeln einzutippen? Schick uns den Spielplan — wir bauen
+        die Runde und schalten sie für dich frei. Das ist in Premium enthalten.</p>
+      <p class="hint" style="background:var(--blue-gl);border:1px solid rgba(80,170,240,.28);
+        border-radius:11px;padding:11px 13px;margin-top:13px;color:#B8D9F5">
+        <b>Eine Sache bleibt bei dir:</b> die Ergebnisse. Für Amateurligen gibt es keine
+        Datenquelle, die Endstände automatisch liefert. Du trägst sie nach jedem Spieltag
+        im Reiter „Ergebnis" ein — danach verteilt die App die Punkte von allein.</p>
+    </div>
+
+    <div class="card">
+      <h3 style="font-family:'Poppins';font-size:16px;font-weight:700;margin:0 0 7px">Und das Geld?</h3>
+      <p class="hint" style="margin:0">Bleibt außerhalb der App. Tipoff wertet ausschließlich
+        Punkte aus. Was ihr untereinander vereinbart, macht ihr untereinander aus —
+        über Tipoff läuft keine Zahlung und keine Auszahlung.</p>
+    </div>
+  </main>
+  <div class="dock">
+    <div class="dockmsg">Simulation — es wird nichts abgebucht</div>
+    <button class="btn" id="buy">${S.premium?'Premium ist aktiv':'Premium holen — '+CFG.price}</button>
+  </div>`;
+  bindBack();
+  const b=app.querySelector('#buy');
+  b.disabled=S.premium;
+  b.onclick=()=>{S.premium=true;toast('Premium aktiv ★');go('home');};
+}
+
+/* ═══════════ RUNDE BEITRETEN ═══════════ */
+function vJoin(){
+  const t=S.joinTab;
+  app.innerHTML=head('Runde beitreten','Tipoff')+`
+  <nav>
+    <button data-j="suchen" aria-selected="${t==='suchen'}">Öffentlich</button>
+    <button data-j="code" aria-selected="${t==='code'}">Mit Code</button>
+  </nav>
+  <main>${t==='suchen'?joinSearch():joinCode()}</main>`;
+  bindBack();
+  app.querySelectorAll('[data-j]').forEach(b=>b.onclick=()=>{S.joinTab=b.dataset.j;render();});
+
+  if(t==='suchen'){
+    const q=app.querySelector('#q');
+    if(q) q.oninput=()=>{
+      const v=q.value.toLowerCase();
+      app.querySelectorAll('[data-d]').forEach(el=>{
+        el.style.display=el.dataset.name.includes(v)?'':'none';});
+    };
+    app.querySelectorAll('[data-join]').forEach(b=>b.onclick=()=>joinPublic(b.dataset.join));
+    app.querySelectorAll('[data-req]').forEach(b=>b.onclick=()=>{
+      b.disabled=true;b.textContent='Anfrage gesendet';b.className='mini no';
+      toast('Anfrage gestellt — der Ersteller entscheidet');});
+  }else{
+    const inp=app.querySelector('#cd');
+    const try_=()=>{
+      const v=inp.value.trim().toUpperCase();
+      if(!v) return;
+      const hit=Object.values(ROUNDS).find(r=>r.code===v);
+      if(hit&&hit.joined) return toast('Da bist du schon dabei');
+      if(hit&&!compFrei(hit.compId)){
+        toast(COMPS[hit.compId].name+' gibt es mit Premium');return go('premium');}
+      if(hit){ if(!needRoom())return;
+        hit.joined=true;toast('Runde beigetreten');return openRound(hit.id);}
+      /* Ein Code ist eine Einladung — damit geht auch eine private Runde auf. */
+      const inv=DISCOVER.find(d=>d.code===v&&!ROUNDS[d.id]);
+      if(inv) return joinPublic(inv.id);
+      const err=app.querySelector('#cerr');
+      err.textContent='Zu diesem Code gibt es keine Runde. Tippfehler?';
+      err.style.display='block';
+    };
+    app.querySelector('#join').onclick=try_;
+    inp.onkeydown=e=>{if(e.key==='Enter')try_();};
+  }
+}
+function joinSearch(){
+  const open=DISCOVER.filter(d=>!ROUNDS[d.id]);
+  return `<input type="text" id="q" placeholder="🔍 Runde oder Wettbewerb suchen"
+    style="margin-bottom:16px">
+  ${open.length?open.map(d=>`
+    <div class="card" style="margin-bottom:11px" data-d
+      data-name="${esc((d.name+' '+COMPS[d.compId].name+' '+COMPS[d.compId].kurz).toLowerCase())}">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <span class="pill ${compFrei(d.compId)?'b':''}">${compFrei(d.compId)
+          ?COMPS[d.compId].em+' '+esc(COMPS[d.compId].name)
+          :'★ '+esc(COMPS[d.compId].name)+' — Premium'}</span>
+        <span class="pill ${d.visibility==='public'?'g':''}">${
+          d.visibility==='public'?'Öffentlich':'Privat'}</span>
+      </div>
+      <div style="font-family:'Poppins';font-weight:700;font-size:16px">${esc(d.name)}</div>
+      <p class="hint" style="margin-top:5px">${esc(d.desc)}</p>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:13px">
+        <span style="font-size:11.5px;color:var(--muted)">${d.members} Mitglieder · von ${esc(d.owner)}</span>
+        <span style="flex:1"></span>
+        ${d.visibility==='public'
+          ? `<button class="mini ok" data-join="${d.id}">Beitreten</button>`
+          : `<button class="mini no" data-req="${d.id}">Anfrage stellen</button>`}
+      </div>
+    </div>`).join('')
+   :'<div class="empty">Du bist schon in allen verfügbaren Runden.</div>'}
+  <p class="hint" style="text-align:center;margin-top:18px">
+    Private Runden siehst du hier zwar, beitreten kannst du aber nur nach Freigabe
+    durch den Ersteller — oder direkt über einen Einladungslink.</p>`;
+}
+function joinCode(){
+  return `<div class="card">
+    <div style="font-family:'Poppins';font-weight:700;font-size:16px">Einladungscode eingeben</div>
+    <p class="hint">Du hast einen Link oder Code von Freunden bekommen? Hier rein damit.</p>
+    <label for="cd">Code</label>
+    <input type="text" id="cd" placeholder="TIP-XXXXX" autocapitalize="characters"
+      style="font-family:'Poppins';font-weight:700;letter-spacing:.12em">
+    <div class="err" id="cerr"></div>
+    <button class="btn" id="join" style="margin-top:18px">Beitreten</button>
+  </div>
+  <p class="hint" style="text-align:center;margin-top:16px">
+    Zum Ausprobieren: <b>TIP-ANLYT</b> (private Runde) oder <b>TIP-NORD</b></p>`;
+}
+function joinPublic(id){
+  const d=DISCOVER.find(x=>x.id===id); if(!d) return;
+  if(!compFrei(d.compId)){toast(COMPS[d.compId].name+' gibt es mit Premium');return go('premium');}
+  if(!needRoom()) return;
+  const names=['Marek','Sven','Aylin','Tobi','Kim','Nora','Jan','Pia'];
+  const r=mkRound({id:d.id,compId:d.compId,name:d.name,visibility:'public',
+    owner:d.owner,rules:d.desc+'\n\nÖffentliche Runde — jeder kann beitreten.',
+    members:[{id:'me',name:S.user?.displayName||'Du',pts:0},
+      ...names.slice(0,5).map((n,i)=>({id:'p'+i,name:n,pts:0}))]});
+  ROUNDS[d.id]=r;
+  toast('Runde beigetreten');
+  openRound(d.id);
+}
+
+/* ═══════════ RUNDE ERSTELLEN ═══════════ */
+function vCreate(){
+  const d=S.draft;
+
+  /* Schritt 1 — offizieller Wettbewerb oder eigene Mannschaften? */
+  if(S.flow==='comp'){
+    app.innerHTML=head('Runde erstellen','Schritt 1 von 2')+`
+    <main>
+      <p class="hint" style="margin:0 3px 18px">Worauf soll in deiner Runde getippt werden?</p>
+      <div class="sec">Offizielle Wettbewerbe<span class="ln"></span></div>
+      ${Object.entries(COMPS).map(([id,c])=>{
+        const n=evOf(id).length, zu=!compFrei(id);
+        return `<button class="opt" data-c="${id}" ${n||zu?'':'disabled style="opacity:.45"'}>
+          <span class="pill ${zu?'':'b'}">${zu?'★ Premium':c.em+' '+esc(c.kurz)}</span>
+          <b>${esc(c.name)}</b>
+          <p>${zu?'Mit Premium freigeschaltet.'
+                :n?`${n} ${c.sport==='mma'?'Kämpfe':'Spiele'} geladen — Ergebnisse und Punkte laufen automatisch.`
+                  :'Für diesen Wettbewerb sind gerade keine Daten geladen.'}</p>
+        </button>`;}).join('')}
+      <div class="sec">Ohne Datenquelle<span class="ln"></span></div>
+      <button class="opt" data-c="custom">
+        <span class="pill">🏟 Eigene Mannschaften</span>
+        <b>Kreisliga, Firmenturnier, 5-gegen-5</b>
+        <p>Du gibst die Mannschaften selbst ein. Weil es dafür keine Datenquelle gibt,
+           trägst du die Endstände nach jedem Spieltag selbst ein.</p>
+      </button>
+    </main>`;
+    bindBack();
+    app.querySelectorAll('[data-c]').forEach(b=>b.onclick=()=>{
+      const c=b.dataset.c;
+      if(c==='custom') return go('create',{flow:'choice',draft:{...d,compId:null}});
+      if(!compFrei(c)){toast(COMPS[c].name+' gibt es mit Premium');return go('premium');}
+      go('create',{flow:'official',draft:{...d,compId:c,name:d.name||''}});
+    });
+    return;
+  }
+
+  /* Schritt 2a — Runde auf einen offiziellen Wettbewerb */
+  if(S.flow==='official'){
+    const c=COMPS[d.compId]||COMPS.bl1;
+    app.innerHTML=head('Runde anlegen','Schritt 2 von 2')+`
+    <main>
+      <div class="card" style="margin-bottom:4px">
+        <span class="pill b">${c.em} ${esc(c.name)}</span>
+        <p class="hint" style="margin-top:10px">Spielplan, Quoten und Ergebnisse kommen
+          automatisch. Du musst nichts nachtragen.</p>
+      </div>
+
+      <label for="ln">Name der Runde</label>
+      <input type="text" id="ln" placeholder="z. B. Büro-Tipprunde" value="${esc(d.name||'')}">
+
+      <label>Sichtbarkeit</label>
+      <div class="toggle">
+        <button data-v="private" aria-pressed="${d.visibility==='private'}">
+          <span class="t">🔒 Privat</span><span class="d">Nur per Link oder Anfrage</span></button>
+        <button data-v="public" aria-pressed="${d.visibility==='public'}">
+          <span class="t">🌍 Öffentlich</span><span class="d">Jeder kann beitreten</span></button>
+      </div>
+
+      <label for="rg">Regeln (frei formulierbar)</label>
+      <textarea id="rg" placeholder="Was gilt in deiner Runde?">${esc(d.rules||'')}</textarea>
+      <p class="hint">Jeder Spieltag bringt ${CFG.budget} Punkte zum Verteilen.
+        Treffer zählen Einsatz × Quote.</p>
+    </main>
+    <div class="dock"><button class="btn" id="mk">Runde erstellen</button></div>`;
+    const keep=()=>{d.name=app.querySelector('#ln').value;d.rules=app.querySelector('#rg').value;};
+    app.querySelectorAll('[data-v]').forEach(b=>b.onclick=()=>{keep();
+      d.visibility=b.dataset.v;render();});
+    app.querySelector('#back').onclick=()=>{keep();go('create',{flow:'comp'});};
+    app.querySelector('#mk').onclick=()=>{keep();buildOfficial(d);};
+    return;
+  }
+
+  if(S.flow==='choice'){
+    app.innerHTML=head('Runde erstellen','Premium')+`
+    <main>
+      <p class="hint" style="margin:0 3px 18px">Zwei Wege — du kannst später jederzeit wechseln.</p>
+      <button class="opt" data-f="self">
+        <span class="pill b">Selbst erstellen</span>
+        <b>Ich mach das selbst</b>
+        <p>Du trägst Teams und den Starttermin ein, Tipoff baut daraus den Spielplan.
+           Sofort startklar.</p>
+      </button>
+      <button class="opt" data-f="host">
+        <span class="pill ${S.premium?'b':''}">${S.premium?'Host übernimmt':'★ Premium'}</span>
+        <b>Ein Host erstellt sie für mich</b>
+        <p>Du schickst uns Liganame, Mannschaften und Zeitraum — das Tipoff-Team baut die
+           Runde und schaltet sie frei. Die Ergebnisse trägst du danach selbst ein.</p>
+      </button>
+      <div class="sec">Womit fangen andere an?<span class="ln"></span></div>
+      <div class="chips">
+        <span class="chip">Erstelle deine Landesliga</span>
+        <span class="chip">Erstelle dein 5-gegen-5-Turnier</span>
+        <span class="chip">Firmenliga</span>
+        <span class="chip">Kreisliga B</span>
+      </div>
+    </main>`;
+    bindBack();
+    app.querySelector('#back').onclick=()=>go('create',{flow:'comp'});
+    app.querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{
+      if(b.dataset.f==='host'&&!S.premium){
+        toast('Die Einrichtung durch uns gibt es mit Premium');return go('premium');}
+      go('create',{flow:b.dataset.f});});
+    return;
+  }
+
+  if(S.flow==='self'){
+    app.innerHTML=head('Runde anlegen','Selbst erstellen')+`
+    <main>
+      <label for="ln">Name der Runde</label>
+      <input type="text" id="ln" placeholder="z. B. Kreisliga B Kellerkinder" value="${esc(d.name||'')}">
+
+      <label>Sichtbarkeit</label>
+      <div class="toggle">
+        <button data-v="private" aria-pressed="${d.visibility==='private'}">
+          <span class="t">🔒 Privat</span><span class="d">Nur per Link oder Anfrage</span></button>
+        <button data-v="public" aria-pressed="${d.visibility==='public'}">
+          <span class="t">🌍 Öffentlich</span><span class="d">Jeder kann beitreten</span></button>
+      </div>
+
+      <label for="tm">Teams</label>
+      <div style="display:flex;gap:8px">
+        <input type="text" id="tm" placeholder="Teamname eingeben">
+        <button class="btn" id="add" style="width:54px;padding:13px">+</button>
+      </div>
+      <div class="chips">${d.teams.map((t,i)=>
+        `<span class="chip">${esc(t)}<button data-rm="${i}">×</button></span>`).join('')
+        ||'<span class="hint" style="margin:0">Noch keine Teams — mindestens vier eintragen.</span>'}</div>
+
+      <label for="st">Erster Spieltag</label>
+      <input type="text" id="st" placeholder="TT.MM.JJJJ" value="${esc(d.start||'')}">
+
+      <p class="hint">Aus deinen Teams entsteht automatisch ein Spielplan, jeder gegen jeden,
+        ein Spieltag pro Woche. Da es für Amateurligen keine Quoten gibt, zählt jeder
+        richtige Tipp ${CFG.amateurPts} Punkte.</p>
+    </main>
+    <div class="dock">
+      <div class="dockmsg">${d.teams.length} Teams${d.teams.length>=4
+        ? ' · '+(d.teams.length%2?d.teams.length:d.teams.length-1)+' Spieltage'
+        : ' · mindestens vier nötig'}</div>
+      <button class="btn" id="mk" ${d.teams.length<4?'disabled':''}>Runde erstellen</button>
+    </div>`;
+    const keep=()=>{d.name=app.querySelector('#ln').value;d.start=app.querySelector('#st').value;};
+    const ti=app.querySelector('#tm');
+    const add=()=>{const v=ti.value.trim();if(!v)return;keep();d.teams.push(v);render();
+      setTimeout(()=>app.querySelector('#tm')?.focus(),30);};
+    app.querySelector('#add').onclick=add;
+    ti.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();add();}};
+    app.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{keep();
+      d.teams.splice(+b.dataset.rm,1);render();});
+    app.querySelectorAll('[data-v]').forEach(b=>b.onclick=()=>{keep();
+      d.visibility=b.dataset.v;render();});
+    app.querySelector('#back').onclick=()=>go('create',{flow:'choice'});
+    const m=app.querySelector('#mk');
+    if(m) m.onclick=()=>{keep();d.name=(d.name||'').trim()||'Meine Runde';buildLeague(d);};
+    return;
+  }
+
+  if(S.flow==='host'){
+    app.innerHTML=head('Host anfragen','Wir richten ein')+`
+    <main>
+      <p class="hint" style="margin:0 3px 8px">Sag uns grob, worum es geht — ein Host vom
+        Tipoff-Team legt die Runde an und trägt den Spielplan ein. Die Endstände trägst
+        du danach als Ersteller selbst nach.</p>
+      <label for="hn">Name der Runde</label>
+      <input type="text" id="hn" placeholder="z. B. Landesliga Mitte">
+      <label for="ht">Welche Teams? (grob reicht)</label>
+      <textarea id="ht" placeholder="Ein Team pro Zeile oder mit Komma getrennt"></textarea>
+      <label for="hz">Zeitraum</label>
+      <input type="text" id="hz" placeholder="z. B. September bis Mai">
+      <label for="hk">Wie erreichen wir dich?</label>
+      <input type="text" id="hk" placeholder="E-Mail oder Handynummer">
+      <p class="hint">Wir melden uns innerhalb von zwei Werktagen. Solange kannst du
+        ganz normal weiter Bundesliga und UFC tippen.</p>
+      <p class="hint" style="background:var(--blue-gl);border:1px solid rgba(80,170,240,.28);
+        border-radius:11px;padding:11px 13px;color:#B8D9F5">
+        <b>Wichtig:</b> Auch wenn wir die Runde für dich einrichten — die Endstände trägst
+        du als Ersteller nach jedem Spieltag selbst ein. Für Amateurligen gibt es keine
+        Datenquelle, die das automatisch könnte.</p>
+    </main>
+    <div class="dock"><button class="btn" id="send">Anfrage abschicken</button></div>`;
+    app.querySelector('#back').onclick=()=>go('create',{flow:'choice'});
+    app.querySelector('#send').onclick=()=>{
+      const n=app.querySelector('#hn').value.trim();
+      if(!n) return toast('Bitte einen Namen angeben');
+      go('create',{flow:'sent',draft:{...d,name:n}});
+    };
+    return;
+  }
+
+  app.innerHTML=head('Anfrage raus','Host')+`
+  <main>
+    <div class="card" style="text-align:center;padding:34px 22px">
+      <div style="font-size:46px">📨</div>
+      <h2 style="font-family:'Poppins';font-weight:700;font-size:22px;margin:14px 0 9px">
+        Angekommen!</h2>
+      <p class="hint" style="margin:0">Deine Anfrage für <b>${esc(d.name||'deine Runde')}</b>
+        liegt beim Host-Team. Wir melden uns innerhalb von zwei Werktagen.
+        Die Ergebnisse trägst du danach selbst im Reiter „Ergebnis" ein.</p>
+    </div>
+  </main>
+  <div class="dock"><button class="btn" id="hm">Zurück zur Startseite</button></div>`;
+  bindBack();
+  app.querySelector('#hm').onclick=()=>go('home');
+}
+
+/* Runde auf einen offiziellen Wettbewerb — kein eigener Spielplan nötig. */
+function buildOfficial(d){
+  const id='o'+(++SEQ), c=COMPS[d.compId];
+  ROUNDS[id]=mkRound({id,compId:d.compId,name:(d.name||'').trim()||('Meine '+c.kurz+'-Runde'),
+    visibility:d.visibility,
+    rules:(d.rules||'').trim()||`Getippt wird auf ${c.name}. ${CFG.budget} Punkte je Spieltag, `+
+      `Treffer zählen Einsatz mal Quote. Ergebnisse kommen automatisch.`,
+    members:[{id:'me',name:S.user?.displayName||'Du',pts:0}]});
+  toast('Runde erstellt');
+  openRound(id);
+}
+
+function buildLeague(d){
+  const id='c'+(++SEQ);
+  const teams=d.teams.slice(); if(teams.length%2) teams.push('spielfrei');
+  const n=teams.length,days=n-1,events=[],base=parseDay(d.start)||new Date(),rot=teams.slice(1);
+  for(let r=0;r<days;r++){
+    const k=r%rot.length,ord=[teams[0],...rot.slice(k).concat(rot.slice(0,k))];
+    for(let i=0;i<n/2;i++){
+      let h=ord[i],a=ord[n-1-i];
+      if(h==='spielfrei'||a==='spielfrei') continue;
+      if((i+r)%2)[h,a]=[a,h];
+      events.push({id:`${id}-${r}-${i}`,day:r+1,home:h,away:a,sport:'fb',noOdds:true,source:'mdl',
+        start:new Date(base.getTime()+r*7*864e5+i*72e5),
+        sides:[{key:'1',label:'1',q:1},{key:'X',label:'X',q:1},{key:'2',label:'2',q:1}]});
+    }
+  }
+  const real=teams.filter(t=>t!=='spielfrei');
+  ROUNDS[id]=mkRound({id,sport:'fb',name:d.name,custom:true,
+    visibility:d.visibility,teams:real,events,
+    rules:`${real.length} Teams, ${days} Spieltage. Ohne Quoten — jeder Treffer ${CFG.amateurPts} Punkte.`,
+    members:[{id:'me',name:S.user?.displayName||'Du',pts:0}]});
+  toast('Runde erstellt');
+  openRound(id);
+}
+function parseDay(s){
+  const m=String(s||'').match(/(\d{1,2})\.(\d{1,2})\.(\d{2,4})/); if(!m) return null;
+  const y=+m[3]<100?2000+ +m[3]:+m[3], d=new Date(y,+m[2]-1,+m[1],19,0);
+  return isNaN(d)?null:d;
+}
+
+/* ═══════════ RUNDE ═══════════ */
+function vRound(){
+  const r=R(),fb=r.sport==='fb';
+  /* Nur der Ersteller einer eigenen Liga trägt Ergebnisse ein. */
+  const darfEintragen=r.custom&&r.owner==='me';
+  const tabs=['tippen'];
+  if(darfEintragen) tabs.push('ergebnis');
+  tabs.push('tabelle');
+  if(S.premium) tabs.push('chat');   // ohne Premium gibt es keinen Chat
+  tabs.push('info');
+  if(!tabs.includes(S.tab)) S.tab='tippen';
+  app.innerHTML=`
+  <header><div class="hrow">
+    <button class="ico" id="back" aria-label="Zurück">‹</button>
+    <div style="flex:1;min-width:0">
+      <div class="hsub">${esc(r.comp)}</div>
+      <div class="htitle" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.name)}</div>
+    </div>
+    <button class="ico" id="menu" aria-label="Menü"><span class="burger"><i></i><i></i><i></i></span></button>
+  </div></header>
+  <nav>${tabs.map(t=>`<button data-t="${t}" aria-selected="${S.tab===t}">${
+    {tippen:'Tippen',ergebnis:'Ergebnis',tabelle:'Tabelle',chat:'Chat',info:'Runde'}[t]
+    }</button>`).join('')}</nav>
+  ${(S.tab==='tippen'||S.tab==='ergebnis')&&fb?'<div class="days" id="days"></div>':''}
+  <main id="body"></main><div id="foot"></div>`;
+  bindBack();
+  app.querySelector('#menu').onclick=()=>{S.menu=true;drawMenu();};
+  app.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{S.tab=b.dataset.t;S.picker=false;render();});
+  if((S.tab==='tippen'||S.tab==='ergebnis')&&fb) drawDays();
+  ({tippen:tabTip,ergebnis:tabEntry,tabelle:tabTable,chat:tabChat,info:tabInfo}[S.tab])();
+}
+function drawDays(){
+  const el=app.querySelector('#days'),r=R(),mx=maxDay(r);
+  el.innerHTML='';
+  for(let d=1;d<=mx;d++){
     const b=document.createElement('button');
-    b.textContent=d;
-    b.setAttribute('aria-current', d===S.day);
-    if(S.matches.some(m=>m.day===d&&m.finished)) b.classList.add('played');
+    b.textContent=d;b.setAttribute('aria-current',d===S.day);
+    if(r.settled[d]||anyResult(eventsOf(r,d),r)) b.classList.add('done');
     b.onclick=()=>{S.day=d;render();};
     el.appendChild(b);
   }
-  requestAnimationFrame(()=>{
-    const cur=el.querySelector('[aria-current="true"]');
-    if(cur) el.scrollLeft=cur.offsetLeft-140;
-  });
+  requestAnimationFrame(()=>{const c=el.querySelector('[aria-current="true"]');
+    if(c) el.scrollLeft=c.offsetLeft-155;});
 }
 
-function renderBudget(){
-  const el=app.querySelector('#budget'), l=left(), done=isSettled();
-  el.className='budget'+(l===0?' empty':'');
-  el.innerHTML = done
-    ? `<span class="lbl">Ausgewertet</span><span class="bar"><i style="width:100%"></i></span>
-       <span class="num">${fmt(R().settled[S.roundId==='buli'?S.day:1].me)} P</span>`
-    : `<span class="lbl">Budget</span><span class="bar"><i style="width:${l/CFG.budget*100}%"></i></span>
-       <span class="num">${l} / ${CFG.budget}</span>`;
+function tabTip(){
+  const b=app.querySelector('#body'),evs=pool(),r=R();
+  if(!S.ready&&!r.custom) return b.innerHTML='<div class="empty">Spielplan wird geladen …</div>';
+  if(!evs.length) return b.innerHTML='<div class="empty">Für diesen Spieltag liegen noch keine Ansetzungen vor.</div>';
+  const st=settled(),l=left();
+  b.innerHTML=r.custom?'':`<div class="budget">
+    <span class="lb">${st?'Ergebnis':'Budget'}</span>
+    <span class="bar"><i style="width:${st?100:l/CFG.budget*100}%"></i></span>
+    <span class="nm" style="${st?'color:var(--win)':''}">${
+      st?'+'+fmt(r.settled[dayKey()].me)+' P':l+' / '+CFG.budget}</span></div>`;
+  evs.slice().sort((a,c)=>a.start-c.start).forEach(ev=>b.appendChild(matchCard(ev)));
+  drawDock();
 }
 
-function renderEvents(){
-  const wrap=app.querySelector('#v-tippen'), evs=pool();
-  wrap.innerHTML='';
-  if(!S.ready){ wrap.innerHTML='<div class="empty">Spielplan wird geladen …</div>'; return; }
-  if(!evs.length){ wrap.innerHTML='<div class="empty">Für diesen Spieltag liegen noch keine Ansetzungen vor.</div>'; return; }
-  evs.sort((a,b)=>a.start-b.start).forEach(ev=>wrap.appendChild(card(ev)));
-}
-
-function card(ev){
-  const r=R(), pick=r.picks[ev.id], done=isSettled();
-  const res = done ? r.settled[S.roundId==='buli'?S.day:1].results[ev.id] : null;
-  const el=document.createElement('article'); el.className='match';
-  const sep = ev.sport==='mma' ? '<em> vs </em>' : '<em> — </em>';
-  el.innerHTML=`
-    <div class="when">${when(ev.start)}
-      <span class="src ${ev.source==='mkt'?'mkt':'mdl'}">${ev.source==='mkt'?'Marktquote':'Modellquote'}</span></div>
-    <div class="who">${esc(ev.sport==='fb'?short(ev.home):ev.home)}${sep}${esc(ev.sport==='fb'?short(ev.away):ev.away)}</div>
+function matchCard(ev){
+  const r=R(),p=r.picks[ev.id],st=settled();
+  /* Ergebnis anzeigen, sobald es feststeht — auch ohne Auswertung. */
+  const res=st?r.settled[dayKey()].results[ev.id]:eventResult(ev,r);
+  /* Nach Anpfiff ist Schluss mit Tippen. */
+  const zu=st||started(ev);
+  const el=document.createElement('article');el.className='match';
+  const nm=ev.sport==='mma'?[ev.home,ev.away]:[short(ev.home),short(ev.away)];
+  el.innerHTML=`<div class="mtop">${when(ev.start)}
+    ${ev.noOdds?'<span class="src">Ohne Quoten</span>'
+      :`<span class="src ${ev.source==='mkt'?'mkt':''}">${ev.source==='mkt'?'Marktquote':'Modell'}</span>`}</div>
+    <div class="who">${esc(nm[0])} <em>${ev.sport==='mma'?'vs':'—'}</em> ${esc(nm[1])}</div>
     <div class="odds"></div>`;
+  if(zu&&!st) el.querySelector('.mtop').insertAdjacentHTML('beforeend',
+    `<span class="src" style="margin-left:0">${res?'Beendet':'Angepfiffen'}</span>`);
 
-  const odds=el.querySelector('.odds');
+  const od=el.querySelector('.odds');
   ev.sides.forEach(s=>{
     const b=document.createElement('button');
-    b.setAttribute('aria-pressed', pick&&pick.market==='h2h'&&pick.side===s.key);
-    b.innerHTML=`<span class="side">${esc(s.label)}</span><span class="q">${fmtQ(s.q)}</span>`;
-    if(!done) b.onclick=()=>choose(ev,s,'h2h');
-    if(res && res.side===s.key) b.style.borderColor='var(--pitch)';
-    odds.appendChild(b);
+    b.setAttribute('aria-pressed',!!(p&&p.type!=='exact'&&p.side===s.key));
+    b.innerHTML=`<span class="sd">${esc(s.label)}</span>
+      <span class="q">${ev.noOdds?'·':fq(s.q)}</span>`;
+    if(!zu) b.onclick=()=>pick(ev,s,'tendency');
+    else b.style.opacity=p&&p.side===s.key?'1':'.55';
+    if(res&&res.side===s.key) b.classList.add('win');
+    od.appendChild(b);
   });
 
-  /* Ergebniswette — nur Fußball, deutlich höhere Quoten */
-  if(ev.exact && !done){
-    const d=document.createElement('details'); d.className='exact';
-    if(pick&&pick.market==='exact') d.open=true;
-    d.innerHTML=`<summary>Genaues Ergebnis · bis ${fmtQ(Math.max(...ev.exact.map(e=>e.q)))}</summary>
-                 <div class="axis">${esc(short(ev.home))} : ${esc(short(ev.away))}</div>
-                 <div class="grid"></div>`;
-    const g=d.querySelector('.grid');
-    ev.exact.forEach(s=>{
-      const b=document.createElement('button');
-      b.setAttribute('aria-pressed', pick&&pick.market==='exact'&&pick.side===s.key);
-      b.innerHTML=`<span class="s">${s.label}</span><span class="o">${fmtQ(s.q)}</span>`;
-      b.onclick=e=>{e.preventDefault();choose(ev,s,'exact');};
-      g.appendChild(b);
-    });
+  if(ev.exact&&ev.exact.length&&!zu){
+    const w=document.createElement('div');w.className='exact';
+    const best=fq(Math.max(...ev.exact.map(e=>e.q)));
+    if(!S.premium){
+      w.innerHTML=`<button class="exlock">
+        <span class="pill b">★</span>
+        <span class="t"><b>Genaues Ergebnis tippen</b>
+          <small>Quoten bis ${best} statt ${fq(Math.max(...ev.sides.map(s=>s.q)))}</small></span>
+        <span style="color:var(--blue)">›</span></button>`;
+      w.querySelector('button').onclick=()=>go('premium');
+    }else{
+      const open=!!(p&&p.type==='exact');
+      w.innerHTML=`<button class="exhead" aria-expanded="${open}">
+        🎯 Genaues Ergebnis
+        <span style="color:var(--muted);font-weight:500">bis ${best}</span>
+        <span class="cr">›</span></button>
+        <div class="box" style="display:${open?'block':'none'}">
+          <div class="axis">${esc(nm[0])} : ${esc(nm[1])}</div>
+          <div class="grid"></div>
+          <p class="hint">Ergebnis daneben, aber Tendenz richtig? Dann gibt es
+            trotzdem die Punkte der Siegwette.</p></div>`;
+      const g=w.querySelector('.grid');
+      ev.exact.forEach(s=>{
+        const b=document.createElement('button');
+        b.setAttribute('aria-pressed',!!(p&&p.type==='exact'&&p.side===s.key));
+        b.innerHTML=`<span class="s">${s.label}</span><span class="o">${fq(s.q)}</span>`;
+        b.onclick=()=>pick(ev,s,'exact');
+        g.appendChild(b);
+      });
+      const hd=w.querySelector('.exhead'),bx=w.querySelector('.box');
+      hd.onclick=()=>{const o=hd.getAttribute('aria-expanded')==='true';
+        hd.setAttribute('aria-expanded',!o);bx.style.display=o?'none':'block';};
+    }
+    el.appendChild(w);
+  }
+
+  if(p&&!zu&&!ev.noOdds){
+    const s=document.createElement('div');s.className='stake';
+    const mx=Math.min(CFG.budget,p.stake+left());
+    s.innerHTML=`<input type="range" min="5" max="${mx}" step="5" value="${p.stake}" aria-label="Einsatz">
+      <span class="v"><b>${p.stake} P</b> → ${fmt(p.stake*p.q)} P</span>`;
+    const i=s.querySelector('input');
+    i.oninput=e=>{p.stake=+e.target.value;
+      s.querySelector('.v').innerHTML=`<b>${p.stake} P</b> → ${fmt(p.stake*p.q)} P`;};
+    i.onchange=()=>render();
+    el.appendChild(s);
+  }
+
+  if(res&&p){
+    const pts=ptsFor(p,res,ev),hit=pts>0;
+    const exactHit=p.type==='exact'&&res&&res.exact===p.side;
+    el.classList.add(hit?'hit':'miss');
+    const d=document.createElement('div');d.className='res';
+    d.innerHTML=`<span style="color:var(--muted)">${esc(res?.text||'—')}
+      ${hit&&p.type==='exact'&&!exactHit?'<span class="tend">Tendenz</span>':''}</span>
+      <span class="pt">${hit?'+'+fmt(pts):'0,0'} P</span>`;
     el.appendChild(d);
-  }
-
-  const st=document.createElement('div'); st.className='stake';
-  if(pick && !done){
-    st.classList.add('on');
-    const max=Math.min(CFG.budget, pick.stake+left());
-    st.innerHTML=`<input type="range" min="5" max="${max}" step="5" value="${pick.stake}"
-                    aria-label="Einsatz">
-                  <span class="val"><b>${pick.stake}</b> P → ${fmt(pick.stake*pick.q)} P</span>`;
-    const inp=st.querySelector('input');
-    inp.oninput=e=>{ pick.stake=+e.target.value;
-      st.querySelector('.val').innerHTML=`<b>${pick.stake}</b> P → ${fmt(pick.stake*pick.q)} P`;
-      renderBudget(); };
-    inp.onchange=()=>render();
-    el.appendChild(st);
-  }else if(pick && done){
-    st.classList.add('on');
-    st.innerHTML=`<span class="val">${pick.market==='exact'?'Ergebnis':'Siegwette'}
-      <b>${esc(pick.side)}</b> · ${pick.stake} P · Quote ${fmtQ(pick.q)}</span>`;
-    el.appendChild(st);
-  }
-
-  if(done && res){
-    const hit = pick && (pick.market==='exact' ? res.exact===pick.side : res.side===pick.side);
-    if(pick) el.classList.add(hit?'hit':'miss');
-    const d=document.createElement('div'); d.className='result';
-    d.innerHTML=`<span class="out">${res.text||res.side}</span>
-                 <span class="pts">${pick?(hit?'+'+fmt(pick.stake*pick.q):'0,0')+' P':'nicht getippt'}</span>`;
+  }else if(res){
+    const d=document.createElement('div');d.className='res';
+    d.innerHTML=`<span style="color:var(--muted)">${esc(res.text)}</span>
+      <span class="pt" style="color:var(--muted)">nicht getippt</span>`;
     el.appendChild(d);
   }
   return el;
 }
-
-function choose(ev,s,market){
-  const r=R(), cur=r.picks[ev.id];
-  if(cur && cur.market===market && cur.side===s.key){ delete r.picks[ev.id]; }
-  else if(cur){ cur.side=s.key; cur.q=s.q; cur.market=market; }
+function pick(ev,s,type){
+  const r=R(),cur=r.picks[ev.id];
+  if(cur&&cur.type===type&&cur.side===s.key) delete r.picks[ev.id];
+  else if(cur) Object.assign(cur,{side:s.key,q:s.q,type});
   else{
-    if(left()<5) return;
-    r.picks[ev.id]={side:s.key,q:s.q,market,stake:Math.min(10,left())};
+    if(!ev.noOdds&&left()<5) return toast('Budget aufgebraucht');
+    r.picks[ev.id]={side:s.key,q:s.q,type,stake:ev.noOdds?0:Math.min(10,left())};
   }
   render();
 }
 
-function renderBoard(){
-  const r=R();
-  const rows=[...r.members].sort((a,b)=>b.pts-a.pts);
-  const v=app.querySelector('#v-tabelle');
-  v.innerHTML=rows.map((m,i)=>`
+/* ══════════ ERGEBNISSE EINTRAGEN (nur eigene Ligen, nur Ersteller) ══════════ */
+function tabEntry(){
+  const r=R(),evs=pool().slice().sort((a,b)=>a.start-b.start),k=dayKey();
+  const b=app.querySelector('#body');
+  if(!evs.length) return b.innerHTML='<div class="empty">Für diesen Spieltag gibt es keine Spiele.</div>';
+
+  b.innerHTML=`<p class="hint" style="margin:0 3px 16px">
+      Für eigene Ligen gibt es keine Datenquelle — du trägst die Endstände selbst ein.
+      Sobald alle Spiele eines Spieltags eingetragen sind, werden die Punkte
+      automatisch verteilt.${r.settled[k]?'<br><br><b>Dieser Spieltag ist bereits gewertet.</b> Änderungen wirken sich nicht mehr aus.':''}</p>
+    ${evs.map(ev=>{
+      const x=r.results[ev.id]||{};
+      return `<div class="card" style="margin-bottom:10px">
+        <div class="mtop">${when(ev.start)}</div>
+        <div style="display:flex;align-items:center;gap:10px;margin-top:11px">
+          <span style="flex:1;font-size:14px;font-weight:500;text-align:right">${esc(ev.home)}</span>
+          <input type="text" inputmode="numeric" maxlength="2" data-h="${ev.id}"
+            value="${x.h??''}" style="width:46px;text-align:center;padding:9px;
+            font-family:'Poppins';font-weight:700;font-size:16px">
+          <span style="color:var(--muted);font-weight:700">:</span>
+          <input type="text" inputmode="numeric" maxlength="2" data-a="${ev.id}"
+            value="${x.a??''}" style="width:46px;text-align:center;padding:9px;
+            font-family:'Poppins';font-weight:700;font-size:16px">
+          <span style="flex:1;font-size:14px;font-weight:500">${esc(ev.away)}</span>
+        </div></div>`;}).join('')}`;
+
+  const fehlt=()=>evs.filter(e=>!eventResult(e,r)).length;
+  app.querySelector('#foot').innerHTML=`<div class="dock">
+    <div class="dockmsg" id="cnt">${evs.length-fehlt()} von ${evs.length} eingetragen</div>
+    <button class="btn" id="sv">Ergebnisse speichern</button></div>`;
+
+  /* Eingaben laufend übernehmen, damit der Zähler stimmt */
+  const lesen=()=>{
+    evs.forEach(ev=>{
+      const h=b.querySelector(`[data-h="${ev.id}"]`).value.replace(/\D/g,'');
+      const a=b.querySelector(`[data-a="${ev.id}"]`).value.replace(/\D/g,'');
+      if(h!==''&&a!=='') r.results[ev.id]={h:+h,a:+a};
+      else delete r.results[ev.id];
+    });
+  };
+  b.querySelectorAll('input').forEach(i=>i.oninput=()=>{
+    i.value=i.value.replace(/\D/g,'');
+    lesen();
+    app.querySelector('#cnt').textContent=`${evs.length-fehlt()} von ${evs.length} eingetragen`;
+  });
+  app.querySelector('#sv').onclick=()=>{
+    lesen();
+    if(fehlt()) return toast(`Noch ${fehlt()} Ergebnis${fehlt()>1?'se':''} offen`);
+    const n=autoSettle();
+    toast(n?'Gewertet — Punkte verteilt':'Gespeichert');
+    S.tab=n?'tabelle':'tippen';render();
+  };
+}
+
+function tabTable(){
+  const r=R(),rows=[...r.members].sort((a,b)=>b.pts-a.pts);
+  app.querySelector('#body').innerHTML=rows.map((m,i)=>`
     <div class="rank${i===0?' lead':''}${m.id==='me'?' me':''}">
-      <span class="pos">${i+1}</span><span class="nm">${esc(m.name)}</span>
-      <span class="delta"></span><span class="flap" data-id="${m.id}">${fmt(m.pts)}</span>
-    </div>`).join('')
-    + `<p class="note" style="padding:16px 4px">Saisonpunkte dieser Runde.
-       ${r.sport==='fb'?'Bundesliga und UFC werden getrennt gewertet.':'Eigene Wertung, unabhängig von der Fußballrunde.'}</p>`;
+      <span class="ps">${i+1}</span>
+      <span class="nm">${esc(m.name)}</span>
+      <span class="dl" data-d="${m.id}"></span>
+      <span class="pts" data-p="${m.id}">${fmt(m.pts)}</span></div>`).join('')+
+    `<p class="hint" style="text-align:center;margin-top:16px">
+      Jede Runde wird getrennt gewertet.</p>`;
+  app.querySelector('#foot').innerHTML='';
 }
 
-function renderInfo(){
-  const r=R();
-  app.querySelector('#v-runde').innerHTML=`
-    <div class="card"><h3>Regeln der Runde</h3>
-      <textarea id="rules">${esc(r.rules)}</textarea>
-      <p class="note">Frei formulierbar, sichtbar für alle beim Beitritt.
-      Die App wertet ausschließlich Punkte aus.</p></div>
-    <div class="card"><h3>Mitglieder</h3>
-      <div class="members">${r.members.map(m=>`<span class="chip">${esc(m.name)}</span>`).join('')}</div></div>
-    <div class="card"><h3>So entstehen die Quoten</h3>
-      <p>Siegwette: bester Preis über alle Buchmacher der Odds API, sonst Modellwert.
-      Ergebniswette: aus der Siegwette hergeleitet — die Marge wird rausgerechnet, daraus
-      folgen zwei Torerwartungen, daraus die Wahrscheinlichkeit jedes Ergebnisses.
-      Deshalb liegen die Quoten dort deutlich höher.</p>
-      <p class="note">Beim Tippen wird die Quote eingefroren. Bewegt sie sich danach,
-      ändert das deine Punkte nicht mehr.</p></div>`;
-  app.querySelector('#rules').onchange=e=>r.rules=e.target.value;
+function tabChat(){
+  const r=R(),b=app.querySelector('#body');
+  if(!S.premium){S.tab='tippen';return render();}
+  b.style.paddingBottom='160px';
+  b.innerHTML=`<div class="chat">${r.chat.map(m=>{
+    const mine=m.who==='me';
+    return `<div class="msg${mine?' mine':''}">
+      ${mine?'':`<span class="au">${esc(m.name)}</span>`}
+      ${m.sticker?(stk(m.sticker).w
+        ?`<span class="stk word">${stk(m.sticker).w}</span>`
+        :`<span class="stk">${stk(m.sticker).e}</span>`)
+        :`<div class="bub">${esc(m.text)}</div>`}</div>`;}).join('')
+    ||'<div class="empty">Noch keine Nachrichten. Fang an.</div>'}</div>`;
+
+  app.querySelector('#foot').innerHTML=`
+    ${S.picker?`<div class="picker">${STICKERS.map(s=>
+      `<button data-s="${s.id}" class="${s.w?'w':''}">${s.w||s.e}</button>`).join('')}</div>`:''}
+    <div class="composer">
+      <input type="text" id="ci" placeholder="Nachricht an die Runde …" maxlength="240">
+      <button class="gh" id="cs" aria-label="Sticker">😀</button>
+      <button id="cb" aria-label="Senden">➤</button>
+    </div>`;
+  const inp=app.querySelector('#ci'),down=()=>setTimeout(()=>window.scrollTo(0,1e6),40);
+  const send=()=>{const v=inp.value.trim();if(!v)return;
+    r.chat.push({who:'me',name:S.user?.displayName||'Du',text:v,t:Date.now()});
+    inp.value='';S.picker=false;render();down();};
+  app.querySelector('#cb').onclick=send;
+  inp.onkeydown=e=>{if(e.key==='Enter')send();};
+  app.querySelector('#cs').onclick=()=>{S.picker=!S.picker;render();};
+  app.querySelectorAll('[data-s]').forEach(x=>x.onclick=()=>{
+    r.chat.push({who:'me',name:S.user?.displayName||'Du',sticker:x.dataset.s,t:Date.now()});
+    S.picker=false;render();down();});
+  down();
 }
 
-function renderDock(){
-  const d=app.querySelector('#dock');
-  if(S.tab!=='tippen'){ d.innerHTML=''; return; }
-  const key=S.roundId==='buli'?S.day:1, r=R();
-  if(r.settled[key]){
-    d.innerHTML=`<div class="dockmsg">Ausgewertet · <b style="color:var(--flood)">+${fmt(r.settled[key].me)} Punkte</b></div>
-                 <button class="cta ghost" id="go">Zurücksetzen</button>`;
-    d.querySelector('#go').onclick=()=>{
-      const s=r.settled[key];
-      r.members.forEach(m=>m.pts-=s.gain[m.id]||0);
-      delete r.settled[key];
-      pool().forEach(ev=>delete r.picks[ev.id]);
-      render();
-    };
+function tabInfo(){
+  const r=R(),own=r.owner==='me';
+  app.querySelector('#body').innerHTML=`
+    <div class="card" style="margin-bottom:11px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:11px;flex-wrap:wrap">
+        <span class="pill b">${esc(compTag(r))}</span>
+        <span class="pill ${r.visibility==='public'?'g':''}">${
+          r.visibility==='public'?'🌍 Öffentlich':'🔒 Privat'}</span>
+        ${own?'<span class="pill b">Du bist Ersteller</span>':''}
+      </div>
+      <div style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">
+        Einladungscode</div>
+      <div style="font-family:'Poppins';font-weight:800;font-size:20px;color:var(--blue);
+        letter-spacing:.11em;margin-top:5px">${esc(r.code)}</div>
+      <button class="btn ghost" id="inv" style="margin-top:14px;padding:12px;font-size:13.5px">
+        Einladungslink teilen ↗</button>
+    </div>
+
+    ${own&&r.requests.length?`<div class="sec">Offene Anfragen<span class="ln"></span></div>
+      ${r.requests.map(q=>`<div class="reqrow">
+        <span class="nm">${esc(q.name)}</span>
+        <button class="mini ok" data-acc="${q.id}">Aufnehmen</button>
+        <button class="mini no" data-dec="${q.id}">Ablehnen</button></div>`).join('')}`:''}
+
+    <div class="sec">Regeln<span class="ln"></span></div>
+    <div class="card" style="margin-bottom:11px">
+      <textarea id="rl" ${own?'':'readonly'}>${esc(r.rules)}</textarea>
+      <p class="hint">${own?'Frei formulierbar, alle sehen es beim Beitritt. ':''}
+        Tipoff wertet ausschließlich Punkte aus — über die App fließt kein Geld.</p>
+    </div>
+
+    <div class="sec">Mitglieder · ${r.members.length}<span class="ln"></span></div>
+    <div class="card" style="margin-bottom:11px">
+      <div class="chips">${r.members.map(m=>`<span class="chip">${esc(m.name)}</span>`).join('')}</div>
+    </div>
+
+    <div class="sec">Punkte<span class="ln"></span></div>
+    <div class="card">
+      <p class="hint" style="margin:0">${r.custom
+        ? `Diese Runde hat keine Buchmacherquoten. Jeder richtige Tipp zählt ${CFG.amateurPts} Punkte — gleich viel für alle. Die Endstände trägt ${r.owner==='me'?'du als Ersteller':esc(r.owner)} im Reiter „Ergebnis" ein.`
+        : `Treffer = Einsatz × Quote, eingefroren im Moment des Tippens. ${S.premium
+          ?'Beim exakten Ergebnis bekommst du bei falschem Ergebnis, aber richtiger Tendenz, die Tendenzpunkte.'
+          :'Mit Premium kommt das genaue Ergebnis dazu — höhere Quoten, mehr Punkte.'}`}</p>
+    </div>`;
+  app.querySelector('#foot').innerHTML='';
+  const rl=app.querySelector('#rl'); if(own&&rl) rl.onchange=e=>r.rules=e.target.value;
+  app.querySelector('#inv').onclick=()=>share(
+    `Tipp mit mir bei "${r.name}" — Code ${r.code}:`, CFG.shareUrl+'?code='+r.code);
+  app.querySelectorAll('[data-acc]').forEach(b=>b.onclick=()=>{
+    const q=r.requests.find(x=>x.id===b.dataset.acc);
+    r.members.push({id:q.id,name:q.name,pts:0});
+    r.requests=r.requests.filter(x=>x.id!==b.dataset.acc);
+    toast(q.name+' ist dabei');render();});
+  app.querySelectorAll('[data-dec]').forEach(b=>b.onclick=()=>{
+    r.requests=r.requests.filter(x=>x.id!==b.dataset.dec);toast('Anfrage abgelehnt');render();});
+}
+
+function drawDock(){
+  const f=app.querySelector('#foot'),r=R(),k=dayKey(),evs=pool(),own=r.owner==='me';
+
+  /* Bereits gewertet */
+  if(r.settled[k]){
+    const real=r.settled[k].real;
+    f.innerHTML=`<div class="dock">
+      <div class="dockmsg">${real?'Ausgewertet':'Probelauf'} · +${fmt(r.settled[k].me)} Punkte für dich</div>
+      ${real?'':'<button class="btn ghost" id="rs">Probelauf zurücksetzen</button>'}</div>`;
+    const rs=f.querySelector('#rs');
+    if(rs) rs.onclick=()=>{
+      const x=r.settled[k];r.members.forEach(m=>m.pts-=x.gain[m.id]||0);
+      delete r.settled[k];evs.forEach(e=>delete r.picks[e.id]);render();};
     return;
   }
-  const n=dayPicks().length, l=left();
-  d.innerHTML=`<div class="dockmsg">${n?`${n} Tipps · ${used()} von ${CFG.budget} Punkten gesetzt`
-                :'Tippe auf eine Quote — oder klapp das genaue Ergebnis auf'}</div>
-               <button class="cta" id="go" ${n===0||l>0?'disabled':''}>Auswerten</button>`;
-  if(n&&l===0) d.querySelector('#go').onclick=settle;
-}
 
-function settle(){
-  const r=R(), evs=pool(), key=S.roundId==='buli'?S.day:1;
-  const results=simulate(evs);
-  const mine=Object.fromEntries(dayPicks());
-  const gain={me:scorePicks(mine,results)};
-  r.members.filter(m=>m.id!=='me').forEach(m=>gain[m.id]=scorePicks(botPicks(evs),results));
+  /* Eigene Liga: der Ersteller muss die Ergebnisse eintragen */
+  if(r.custom){
+    const fehlt=evs.filter(e=>!eventResult(e,r)).length;
+    if(fehlt&&own){
+      f.innerHTML=`<div class="dock">
+        <div class="dockmsg">${fehlt} von ${evs.length} Ergebnissen fehlen noch</div>
+        <button class="btn" id="ent">Ergebnisse eintragen</button></div>`;
+      f.querySelector('#ent').onclick=()=>{S.tab='ergebnis';render();};
+      return;
+    }
+    if(fehlt){
+      f.innerHTML=`<div class="dock"><div class="dockmsg">
+        Warte auf die Ergebnisse — die trägt ${esc(r.owner==='me'?'du':'der Ersteller der Runde')} ein.
+        </div></div>`;
+      return;
+    }
+  }
+
+  /* Alle Ergebnisse da, aber noch nicht getippt worden */
+  const n=dayPicks().length;
+  if(allResults(evs,r)&&!n){
+    f.innerHTML=`<div class="dock"><div class="dockmsg">
+      Ergebnisse liegen vor — für diesen Spieltag hast du nicht getippt.</div></div>`;
+    return;
+  }
+
+  /* Noch offen: Tippen läuft */
+  const l=left(),frei=r.custom,ok=frei?n>0:(n>0&&l===0);
+  const offen=evs.filter(e=>!started(e)).length;
+  f.innerHTML=`<div class="dock">
+    <div class="dockmsg">${n
+      ?(frei?`${n} Tipps abgegeben`:`${n} Tipps · ${used()} von ${CFG.budget} Punkten gesetzt`)
+      :offen?'Tipp auf eine Quote, dann Einsatz mit dem Regler wählen'
+             :'Für diesen Spieltag ist die Tippfrist vorbei'}</div>
+    <button class="btn ghost" id="ev" ${ok?'':'disabled'}>Probeweise auswerten</button>
+    <p class="hint" style="text-align:center;margin-top:9px;font-size:11.5px">
+      Echte Ergebnisse werden von selbst verrechnet, sobald sie feststehen.</p></div>`;
+  if(ok) f.querySelector('#ev').onclick=settleDay;
+}
+/* Punkte gutschreiben — einmal je Spieltag. */
+function applySettle(r,k,evs,res,picks,real){
+  const gain={me:scoreAll(picks,res,evs)};
+  r.members.filter(m=>m.id!=='me').forEach(m=>gain[m.id]=scoreAll(botPicks(evs),res,evs));
   r.members.forEach(m=>m.pts+=gain[m.id]||0);
-  r.settled[key]={results,gain,me:gain.me};
-  S.tab='tabelle'; render(); roll(gain);
+  r.settled[k]={results:res,gain,me:gain.me,real:!!real};
+  return gain;
 }
 
-/* Signatur: Fallblattanzeige — Punkte rollen hoch wie am Stadionturm. */
-function roll(gain){
-  app.querySelectorAll('.flap').forEach(el=>{
-    const id=el.dataset.id, to=+R().members.find(m=>m.id===id).pts, g=gain[id]||0, from=to-g;
-    const row=el.closest('.rank'), delta=row.querySelector('.delta'), t0=performance.now();
+/* Auswertung von Hand — nur als Probelauf, solange keine echten Ergebnisse da sind. */
+function settleDay(){
+  const r=R(),evs=pool(),k=dayKey();
+  const real=allResults(evs,r);
+  const res=real||simulate(evs);
+  const gain=applySettle(r,k,evs,res,Object.fromEntries(dayPicks()),!!real);
+  S.tab='tabelle';render();rollUp(gain);
+}
+
+/* ══════════ AUTOMATISCHE AUSWERTUNG ══════════
+   Läuft nach jedem Datenabruf: Sobald für einen Spieltag alle Ergebnisse
+   vorliegen und du getippt hast, werden die Punkte von selbst gutgeschrieben. */
+function autoSettle(){
+  let n=0;
+  Object.values(ROUNDS).forEach(r=>{
+    if(!r.joined) return;
+    const days = r.custom ? [...new Set(r.events.map(e=>e.day))]
+               : r.sport==='mma' ? [1]
+               : [...new Set(evOf(r.compId).map(m=>m.day||1))];
+    days.forEach(d=>{
+      if(r.settled[d]) return;
+      const evs=eventsOf(r,d); if(!evs.length) return;
+      const res=allResults(evs,r); if(!res) return;
+      const picks=Object.fromEntries(
+        Object.entries(r.picks).filter(([id])=>evs.some(e=>e.id===id)));
+      if(!Object.keys(picks).length) return;      // nichts getippt, nichts zu werten
+      applySettle(r,d,evs,res,picks,true); n++;
+    });
+  });
+  return n;
+}
+function rollUp(gain){
+  app.querySelectorAll('[data-p]').forEach(el=>{
+    const id=el.dataset.p,to=R().members.find(m=>m.id===id).pts,g=gain[id]||0,from=to-g;
+    const dl=app.querySelector(`[data-d="${id}"]`),t0=performance.now();
     (function step(t){
-      const k=Math.min(1,(t-t0)/1100), e=1-Math.pow(1-k,3);
+      const k=Math.min(1,(t-t0)/950),e=1-(1-k)**3;
       el.textContent=fmt(from+(to-from)*e);
       if(k<1) requestAnimationFrame(step);
-      else{ el.textContent=fmt(to); delta.textContent='+'+fmt(g); delta.classList.add('show'); }
+      else{el.textContent=fmt(to);if(dl&&g){dl.textContent='+'+fmt(g);dl.classList.add('on');}}
     })(t0);
   });
 }
 
-/* ═══════════════ 6. START ═══════════════ */
+/* ═══════════ PROFIL ═══════════ */
+function vProfile(){
+  const mine=myRounds();
+  const total=mine.reduce((s,r)=>s+(r.members.find(m=>m.id==='me')?.pts||0),0);
+  const wins=mine.filter(r=>[...r.members].sort((a,b)=>b.pts-a.pts)[0]?.id==='me').length;
+  app.innerHTML=head('Mein Profil','Konto')+`
+  <main>
+    <div class="card" style="text-align:center;padding:26px">
+      <div class="avatar" style="margin:0 auto;width:62px;height:62px;font-size:26px;border-radius:19px">
+        ${esc(initial())}</div>
+      <div style="font-family:'Poppins';font-weight:700;font-size:20px;margin-top:14px">
+        ${esc(S.user?.displayName||'—')}</div>
+      <div style="font-size:13px;color:var(--muted);margin-top:4px">${esc(S.user?.email||'')}</div>
+      ${S.premium?'<div style="margin-top:13px"><span class="pill b">★ Premium aktiv</span></div>':''}
+    </div>
+
+    <div class="sec">Deine Zahlen<span class="ln"></span></div>
+    <div style="display:flex;gap:10px">
+      ${[['Runden',mine.length],['Punkte',fmt(total)],['Führungen',wins]].map(([l,v])=>`
+        <div class="card" style="flex:1;text-align:center;padding:16px 8px">
+          <div style="font-family:'Poppins';font-weight:700;font-size:22px;color:var(--blue)">${v}</div>
+          <div style="font-size:10.5px;color:var(--muted);font-weight:600;text-transform:uppercase;
+            letter-spacing:.06em;margin-top:4px">${l}</div></div>`).join('')}
+    </div>
+
+    <div class="sec">Meine Runden<span class="ln"></span></div>
+    ${mine.map(r=>`<button class="round" data-r="${r.id}">
+      <div class="top"><span class="pill b">${esc(compTag(r,true))}</span>
+        <span class="nm">${esc(r.name)}</span><span class="arw">›</span></div>
+      <div class="row"><div>Punkte<b class="hot">${fmt(r.members.find(m=>m.id==='me').pts)}</b></div>
+        <div>Mitglieder<b>${r.members.length}</b></div></div>
+    </button>`).join('')}
+  </main>`;
+  bindBack();
+  app.querySelectorAll('[data-r]').forEach(b=>b.onclick=()=>openRound(b.dataset.r));
+}
+
+/* ═══════════ EINSTELLUNGEN ═══════════ */
+function vSettings(){
+  app.innerHTML=head('Einstellungen','Konto')+`
+  <main>
+    <div class="sec">Konto<span class="ln"></span></div>
+    <div class="card" style="margin-bottom:11px">
+      <label for="dn" style="margin-top:0">Nutzername</label>
+      <input type="text" id="dn" value="${esc(S.user?.displayName||'')}">
+      <button class="btn ghost" id="sv" style="margin-top:14px;padding:12px;font-size:13.5px">
+        Speichern</button>
+    </div>
+
+    <div class="sec">Abo<span class="ln"></span></div>
+    <div class="card" style="margin-bottom:11px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="flex:1">
+          <div style="font-weight:600;font-size:14.5px">${S.premium?'Premium':'Kostenlos'}</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:2px">${
+            S.premium?'Alle Funktionen freigeschaltet':'Sieg / Unentschieden / Niederlage'}</div>
+        </div>
+        <button class="mini ${S.premium?'no':'ok'}" id="ab">${S.premium?'Beenden':'Upgrade'}</button>
+      </div>
+    </div>
+
+    <div class="sec">Rechtliches<span class="ln"></span></div>
+    <div class="card" style="margin-bottom:11px;padding:6px">
+      ${[['impressum','📄','Impressum'],['agb','📋','AGB'],['datenschutz','🔒','Datenschutzerklärung']]
+        .map(([k,e,l])=>`<button class="ditem" data-l="${k}">
+          <span class="em">${e}</span>${l}<span style="margin-left:auto;color:var(--muted)">›</span></button>`).join('')}
+    </div>
+
+    <div class="sec">Gefahrenzone<span class="ln"></span></div>
+    <button class="btn red" id="del">Konto löschen</button>
+    <p class="hint">Beim Löschen verschwinden dein Zugang und alle Tipps unwiderruflich.
+      Das ist dein Recht nach der Datenschutz-Grundverordnung.</p>
+
+    <p class="hint" style="text-align:center;margin-top:28px;font-size:11.5px;color:#5C6672">
+      Tipoff · Version 1.0${FB_ON?'':' · Demo-Modus'}</p>
+  </main>`;
+  bindBack();
+  app.querySelector('#sv').onclick=async()=>{
+    const v=app.querySelector('#dn').value.trim();
+    if(!v) return toast('Der Name darf nicht leer sein');
+    if(FB_ON&&FB?.auth.currentUser){
+      try{await FB.updateProfile(FB.auth.currentUser,{displayName:v});}catch(e){}
+    }
+    S.user={...S.user,displayName:v};
+    Object.values(ROUNDS).forEach(r=>{const m=r.members.find(x=>x.id==='me');if(m)m.name=v;});
+    toast('Gespeichert');render();
+  };
+  app.querySelector('#ab').onclick=()=>{
+    if(S.premium){S.premium=false;toast('Premium beendet');render();} else go('premium');};
+  app.querySelectorAll('[data-l]').forEach(b=>b.onclick=()=>go('legal',{flow:b.dataset.l}));
+  app.querySelector('#del').onclick=async()=>{
+    if(!confirm('Konto wirklich löschen? Alle Tipps gehen verloren.')) return;
+    if(FB_ON&&FB?.auth.currentUser){ try{await FB.deleteUser(FB.auth.currentUser);}catch(e){} }
+    toast('Konto gelöscht');S.user=null;S.premium=false;go('auth',{authMode:'register'});
+  };
+}
+
+/* ═══════════ RECHTSTEXTE ═══════════ */
+const LEGAL={
+  impressum:{t:'Impressum',s:'Angaben gemäß § 5 DDG',h:`
+    <h3>Anbieter</h3>
+    <p><span class="ph">[Vor- und Nachname]</span><br>
+       <span class="ph">[Straße und Hausnummer]</span><br>
+       <span class="ph">[PLZ und Ort]</span><br>Deutschland</p>
+    <h3>Kontakt</h3>
+    <p>E-Mail: <span class="ph">[deine E-Mail-Adresse]</span><br>
+       Telefon: <span class="ph">[optional, aber empfohlen]</span></p>
+    <h3>Verantwortlich für den Inhalt</h3>
+    <p><span class="ph">[Vor- und Nachname, Anschrift wie oben]</span></p>
+    <h3>Umsatzsteuer</h3>
+    <p>Umsatzsteuer-Identifikationsnummer gemäß § 27a Umsatzsteuergesetz:
+       <span class="ph">[falls vorhanden — als Kleinunternehmer nach § 19 UStG entfällt sie]</span></p>
+    <h3>Streitbeilegung</h3>
+    <p>Wir sind nicht bereit und nicht verpflichtet, an Streitbeilegungsverfahren vor einer
+       Verbraucherschlichtungsstelle teilzunehmen.</p>
+    <h3>Haftung für Inhalte</h3>
+    <p>Als Diensteanbieter sind wir für eigene Inhalte auf diesen Seiten nach den allgemeinen
+       Gesetzen verantwortlich. Wir sind jedoch nicht verpflichtet, übermittelte oder gespeicherte
+       fremde Informationen zu überwachen oder nach Umständen zu forschen, die auf eine
+       rechtswidrige Tätigkeit hinweisen.</p>
+    <h3>Haftung für Links</h3>
+    <p>Unser Angebot enthält Links zu externen Websites Dritter, auf deren Inhalte wir keinen
+       Einfluss haben. Für diese fremden Inhalte ist stets der jeweilige Anbieter verantwortlich.</p>`},
+
+  agb:{t:'AGB',s:'Allgemeine Geschäftsbedingungen',h:`
+    <h3>1. Geltungsbereich</h3>
+    <p>Diese Bedingungen gelten für die Nutzung der Anwendung Tipoff (nachfolgend „App"),
+       betrieben von <span class="ph">[Anbietername]</span>. Mit der Registrierung erkennst du
+       sie an.</p>
+    <h3>2. Was Tipoff ist — und was nicht</h3>
+    <p>Tipoff ist ein Tippspiel. Nutzerinnen und Nutzer geben Prognosen zu Sportereignissen ab
+       und erhalten dafür Punkte. <b>Punkte haben keinen Geldwert.</b> Sie können nicht
+       ausgezahlt, gehandelt oder in Sachpreise umgetauscht werden.</p>
+    <p><b>Über die App fließt kein Geld zwischen Nutzern.</b> Tipoff nimmt keine Einsätze
+       entgegen, verwahrt keine Gelder und zahlt keine Gewinne aus. Vereinbarungen, die
+       Mitglieder einer Runde untereinander treffen, sind ausschließlich deren eigene
+       Angelegenheit; der Anbieter ist daran nicht beteiligt und übernimmt dafür keine
+       Verantwortung.</p>
+    <h3>3. Registrierung</h3>
+    <p>Für die Nutzung ist ein Konto mit Nutzername, E-Mail-Adresse und Passwort erforderlich.
+       Deine Angaben müssen zutreffend sein. Halte dein Passwort geheim. Pro Person ist
+       ein Konto zulässig. Das Mindestalter beträgt <span class="ph">[16 oder 18 Jahre —
+       bitte festlegen]</span>.</p>
+    <h3>4. Verhalten in Runden und im Chat</h3>
+    <p>Untersagt sind beleidigende, diskriminierende, gewaltverherrlichende, jugendgefährdende
+       oder rechtswidrige Inhalte, Werbung sowie das Vortäuschen fremder Identitäten. Wir
+       dürfen Inhalte entfernen und Konten bei Verstößen sperren oder löschen.</p>
+    <h3>5. Premium</h3>
+    <p>Premium ist ein kostenpflichtiges Abonnement zum Preis von ${CFG.price} pro Monat.
+       Es verlängert sich automatisch um jeweils einen Monat und ist jederzeit zum Ende des
+       laufenden Abrechnungszeitraums kündbar. Nach Kündigung bleiben die Funktionen bis
+       zum Ende des bezahlten Zeitraums verfügbar.</p>
+    <h3>6. Widerrufsrecht</h3>
+    <p>Verbraucher haben das Recht, binnen vierzehn Tagen ohne Angabe von Gründen zu
+       widerrufen. Die Frist beginnt mit Vertragsschluss. Zur Ausübung genügt eine eindeutige
+       Erklärung an <span class="ph">[deine E-Mail-Adresse]</span>. Verlangst du ausdrücklich,
+       dass wir vor Ablauf der Frist beginnen, erlischt das Widerrufsrecht mit vollständiger
+       Erbringung der Leistung.</p>
+    <h3>7. Verfügbarkeit</h3>
+    <p>Wir bemühen uns um einen durchgehenden Betrieb, schulden aber keine bestimmte
+       Verfügbarkeit. Wartungen, Störungen und Ausfälle bei Drittanbietern (etwa Daten- oder
+       Quotenlieferanten) können zu Unterbrechungen führen.</p>
+    <h3>8. Daten Dritter</h3>
+    <p>Spielpläne, Ergebnisse und Quoten stammen von externen Anbietern. Für deren
+       Richtigkeit, Vollständigkeit und Aktualität übernehmen wir keine Gewähr. Bei
+       offensichtlich fehlerhaften Daten dürfen wir Wertungen nachträglich korrigieren.</p>
+    <h3>9. Haftung</h3>
+    <p>Wir haften unbeschränkt bei Vorsatz und grober Fahrlässigkeit sowie bei Verletzung
+       von Leben, Körper und Gesundheit. Bei einfacher Fahrlässigkeit haften wir nur bei
+       Verletzung wesentlicher Vertragspflichten und begrenzt auf den vertragstypischen,
+       vorhersehbaren Schaden.</p>
+    <h3>10. Änderungen</h3>
+    <p>Wir dürfen diese Bedingungen ändern. Über Änderungen informieren wir mindestens
+       dreißig Tage vorher per E-Mail oder in der App. Widersprichst du nicht, gelten sie
+       als angenommen.</p>
+    <h3>11. Schlussbestimmungen</h3>
+    <p>Es gilt das Recht der Bundesrepublik Deutschland. Sollte eine Bestimmung unwirksam
+       sein, bleibt der Rest wirksam.</p>
+    <p style="color:var(--muted);font-size:12px;margin-top:22px">
+       Stand: <span class="ph">[Datum eintragen]</span></p>`},
+
+  datenschutz:{t:'Datenschutz',s:'Datenschutzerklärung',h:`
+    <h3>1. Verantwortlicher</h3>
+    <p><span class="ph">[Vor- und Nachname]</span>, <span class="ph">[Anschrift]</span>,
+       E-Mail <span class="ph">[deine E-Mail-Adresse]</span>.</p>
+    <h3>2. Welche Daten wir verarbeiten</h3>
+    <ul>
+      <li><b>Kontodaten:</b> Nutzername, E-Mail-Adresse, verschlüsseltes Passwort</li>
+      <li><b>Nutzungsdaten:</b> Tipps, Punktestände, Runden-Mitgliedschaften, Chat-Nachrichten</li>
+      <li><b>Technische Daten:</b> Zeitpunkt der Anmeldung, IP-Adresse, Gerätetyp</li>
+    </ul>
+    <h3>3. Zwecke und Rechtsgrundlagen</h3>
+    <p>Die Verarbeitung erfolgt zur Bereitstellung des Dienstes und Erfüllung des
+       Nutzungsvertrags (Art. 6 Abs. 1 lit. b DSGVO), zur Sicherheit und Missbrauchsabwehr
+       aufgrund berechtigten Interesses (Art. 6 Abs. 1 lit. f DSGVO) sowie, soweit
+       einschlägig, zur Erfüllung rechtlicher Pflichten (Art. 6 Abs. 1 lit. c DSGVO).</p>
+    <h3>4. Auftragsverarbeiter und Dienste</h3>
+    <ul>
+      <li><b>Google Firebase Authentication</b> (Google Ireland Limited) — Verwaltung der
+        Konten und Anmeldung. Es besteht ein Auftragsverarbeitungsvertrag.</li>
+      <li><b>GitHub Pages</b> (GitHub Inc.) — Auslieferung der App.</li>
+      <li><b>OpenLigaDB</b> — Spielpläne und Ergebnisse.</li>
+      <li><b>The Odds API</b> — Quotendaten.</li>
+    </ul>
+    <p>Bei einer Übermittlung in Drittländer stützen wir uns auf die Standardvertragsklauseln
+       der Europäischen Kommission.</p>
+    <h3>5. Speicherdauer</h3>
+    <p>Kontodaten speichern wir, solange dein Konto besteht. Nach der Löschung entfernen wir
+       sie unverzüglich, soweit keine gesetzlichen Aufbewahrungsfristen entgegenstehen.</p>
+    <h3>6. Deine Rechte</h3>
+    <ul>
+      <li>Auskunft über die zu dir gespeicherten Daten (Art. 15 DSGVO)</li>
+      <li>Berichtigung unrichtiger Daten (Art. 16 DSGVO)</li>
+      <li>Löschung (Art. 17 DSGVO)</li>
+      <li>Einschränkung der Verarbeitung (Art. 18 DSGVO)</li>
+      <li>Datenübertragbarkeit (Art. 20 DSGVO)</li>
+      <li>Widerspruch gegen Verarbeitungen auf Grundlage berechtigten Interesses (Art. 21 DSGVO)</li>
+      <li>Beschwerde bei einer Aufsichtsbehörde (Art. 77 DSGVO)</li>
+    </ul>
+    <p>Dein Konto kannst du jederzeit selbst unter Einstellungen löschen.</p>
+    <h3>7. Keine Werbung, kein Verkauf</h3>
+    <p>Wir verkaufen keine Daten und setzen keine Werbe- oder Analyse-Tracker ein.</p>
+    <h3>8. Datensicherheit</h3>
+    <p>Die Übertragung erfolgt verschlüsselt über HTTPS. Passwörter werden ausschließlich
+       als kryptografischer Hash beim Anmeldedienst gespeichert; wir selbst können sie
+       nicht einsehen.</p>
+    <p style="color:var(--muted);font-size:12px;margin-top:22px">
+       Stand: <span class="ph">[Datum eintragen]</span></p>`}
+};
+function vLegal(){
+  const L=LEGAL[S.flow]||LEGAL.impressum;
+  app.innerHTML=head(L.t,L.s)+`
+  <main>
+    <div class="banner">
+      <b>Vorlage.</b> Die gelb markierten Stellen musst du durch deine echten Angaben ersetzen.
+      Vor einem öffentlichen Start solltest du die Texte von jemandem prüfen lassen, der sich
+      juristisch auskennt — besonders wegen der Abgrenzung zum Glücksspielrecht.
+    </div>
+    <div class="legal">${L.h}</div>
+  </main>`;
+  const b=app.querySelector('#back');
+  b.onclick=()=>go(S.user?'home':'auth');
+}
+
+/* ══════════ START ══════════ */
 (async()=>{
-  render();
-  const d=await loadData();
-  S.matches=d.matches; S.fights=d.fights; S.ready=true;
-  render();
+  const sp=document.getElementById('splash'),vid=document.getElementById('vid'),
+        sm=document.getElementById('smark'),t0=Date.now();
+  let vidOk=false;
+  vid.src=CFG.intro;
+  vid.addEventListener('canplay',()=>{
+    vidOk=true;vid.classList.add('on');vid.play().catch(()=>{});},{once:true});
+  /* Nur wenn das Video nicht spielt, tritt die gezeichnete Wortmarke an seine Stelle. */
+  const fallback=()=>{if(!vidOk) sm.classList.add('show');};
+  vid.addEventListener('error',fallback,{once:true});
+  setTimeout(fallback,900);
+  sp.addEventListener('click',()=>hide());          // Antippen überspringt
+
+  const [d,fb]=await Promise.all([loadData(),initAuth()]);
+  S.ev=d;S.ready=true;
+  autoSettle();          // fertige Spieltage sofort verrechnen
+
+  if(fb){
+    FB=fb;let last;
+    FB.onAuthStateChanged(FB.auth,u=>{
+      const uid=u?u.uid:null;
+      S.user=u?{displayName:u.displayName||u.email.split('@')[0],email:u.email}:null;
+      if(uid!==last){
+        last=uid;
+        if(u&&S.screen!=='welcome') S.screen='home';
+        if(!u) S.screen='auth';
+        if(u){Object.values(ROUNDS).forEach(r=>{
+          const m=r.members.find(x=>x.id==='me');if(m)m.name=S.user.displayName;});}
+      }
+      render();
+    });
+  }else render();
+
+  let hidden=false;
+  function hide(){ if(hidden)return; hidden=true;
+    sp.classList.add('gone'); setTimeout(()=>sp.remove(),600); }
+  /* Das Video darf ausspielen; ist es früher fertig oder fehlt es, geht es sofort weiter. */
+  vid.addEventListener('ended',hide,{once:true});
+  setTimeout(hide,Math.max(2600-(Date.now()-t0),vidOk?4200:0));
 })();
 </script>
 </body>

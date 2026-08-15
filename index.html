@@ -2044,7 +2044,8 @@ function drawDock(){
   const frei=r.custom,offen=evs.filter(e=>!started(e)).length;
   f.innerHTML=`<div class="dock">
     <div class="dockmsg">${n
-      ?(frei?`${n} Tipp${n>1?'s':''} abgegeben`:`${n} Tipp${n>1?'s':''} · ${used()} von ${CFG.budget} Punkten gesetzt`)
+      ?(frei?`${n} Tipp${n>1?'s':''} abgegeben`
+             :`${n} Tipp${n>1?'s':''} abgegeben${left()>0?` · noch ${left()} P übrig`:''}`)
       :offen?'Tipp auf eine Quote, dann Einsatz mit dem Regler wählen'
              :'Für diesen Spieltag ist die Tippfrist vorbei'}</div></div>`;
 }

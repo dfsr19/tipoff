@@ -233,6 +233,7 @@ function buildFootball(match, oddsEvents, table){
    ein beendeter Kampf dadurch beim nächsten Sync-Lauf einfach aus der Liste.
    Deshalb: erst alles aus den Live-Quoten aufbauen wie bisher, danach aus
    /scores alles nachtragen, was da schon rausgefallen, aber entschieden ist. */
+const isWeekend = ts => { const d = new Date(ts).getUTCDay(); return d===0 || d===6; };
 function buildUFC(oddsEvents, scores){
   const seen = new Set();
 
@@ -286,16 +287,20 @@ function buildUFC(oddsEvents, scores){
     });
   }
 
+  /* UFC-Events unter der Woche (z.B. kleinere Fight-Night-Karten mittwochs)
+     sind für diese App nicht relevant — nur Samstag/Sonntag zählt. */
+  const weekendOnly = built.filter(f => isWeekend(f.start));
+
   /* Die Odds API liefert nicht nur die nächste Card, sondern auch spekulative
      Wettmärkte für mögliche Kämpfe Monate oder Jahre voraus. Nur die Kämpfe der
      nächsten anstehenden Veranstaltung behalten (Fenster von zwei Tagen ab dem
      frühesten noch offenen Kampf) — alles Speziellere ist Zukunftsmusik.
      Entschiedene Kämpfe bleiben davon unberührt und immer erhalten. */
-  const open = built.filter(f => !f.finished);
-  if(!open.length) return built.filter(f=>f.finished);      // nichts Anstehendes mehr
+  const open = weekendOnly.filter(f => !f.finished);
+  if(!open.length) return weekendOnly.filter(f=>f.finished);      // nichts Anstehendes mehr
   const first = Math.min(...open.map(f => new Date(f.start).getTime()));
   const WINDOW = 2*864e5;
-  return built.filter(f =>
+  return weekendOnly.filter(f =>
     f.finished || new Date(f.start).getTime() - first <= WINDOW);
 }
 
@@ -327,6 +332,8 @@ function buildUFC(oddsEvents, scores){
   let fights = [];
   try{
     const [odds, scores] = await Promise.all([loadOdds(UFC.odds), loadScores(UFC.odds)]);
+    console.log(`  Diagnose: ${scores.length} Einträge von /scores zurück.`);
+    if(scores.length) console.log(`  Diagnose Beispiel: ${JSON.stringify(scores[0])}`);
     fights = buildUFC(odds, scores);
     if(fights.length) competitions.push({id:'ufc', name:'UFC', sport:'mma', matches:fights});
     bericht.push(`UFC: ${fights.length} Kämpfe, ${fights.filter(f=>f.finished).length} entschieden`);

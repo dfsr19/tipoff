@@ -828,6 +828,7 @@ function vAuth(){
       if(reg){
         const c=await FB.createUserWithEmailAndPassword(FB.auth,email,pass);
         await FB.updateProfile(c.user,{displayName:name});
+        FB.sendEmailVerification(c.user).catch(e=>console.warn('Verifizierungsmail:',e));
         S.user={displayName:name,email};
         go('welcome');
       }else{
@@ -847,6 +848,7 @@ function vWelcome(){
     <div class="slogan">Lass dein Knowledge siegen.</div>
     <p>Verteile jeden Spieltag 100 Punkte auf die Tipps, an die du wirklich glaubst.
        Je mutiger die Quote, desto mehr springt raus.</p>
+    ${FB_ON?'<p class="legalnote">Wir haben dir eine Bestätigungsmail geschickt — schau kurz in dein Postfach.</p>':''}
     <button class="btn" id="start">Los geht's</button>
   </div>`;
   app.querySelector('#start').onclick=()=>go('home');

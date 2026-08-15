@@ -137,9 +137,10 @@ main{flex:1;padding:16px 14px 110px}
 .hint b{color:var(--text);font-weight:600}
 label{display:block;font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;
   color:var(--muted);margin:16px 0 7px}
-input[type=text],input[type=password],input[type=email],textarea,select{
+input[type=text],input[type=password],input[type=email],input[type=date],textarea,select{
   width:100%;background:var(--raise);border:1px solid var(--line-2);border-radius:12px;
   padding:13px;font-size:15px;transition:border-color .15s}
+input[type=date]{color-scheme:dark}
 input:focus,textarea:focus{border-color:var(--blue);outline:none}
 input::placeholder,textarea::placeholder{color:#5C6672}
 textarea{min-height:88px;resize:vertical;line-height:1.55}
@@ -1700,22 +1701,21 @@ function vCreate(){
   /* Schritt 2b — Paarungen manuell festlegen, kein automatischer Spielplan */
   if(S.flow==='pairs'){
     if(!d.matchdays||!d.matchdays.length){
-      d.matchdays=[{id:'md'+(++SEQ),date:'',pairings:[{id:'p'+(++SEQ),home:d.teams[0],away:d.teams[1]||d.teams[0]}]}];
+      d.matchdays=autoSchedule(d.teams);
     }
     const teamOpts=sel=>d.teams.map(t=>`<option ${t===sel?'selected':''}>${esc(t)}</option>`).join('');
     app.innerHTML=head('Spielplan','Schritt 2 von 2')+`
     <main>
-      <p class="hint" style="margin:0 3px 16px">Leg fest, wer gegen wen spielt. Mehrere
-        Spieltage? Für jeden ein Datum eintragen. Alles an einem Tag? Ein Spieltag reicht,
-        das Datum kannst du leer lassen.</p>
+      <p class="hint" style="margin:0 3px 16px">Wir haben dir schon einen Spielplan vorgeschlagen
+        — jeder gegen jeden. Team, Datum oder Paarung antippen, um etwas zu ändern.</p>
       ${d.matchdays.map((md,mi)=>`
         <div class="card" style="margin-bottom:11px" data-md="${md.id}">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:11px">
             <b style="font-family:'Poppins';flex:1">Spieltag ${mi+1}</b>
             ${d.matchdays.length>1?`<button class="mini no" data-rmmd="${md.id}">Entfernen</button>`:''}
           </div>
-          <label>Datum (optional bei einem Turniertag)</label>
-          <input type="text" placeholder="TT.MM.JJJJ" value="${esc(md.date||'')}" data-date="${md.id}">
+          <label>Datum</label>
+          <input type="date" value="${esc(md.date||isoToday())}" data-date="${md.id}">
           ${md.pairings.map(p=>`
             <div style="display:flex;align-items:center;gap:8px;margin-top:12px">
               <select data-home="${p.id}" style="flex:1">${teamOpts(p.home)}</select>
@@ -1745,7 +1745,7 @@ function vCreate(){
     app.querySelectorAll('[data-rmmd]').forEach(b=>b.onclick=()=>{
       d.matchdays=d.matchdays.filter(m=>m.id!==b.dataset.rmmd);render();});
     app.querySelector('#addmd').onclick=()=>{
-      d.matchdays.push({id:'md'+(++SEQ),date:'',pairings:[{id:'p'+(++SEQ),home:d.teams[0],away:d.teams[1]||d.teams[0]}]});
+      d.matchdays.push({id:'md'+(++SEQ),date:isoToday(),pairings:[{id:'p'+(++SEQ),home:d.teams[0],away:d.teams[1]||d.teams[0]}]});
       render();};
     app.querySelector('#mk').onclick=async e=>{
       const total=d.matchdays.reduce((n,m)=>n+m.pairings.filter(p=>p.home!==p.away).length,0);
@@ -1827,7 +1827,7 @@ async function buildLeague(d){
   const idPrefix='c'+(++SEQ);
   const events=[];
   d.matchdays.forEach((md,mi)=>{
-    const day=mi+1, base=parseDay(md.date)||new Date();
+    const day=mi+1, base=parseISODate(md.date)||new Date();
     md.pairings.filter(p=>p.home&&p.away&&p.home!==p.away).forEach((p,pi)=>{
       events.push({id:`${idPrefix}-${day}-${pi}`,day,home:p.home,away:p.away,
         sport:'fb',noOdds:true,source:'mdl',start:base,
@@ -1854,6 +1854,33 @@ function parseDay(s){
   const m=String(s||'').match(/(\d{1,2})\.(\d{1,2})\.(\d{2,4})/); if(!m) return null;
   const y=+m[3]<100?2000+ +m[3]:+m[3], d=new Date(y,+m[2]-1,+m[1],19,0);
   return isNaN(d)?null:d;
+}
+/* Datum aus <input type="date"> (immer JJJJ-MM-TT) */
+function parseISODate(s){
+  const m=String(s||'').match(/^(\d{4})-(\d{2})-(\d{2})$/); if(!m) return null;
+  const d=new Date(+m[1],+m[2]-1,+m[3],19,0);
+  return isNaN(d)?null:d;
+}
+const isoDate=(dt=new Date())=>dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');
+const isoToday=()=>isoDate();
+/* Vorschlag für den Spielplan — klassisches Rundenverfahren (jeder gegen jeden).
+   Nur ein Startpunkt: jede Paarung, jedes Datum bleibt danach frei editierbar. */
+function autoSchedule(teamsIn){
+  const teams=teamsIn.slice(); if(teams.length%2) teams.push(null);
+  const n=teams.length,days=n-1,rot=teams.slice(1),out=[];
+  for(let r=0;r<days;r++){
+    const k=r%rot.length,ord=[teams[0],...rot.slice(k).concat(rot.slice(0,k))];
+    const pairings=[];
+    for(let i=0;i<n/2;i++){
+      let h=ord[i],a=ord[n-1-i];
+      if(h===null||a===null) continue;
+      if((i+r)%2)[h,a]=[a,h];
+      pairings.push({id:'p'+(++SEQ),home:h,away:a});
+    }
+    const dt=new Date(); dt.setDate(dt.getDate()+r*7);
+    out.push({id:'md'+(++SEQ),date:isoDate(dt),pairings});
+  }
+  return out;
 }
 
 /* ═══════════ RUNDE ═══════════ */

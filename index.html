@@ -578,6 +578,13 @@ const S={screen:'auth',authMode:'register',user:null,menu:false,
          premium:false,flow:null,picker:false,
          draft:{teams:[],visibility:'private',compId:'bl1'},
          joinTab:'suchen'};
+/* Kommt der Aufruf von einem Passwort-Zurücksetzen-Mail-Link? */
+{
+  const qp=new URLSearchParams(location.search);
+  if(qp.get('mode')==='resetPassword' && qp.get('oobCode')){
+    S.screen='resetpw'; S.resetCode=qp.get('oobCode');
+  }
+}
 /* Alle Spiele eines Wettbewerbs */
 const evOf=id=>S.ev[id]||[];
 
@@ -627,6 +634,85 @@ const STICKERS=[{id:'ball',e:'⚽'},{id:'glove',e:'🥊'},{id:'fire',e:'🔥'},{
  {id:'cry',e:'😭'},{id:'laugh',e:'🤣'},{id:'clown',e:'🤡'},{id:'goat',e:'🐐'},
  {id:'tor',w:'TOOOR'},{id:'ko',w:'K.O.'},{id:'autsch',w:'AUTSCH'},{id:'glueck',w:'GLÜCK'}];
 const stk=i=>STICKERS.find(s=>s.id===i)||STICKERS[0];
+
+/* ══════════ ECHTE RUNDEN — FIRESTORE ══════════
+   Ohne Firebase (Demo-Modus) bleiben die fest im Code stehenden Beispiel-Runden aktiv.
+   Mit Firebase läuft alles über die Datenbank: erstellen, beitreten, tippen, auswerten. */
+const myUid=()=>FB?.auth?.currentUser?.uid||null;
+
+function fireToLocal(id,d,uid){
+  const membersArr=Object.entries(d.members||{}).map(([mid,m])=>
+    ({id:mid===uid?'me':mid,name:m.name,pts:m.pts||0}));
+  const r=mkRound({id,compId:d.compId,sport:d.sport,name:d.name,comp:d.comp,rules:d.rules,
+    custom:d.custom,teams:d.teams,events:d.events,visibility:d.visibility,code:d.code,
+    owner:d.ownerUid===uid?'me':(d.ownerName||d.ownerUid),members:membersArr,requests:[],chat:[]});
+  r.results=d.results||{};
+  r.picks=(d.picks&&d.picks[uid])||{};
+  r.settled=d.settled||{};
+  r.memberPicks=d.picks||{};
+  r.fsId=id;r.ownerUid=d.ownerUid;r.memberUids=d.memberUids||[];
+  return r;
+}
+async function fsLoadMyRounds(){
+  if(!FB) return;
+  const uid=myUid(); if(!uid) return;
+  try{
+    const qs=await FB.getDocs(FB.query(FB.collection(FB.db,'rounds'),
+      FB.where('memberUids','array-contains',uid)));
+    qs.forEach(docu=>{ ROUNDS[docu.id]=fireToLocal(docu.id,docu.data(),uid); });
+  }catch(e){ console.warn('Runden laden:',e); }
+}
+async function fsCreateRound(data){
+  const uid=myUid(); if(!uid) return null;
+  const ref=FB.doc(FB.collection(FB.db,'rounds'));
+  const payload={compId:data.compId||null,sport:data.sport||'fb',name:data.name,comp:data.comp||'',
+    rules:data.rules||'',custom:!!data.custom,teams:data.teams||[],events:data.events||[],
+    results:{},visibility:data.visibility||'private',code:code(),
+    ownerUid:uid,ownerName:S.user?.displayName||'Du',
+    memberUids:[uid],members:{[uid]:{name:S.user?.displayName||'Du',pts:0}},
+    picks:{},settled:{},createdAt:Date.now()};
+  await FB.setDoc(ref,payload);
+  ROUNDS[ref.id]=fireToLocal(ref.id,payload,uid);
+  return ref.id;
+}
+async function fsJoinByCode(v){
+  const uid=myUid(); if(!uid) return {error:'Da ist etwas schiefgelaufen. Versuch es nochmal.'};
+  try{
+    const qs=await FB.getDocs(FB.query(FB.collection(FB.db,'rounds'),FB.where('code','==',v)));
+    if(qs.empty) return {error:'Zu diesem Code gibt es keine Runde. Tippfehler?'};
+    const docu=qs.docs[0],d=docu.data();
+    if(d.memberUids&&d.memberUids.includes(uid)) return {already:docu.id};
+    await FB.updateDoc(docu.ref,{
+      [`members.${uid}`]:{name:S.user?.displayName||'Du',pts:0},
+      memberUids:FB.arrayUnion(uid)});
+    const fresh=await FB.getDoc(docu.ref);
+    ROUNDS[docu.id]=fireToLocal(docu.id,fresh.data(),uid);
+    return {id:docu.id};
+  }catch(e){ return {error:'Da ist etwas schiefgelaufen. Versuch es nochmal.'}; }
+}
+async function fsSyncPick(r,eventId){
+  if(!r.fsId||!FB) return;
+  const uid=myUid(); if(!uid) return;
+  try{
+    const val=r.picks[eventId];
+    await FB.updateDoc(FB.doc(FB.db,'rounds',r.fsId),
+      {[`picks.${uid}.${eventId}`]: val===undefined?FB.deleteField():val});
+  }catch(e){ console.warn('Tipp speichern:',e); }
+}
+async function fsSyncResults(r){
+  if(!r.fsId||!FB) return;
+  try{ await FB.updateDoc(FB.doc(FB.db,'rounds',r.fsId),{results:r.results}); }
+  catch(e){ console.warn('Ergebnisse speichern:',e); }
+}
+async function fsSyncSettle(r,k){
+  if(!r.fsId||!FB) return;
+  try{
+    const updates={[`settled.${k}`]:r.settled[k]};
+    r.members.forEach(m=>{ const uid=m.id==='me'?myUid():m.id;
+      if(uid) updates[`members.${uid}.pts`]=m.pts; });
+    await FB.updateDoc(FB.doc(FB.db,'rounds',r.fsId),updates);
+  }catch(e){ console.warn('Auswertung speichern:',e); }
+}
 
 const R=()=>ROUNDS[S.roundId];
 const eventsOf=(r,d)=> r.custom ? r.events.filter(e=>e.day===d)
@@ -763,7 +849,7 @@ const MARK=`<img class="mark" src="${LOGO_SRC}" alt="Tipoff">`;
 const initial=()=>(S.user?.displayName||S.user?.email||'?')[0].toUpperCase();
 
 const SCREENS={auth:vAuth,welcome:vWelcome,home:vHome,round:vRound,premium:vPremium,
-  create:vCreate,join:vJoin,profile:vProfile,settings:vSettings,legal:vLegal};
+  create:vCreate,join:vJoin,profile:vProfile,settings:vSettings,legal:vLegal,resetpw:vResetPw};
 function render(){ (SCREENS[S.screen]||vHome)(); if(S.menu) drawMenu(); }
 
 /* ─── Kopfzeile für Unterseiten ─── */
@@ -774,6 +860,48 @@ const head=(title,sub)=>`<header><div class="hrow">
     <div class="htitle">${esc(title)}</div></div>
 </div></header>`;
 const bindBack=(to='home')=>{const b=app.querySelector('#back');if(b)b.onclick=()=>go(to);};
+
+/* ═══════════ PASSWORT ZURÜCKSETZEN (eigene Seite, per Mail-Link) ═══════════ */
+function vResetPw(){
+  app.innerHTML=`<div class="authwrap">
+    ${MARK}
+    <div class="authtag">Neues Passwort für dein Konto festlegen.</div>
+    <label for="p1">Neues Passwort</label>
+    <input type="password" id="p1" placeholder="Mindestens sechs Zeichen" autocomplete="new-password">
+    <label for="p2">Passwort wiederholen</label>
+    <input type="password" id="p2" placeholder="Nochmal eingeben" autocomplete="new-password">
+    <div class="err" id="err"></div>
+    <button class="btn" id="rpsub" style="margin-top:22px">Passwort speichern</button>
+  </div>`;
+
+  const err=app.querySelector('#err'),btn=app.querySelector('#rpsub');
+  const fail=m=>{err.textContent=m;err.style.cssText='display:block';
+    btn.disabled=false;btn.textContent='Passwort speichern';};
+
+  const submit=async()=>{
+    err.style.display='none';
+    const p1=app.querySelector('#p1').value,p2=app.querySelector('#p2').value;
+    if(!p1||p1.length<6) return fail('Das Passwort braucht mindestens sechs Zeichen.');
+    if(p1!==p2) return fail('Die Passwörter stimmen nicht überein.');
+    btn.disabled=true;btn.textContent='Einen Moment …';
+    if(!FB) return fail('Da ist etwas schiefgelaufen. Versuch es später nochmal.');
+    try{
+      await FB.verifyPasswordResetCode(FB.auth,S.resetCode);
+      await FB.confirmPasswordReset(FB.auth,S.resetCode,p1);
+      app.innerHTML=`<div class="authwrap">
+        ${MARK}
+        <div class="authtag">Dein Passwort wurde geändert. Du kannst dich jetzt anmelden.</div>
+        <button class="btn" id="toLogin" style="margin-top:22px">Zur Anmeldung</button>
+      </div>`;
+      app.querySelector('#toLogin').onclick=()=>{
+        history.replaceState(null,'',location.pathname);
+        S.screen='auth';S.authMode='login';render();
+      };
+    }catch(e){ fail('Dieser Link ist ungültig oder abgelaufen. Fordere einen neuen an.'); }
+  };
+  btn.onclick=submit;
+  app.querySelectorAll('input').forEach(i=>i.onkeydown=e=>{if(e.key==='Enter')submit();});
+}
 
 /* ═══════════ REGISTRIEREN / ANMELDEN ═══════════ */
 function vAuth(){
@@ -861,11 +989,12 @@ function vAuth(){
     err.style.display='none';
     if(!email) return fail('Trag oben erst deine E-Mail-Adresse ein.');
     forgotBtn.disabled=true;forgotBtn.textContent='Einen Moment …';
-    const done=()=>{ err.textContent='Falls zu dieser E-Mail ein Konto existiert, ist gerade eine Mail zum Zurücksetzen unterwegs.';
+    const done=()=>{ err.textContent='Falls zu dieser E-Mail ein Konto existiert, ist gerade eine Mail zum Zurücksetzen unterwegs. Schau notfalls auch im Spam-Ordner nach.';
       err.style.cssText='display:block;color:var(--muted)';
       forgotBtn.disabled=false;forgotBtn.textContent='Passwort vergessen?'; };
     if(!FB_ON) return done();
-    try{ await FB.sendPasswordResetEmail(FB.auth,email); }catch(e){ /* nichts verraten, ob's das Konto gibt */ }
+    try{ await FB.sendPasswordResetEmail(FB.auth,email); }
+    catch(e){ console.warn('Passwort-Reset:',e.code,e.message); }
     done();
   };
 }
@@ -1194,11 +1323,23 @@ function vJoin(){
       toast('Anfrage gestellt — der Ersteller entscheidet');});
   }else{
     const inp=app.querySelector('#cd');
-    const try_=()=>{
+    const try_=async()=>{
       const v=inp.value.trim().toUpperCase();
       if(!v) return;
+      const err=app.querySelector('#cerr');err.style.display='none';
       const hit=Object.values(ROUNDS).find(r=>r.code===v);
       if(hit&&hit.joined) return toast('Da bist du schon dabei');
+
+      if(FB_ON&&FB){
+        if(!needRoom())return;
+        const btn=app.querySelector('#join');
+        btn.disabled=true;btn.textContent='Einen Moment …';
+        const res=await fsJoinByCode(v);
+        btn.disabled=false;btn.textContent='Beitreten';
+        if(res.error){ err.textContent=res.error;err.style.display='block';return; }
+        toast('Runde beigetreten');
+        return openRound(res.id||res.already);
+      }
       if(hit&&!compFrei(hit.compId)){
         toast(COMPS[hit.compId].name+' gibt es mit Premium');return go('premium');}
       if(hit){ if(!needRoom())return;
@@ -1206,7 +1347,6 @@ function vJoin(){
       /* Ein Code ist eine Einladung — damit geht auch eine private Runde auf. */
       const inv=DISCOVER.find(d=>d.code===v&&!ROUNDS[d.id]);
       if(inv) return joinPublic(inv.id);
-      const err=app.querySelector('#cerr');
       err.textContent='Zu diesem Code gibt es keine Runde. Tippfehler?';
       err.style.display='block';
     };
@@ -1339,7 +1479,9 @@ function vCreate(){
     app.querySelectorAll('[data-v]').forEach(b=>b.onclick=()=>{keep();
       d.visibility=b.dataset.v;render();});
     app.querySelector('#back').onclick=()=>{keep();go('create',{flow:'comp'});};
-    app.querySelector('#mk').onclick=()=>{keep();buildOfficial(d);};
+    app.querySelector('#mk').onclick=async()=>{keep();
+      const btn=app.querySelector('#mk');btn.disabled=true;btn.textContent='Einen Moment …';
+      await buildOfficial(d);};
     return;
   }
 
@@ -1424,7 +1566,8 @@ function vCreate(){
       d.visibility=b.dataset.v;render();});
     app.querySelector('#back').onclick=()=>go('create',{flow:'choice'});
     const m=app.querySelector('#mk');
-    if(m) m.onclick=()=>{keep();d.name=(d.name||'').trim()||'Meine Runde';buildLeague(d);};
+    if(m) m.onclick=async()=>{keep();d.name=(d.name||'').trim()||'Meine Runde';
+      m.disabled=true;m.textContent='Einen Moment …';await buildLeague(d);};
     return;
   }
 
@@ -1477,36 +1620,50 @@ function vCreate(){
 }
 
 /* Runde auf einen offiziellen Wettbewerb — kein eigener Spielplan nötig. */
-function buildOfficial(d){
-  const id='o'+(++SEQ), c=COMPS[d.compId];
-  ROUNDS[id]=mkRound({id,compId:d.compId,name:(d.name||'').trim()||('Meine '+c.kurz+'-Runde'),
-    visibility:d.visibility,
-    rules:(d.rules||'').trim()||`Getippt wird auf ${c.name}. ${CFG.budget} Punkte je Spieltag, `+
-      `Treffer zählen Einsatz mal Quote. Ergebnisse kommen automatisch.`,
+async function buildOfficial(d){
+  const c=COMPS[d.compId];
+  const name=(d.name||'').trim()||('Meine '+c.kurz+'-Runde');
+  const rules=(d.rules||'').trim()||`Getippt wird auf ${c.name}. ${CFG.budget} Punkte je Spieltag, `+
+      `Treffer zählen Einsatz mal Quote. Ergebnisse kommen automatisch.`;
+  if(FB_ON&&FB){
+    const id=await fsCreateRound({compId:d.compId,sport:c.sport,name,comp:c.name,
+      rules,visibility:d.visibility});
+    if(!id) return toast('Da ist etwas schiefgelaufen. Versuch es nochmal.');
+    toast('Runde erstellt');openRound(id);return;
+  }
+  const id='o'+(++SEQ);
+  ROUNDS[id]=mkRound({id,compId:d.compId,name,visibility:d.visibility,rules,
     members:[{id:'me',name:S.user?.displayName||'Du',pts:0}]});
   toast('Runde erstellt');
   openRound(id);
 }
 
-function buildLeague(d){
-  const id='c'+(++SEQ);
+async function buildLeague(d){
   const teams=d.teams.slice(); if(teams.length%2) teams.push('spielfrei');
   const n=teams.length,days=n-1,events=[],base=parseDay(d.start)||new Date(),rot=teams.slice(1);
+  const idPrefix='c'+(++SEQ);
   for(let r=0;r<days;r++){
     const k=r%rot.length,ord=[teams[0],...rot.slice(k).concat(rot.slice(0,k))];
     for(let i=0;i<n/2;i++){
       let h=ord[i],a=ord[n-1-i];
       if(h==='spielfrei'||a==='spielfrei') continue;
       if((i+r)%2)[h,a]=[a,h];
-      events.push({id:`${id}-${r}-${i}`,day:r+1,home:h,away:a,sport:'fb',noOdds:true,source:'mdl',
+      events.push({id:`${idPrefix}-${r}-${i}`,day:r+1,home:h,away:a,sport:'fb',noOdds:true,source:'mdl',
         start:new Date(base.getTime()+r*7*864e5+i*72e5),
         sides:[{key:'1',label:'1',q:1},{key:'X',label:'X',q:1},{key:'2',label:'2',q:1}]});
     }
   }
   const real=teams.filter(t=>t!=='spielfrei');
+  const rules=`${real.length} Teams, ${days} Spieltage. Ohne Quoten — jeder Treffer ${CFG.amateurPts} Punkte.`;
+  if(FB_ON&&FB){
+    const id=await fsCreateRound({sport:'fb',name:d.name,custom:true,visibility:d.visibility,
+      teams:real,events,rules});
+    if(!id) return toast('Da ist etwas schiefgelaufen. Versuch es nochmal.');
+    toast('Runde erstellt');openRound(id);return;
+  }
+  const id=idPrefix;
   ROUNDS[id]=mkRound({id,sport:'fb',name:d.name,custom:true,
-    visibility:d.visibility,teams:real,events,
-    rules:`${real.length} Teams, ${days} Spieltage. Ohne Quoten — jeder Treffer ${CFG.amateurPts} Punkte.`,
+    visibility:d.visibility,teams:real,events,rules,
     members:[{id:'me',name:S.user?.displayName||'Du',pts:0}]});
   toast('Runde erstellt');
   openRound(id);
@@ -1648,7 +1805,7 @@ function matchCard(ev){
     const i=s.querySelector('input');
     i.oninput=e=>{p.stake=+e.target.value;
       s.querySelector('.v').innerHTML=`<b>${p.stake} P</b> → ${fmt(p.stake*p.q)} P`;};
-    i.onchange=()=>render();
+    i.onchange=()=>{render();fsSyncPick(r,ev.id);};
     el.appendChild(s);
   }
 
@@ -1678,6 +1835,7 @@ function pick(ev,s,type){
     r.picks[ev.id]={side:s.key,q:s.q,type,stake:ev.noOdds?0:Math.min(10,left())};
   }
   render();
+  fsSyncPick(r,ev.id);
 }
 
 /* ══════════ ERGEBNISSE EINTRAGEN (nur eigene Ligen, nur Ersteller) ══════════ */
@@ -1725,9 +1883,10 @@ function tabEntry(){
     lesen();
     app.querySelector('#cnt').textContent=`${evs.length-fehlt()} von ${evs.length} eingetragen`;
   });
-  app.querySelector('#sv').onclick=()=>{
+  app.querySelector('#sv').onclick=async()=>{
     lesen();
     if(fehlt()) return toast(`Noch ${fehlt()} Ergebnis${fehlt()>1?'se':''} offen`);
+    await fsSyncResults(r);
     const n=autoSettle();
     toast(n?'Gewertet — Punkte verteilt':'Gespeichert');
     S.tab=n?'tabelle':'tippen';render();
@@ -1894,12 +2053,23 @@ function drawDock(){
       Echte Ergebnisse werden von selbst verrechnet, sobald sie feststehen.</p></div>`;
   if(ok) f.querySelector('#ev').onclick=settleDay;
 }
-/* Punkte gutschreiben — einmal je Spieltag. */
+/* Punkte gutschreiben — einmal je Spieltag.
+   Bei echten (Firestore-)Runden zählen die wirklich abgegebenen Tipps aller Mitglieder.
+   Bei den fest im Code stehenden Demo-Runden (ohne fsId) simulieren Bot-Tipps die anderen. */
 function applySettle(r,k,evs,res,picks,real){
-  const gain={me:scoreAll(picks,res,evs)};
-  r.members.filter(m=>m.id!=='me').forEach(m=>gain[m.id]=scoreAll(botPicks(evs),res,evs));
+  const gain={};
+  r.members.forEach(m=>{
+    if(r.fsId){
+      const uid=m.id==='me'?myUid():m.id;
+      const theirs=m.id==='me'?picks:((r.memberPicks&&r.memberPicks[uid])||{});
+      gain[m.id]=scoreAll(theirs,res,evs);
+    }else{
+      gain[m.id]=m.id==='me'?scoreAll(picks,res,evs):scoreAll(botPicks(evs),res,evs);
+    }
+  });
   r.members.forEach(m=>m.pts+=gain[m.id]||0);
   r.settled[k]={results:res,gain,me:gain.me,real:!!real};
+  fsSyncSettle(r,k);
   return gain;
 }
 
@@ -2211,15 +2381,21 @@ function vLegal(){
 
   if(fb){
     FB=fb;let last;
-    FB.onAuthStateChanged(FB.auth,u=>{
+    FB.onAuthStateChanged(FB.auth,async u=>{
       const uid=u?u.uid:null;
       S.user=u?{displayName:u.displayName||u.email.split('@')[0],email:u.email}:null;
       if(uid!==last){
         last=uid;
-        if(u&&S.screen!=='welcome') S.screen='home';
-        if(!u) S.screen='auth';
-        if(u){Object.values(ROUNDS).forEach(r=>{
-          const m=r.members.find(x=>x.id==='me');if(m)m.name=S.user.displayName;});}
+        if(S.screen!=='resetpw'){
+          if(u&&S.screen!=='welcome') S.screen='home';
+          if(!u) S.screen='auth';
+        }
+        if(u){
+          /* Demo-Runden weichen den echten, sobald jemand eingeloggt ist. */
+          Object.keys(ROUNDS).forEach(k=>delete ROUNDS[k]);
+          render();
+          await fsLoadMyRounds();
+        }
       }
       render();
     });

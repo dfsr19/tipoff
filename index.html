@@ -61,6 +61,9 @@ input,textarea,select{font:inherit;color:inherit}
 
 /* ═══════ WORTMARKE ═══════ */
 .mark{display:block;height:26px;width:auto}
+.hrow .mark{height:30px}
+.logobtn{background:none;border:none;padding:4px 2px;margin:-4px -2px;cursor:pointer;
+  -webkit-tap-highlight-color:transparent}
 
 /* ═══════ KOPF ═══════ */
 header{background:var(--bg);padding:16px 16px 18px;position:relative;
@@ -68,7 +71,6 @@ header{background:var(--bg);padding:16px 16px 18px;position:relative;
 header::after{content:'';position:absolute;left:0;right:0;bottom:-1px;height:1px;
   background:linear-gradient(90deg,transparent,var(--blue),transparent);opacity:.35}
 .hrow{display:flex;align-items:center;gap:12px}
-.hrow .mark{height:22px}
 .ico{width:40px;height:40px;flex-shrink:0;border:1px solid var(--line-2);border-radius:12px;
   display:grid;place-items:center;background:var(--raise);transition:background .15s}
 .ico:active{background:var(--line)}
@@ -202,6 +204,20 @@ textarea{min-height:88px;resize:vertical;line-height:1.55}
 .round.dash{background:transparent;border-style:dashed;color:var(--muted)}
 .round.dash .nm{color:var(--text)}
 
+/* ═══════ WETTBEWERBS-AUSWAHL ═══════ */
+.compgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px}
+.compcard{background:var(--card);border:1px solid var(--line);border-radius:var(--r);
+  padding:16px 14px;text-align:left;display:flex;flex-direction:column;gap:9px;
+  transition:all .15s}
+.compcard:active{transform:scale(.98);border-color:var(--line-2)}
+.compcard .cicon{color:var(--blue)}
+.compcard .cname{font-family:'Poppins';font-weight:700;font-size:15px}
+.compcard .ctag{font-size:10.5px;font-weight:700;color:var(--win);text-transform:uppercase;
+  letter-spacing:.05em;display:flex;align-items:center;gap:5px}
+.compcard.locked{opacity:.72}
+.compcard.locked .cicon{color:var(--muted)}
+.compcard.locked .ctag{color:#D4AF6A}
+
 /* ═══════ TEILEN ═══════ */
 .share{display:flex;gap:12px;align-items:center;width:100%;text-align:left;
   background:linear-gradient(135deg,rgba(80,170,240,.13),rgba(80,170,240,.04));
@@ -252,6 +268,8 @@ textarea{min-height:88px;resize:vertical;line-height:1.55}
 /* ═══════ SPIELKARTE ═══════ */
 .match{background:var(--card);border:1px solid var(--line);border-radius:var(--r);
   padding:14px;margin-bottom:11px}
+.match.headline{border-color:#D4AF6A;box-shadow:0 0 0 1px rgba(212,175,106,.35)}
+.src.headtag{margin-left:0;background:rgba(212,175,106,.16);border-color:#D4AF6A;color:#D4AF6A}
 .mtop{display:flex;align-items:center;gap:8px;font-size:10.5px;font-weight:600;
   letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
 .src{margin-left:auto;font-size:9.5px;padding:3px 7px;border-radius:20px;font-weight:700;
@@ -465,6 +483,19 @@ const COMPS={
 /* Steht dieser Wettbewerb gerade offen? */
 const compFrei=id=>!COMPS[id]?.prem||S.premium;
 const compName=id=>COMPS[id]?.name||'Eigene Runde';
+
+/* ══════════ EIGENES ICON-SET ══════════
+   Schlichte Strich-Icons statt iOS-Emojis — einheitlicher, ruhiger Look. */
+const ICONS={
+  ball:'<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="8.4"/><path d="M12 7.4l3.4 2.5-1.3 3.9h-4.2l-1.3-3.9z"/><path d="M12 3.6v3.8M12 20.4v-3.9M4.3 8.2l3.2 1.6M20 15.9l-3.5-1.8M4 15.9l3.3-1.6M20 8.2l-3.2 1.6"/></svg>',
+  trophy:'<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4h10v4.5a5 5 0 0 1-10 0z"/><path d="M7 5.2H4.6A2.6 2.6 0 0 0 7 8.7M17 5.2h2.4A2.6 2.6 0 0 1 17 8.7"/><path d="M12 13.5v3.3M9 20h6M9.4 20l.5-2.4h4.2l.5 2.4"/></svg>',
+  glove:'<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7.5 11.7V6.4a1.8 1.8 0 1 1 3.6 0v3.9M11.1 9.9V5.2a1.8 1.8 0 1 1 3.6 0V10M14.7 9.7V6.4a1.8 1.8 0 1 1 3.6 0v6.3c0 3.2-2.3 5.6-5.5 5.6h-2.6a4.6 4.6 0 0 1-4.6-4.6v-2.5a1.8 1.8 0 1 1 3.6 0v1.1"/></svg>',
+  lock:'<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="5.3" y="11" width="13.4" height="9" rx="2.2"/><path d="M8 11V7.3a4 4 0 1 1 8 0V11"/></svg>',
+  globe:'<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="8.6"/><path d="M3.4 12h17.2M12 3.4c2.3 2.4 3.3 5.6 3.3 8.6s-1 6.2-3.3 8.6c-2.3-2.4-3.3-5.6-3.3-8.6s1-6.2 3.3-8.6z"/></svg>',
+  search:'<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.7"/><path d="M20 20l-4.1-4.1"/></svg>',
+  plus:'<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>'
+};
+const compIcon=id=>ICONS[id==='ufc'?'glove':id==='ucl'?'trophy':'ball'];
 /* Beschriftung einer Runde — verträgt auch fehlende Wettbewerbsangaben. */
 function compTag(r,kurz){
   if(r.custom||!COMPS[r.compId]) return '🏟 Eigene Liga';
@@ -761,6 +792,12 @@ function needRoom(){
 }
 const myRounds=()=>Object.values(ROUNDS).filter(r=>r.joined);
 const pool=()=>{const r=R(); return r?eventsOf(r,S.day):[];};
+/* Reihenfolge der Karten: Fußball nach Anstoß, UFC umgekehrt — der Hauptkampf
+   steht in den Rohdaten zeitlich zuletzt, soll aber ganz oben erscheinen. */
+const orderEvents=evs=>{
+  const s=evs.slice().sort((a,b)=>a.start-b.start);
+  return evs[0]&&evs[0].sport==='mma'?s.reverse():s;
+};
 const dayKey=()=>R().sport==='mma'?1:S.day;
 const dayPicks=()=>{const ids=new Set(pool().map(e=>e.id));
   return Object.entries(R().picks).filter(([k])=>ids.has(k));};
@@ -1065,9 +1102,10 @@ function vHome(){
 
   app.innerHTML=`
   <header>
-    <div class="hrow">${MARK}
+    <div class="hrow"><button class="logobtn" id="logohome" aria-label="Hauptmenü">${MARK}</button>
       <div style="margin-left:auto;display:flex;gap:9px;align-items:center">
         ${S.premium?'<span class="pill b">★ Premium</span>':''}
+        <button class="ico" id="quicknew" aria-label="Runde erstellen">${ICONS.plus}</button>
         <button class="ico" id="sh" aria-label="Teilen">↗</button>
         <button class="ico" id="menu" aria-label="Menü"><span class="burger"><i></i><i></i><i></i></span></button>
       </div>
@@ -1080,6 +1118,18 @@ function vHome(){
       Ersatz-Spielplan, nicht den echten. Das passiert, wenn die Datei lokal geöffnet wird
       statt über die Web-Adresse — öffne die App über
       <b>dfsr19.github.io/tipoff</b>.</div>`:''}
+
+    <div class="sec">Worauf tippen?<span class="ln"></span></div>
+    <div class="compgrid">
+      ${Object.keys(COMPS).map(id=>{
+        const c=COMPS[id],locked=c.prem&&!S.premium;
+        return `<button class="compcard${locked?' locked':''}" data-comp="${id}">
+          <span class="cicon">${compIcon(id)}</span>
+          <span class="cname">${esc(c.kurz)}</span>
+          <span class="ctag">${locked?ICONS.lock+'Premium':'Kostenlos'}</span>
+        </button>`;}).join('')}
+    </div>
+
     <button class="share" id="share">
       <span class="ic">↗</span>
       <span style="flex:1"><b>Freunde einladen</b><small>Link teilen — sofort mittippen</small></span>
@@ -1087,7 +1137,7 @@ function vHome(){
     </button>
 
     <div class="sec">Meine Runden<span class="ln"></span></div>
-    ${mine.map(r=>{
+    ${mine.length?mine.map(r=>{
       const req=r.owner==='me'&&r.requests.length;
       return `<button class="round" data-r="${r.id}">
         <div class="top">
@@ -1103,17 +1153,17 @@ function vHome(){
           <div>${r.sport==='mma'?'Kämpfe':'Als nächstes'}
             <b class="hot">${r.sport==='mma'?eventsOf(r,1).length:'ST '+nextDayOf(r)}</b></div>
         </div>
-      </button>`;}).join('')}
+      </button>`;}).join(''):'<p class="hint">Noch keine Runde — wähl oben einen Wettbewerb oder tritt einer Runde bei.</p>'}
 
     <button class="round dash" id="joinbtn">
-      <div class="top"><span class="pill">🔍 Beitreten</span><span class="arw">›</span></div>
+      <div class="top"><span class="pill">${ICONS.search}Beitreten</span><span class="arw">›</span></div>
       <div class="nm">Runde suchen oder Code eingeben</div>
       <div style="font-size:12.5px;color:var(--muted);margin-top:6px">
         Öffentliche Runden durchstöbern oder per Einladungslink beitreten</div>
     </button>
 
     <button class="round dash" id="newbtn">
-      <div class="top"><span class="pill b">➕ Erstellen</span><span class="arw">›</span></div>
+      <div class="top"><span class="pill b">${ICONS.plus}Erstellen</span><span class="arw">›</span></div>
       <div class="nm">Eigene Runde erstellen</div>
       <div style="font-size:12.5px;color:var(--muted);margin-top:6px">
         Kreisliga, Firmenturnier oder 5-gegen-5 — öffentlich oder privat</div>
@@ -1149,12 +1199,21 @@ function vHome(){
   </main>`;
 
   app.querySelectorAll('[data-r]').forEach(b=>b.onclick=()=>openRound(b.dataset.r));
+  app.querySelector('#logohome').onclick=()=>go('home');
   app.querySelector('#menu').onclick=()=>{S.menu=true;drawMenu();};
   app.querySelector('#sh').onclick=share;
   app.querySelector('#share').onclick=share;
   app.querySelector('#joinbtn').onclick=()=>go('join');
-  app.querySelector('#newbtn').onclick=()=>{
+  const openCreate=()=>{
     if(needRoom()) go('create',{flow:'comp',draft:{teams:[],visibility:'private',compId:'bl1'}});};
+  app.querySelector('#newbtn').onclick=openCreate;
+  app.querySelector('#quicknew').onclick=openCreate;
+  app.querySelectorAll('[data-comp]').forEach(b=>b.onclick=()=>{
+    const id=b.dataset.comp;
+    if(!compFrei(id)){ toast(COMPS[id].name+' gibt es mit Premium'); return go('premium'); }
+    if(!needRoom()) return;
+    go('create',{flow:'official',draft:{teams:[],visibility:'private',compId:id,name:''}});
+  });
   app.querySelector('#rl').onclick=async()=>{net.data='lade';render();
     const d=await loadData();S.ev=d;
     const n=autoSettle();render();
@@ -1730,19 +1789,19 @@ function tabTip(){
     <span class="bar"><i style="width:${st?100:l/CFG.budget*100}%"></i></span>
     <span class="nm" style="${st?'color:var(--win)':''}">${
       st?'+'+fmt(r.settled[dayKey()].me)+' P':l+' / '+CFG.budget}</span></div>`;
-  evs.slice().sort((a,c)=>a.start-c.start).forEach(ev=>b.appendChild(matchCard(ev)));
+  orderEvents(evs).forEach((ev,i)=>b.appendChild(matchCard(ev,ev.sport==='mma'&&i===0)));
   drawDock();
 }
 
-function matchCard(ev){
+function matchCard(ev,isMain){
   const r=R(),p=r.picks[ev.id],st=settled();
   /* Ergebnis anzeigen, sobald es feststeht — auch ohne Auswertung. */
   const res=st?r.settled[dayKey()].results[ev.id]:eventResult(ev,r);
   /* Nach Anpfiff ist Schluss mit Tippen. */
   const zu=st||started(ev);
-  const el=document.createElement('article');el.className='match';
+  const el=document.createElement('article');el.className='match'+(isMain?' headline':'');
   const nm=ev.sport==='mma'?[ev.home,ev.away]:[short(ev.home),short(ev.away)];
-  el.innerHTML=`<div class="mtop">${when(ev.start)}
+  el.innerHTML=`<div class="mtop">${ev.sport==='mma'?(isMain?'<span class="src headtag">Hauptkampf</span>':''):when(ev.start)}
     ${ev.noOdds?'<span class="src">Ohne Quoten</span>'
       :`<span class="src ${ev.source==='mkt'?'mkt':''}">${ev.source==='mkt'?'Marktquote':'Modell'}</span>`}</div>
     <div class="who">${esc(nm[0])} <em>${ev.sport==='mma'?'vs':'—'}</em> ${esc(nm[1])}</div>
@@ -1852,7 +1911,7 @@ async function submitPicks(){
 
 /* ══════════ ERGEBNISSE EINTRAGEN (nur eigene Ligen, nur Ersteller) ══════════ */
 function tabEntry(){
-  const r=R(),evs=pool().slice().sort((a,b)=>a.start-b.start),k=dayKey();
+  const r=R(),evs=orderEvents(pool()),k=dayKey();
   const b=app.querySelector('#body');
   if(!evs.length) return b.innerHTML='<div class="empty">Für diesen Spieltag gibt es keine Spiele.</div>';
 
@@ -1907,17 +1966,21 @@ function tabEntry(){
 
 function tabTable(){
   const r=R(),rows=[...r.members].sort((a,b)=>b.pts-a.pts);
-  const evs=pool().slice().sort((a,b)=>a.start-b.start);
+  const evs=orderEvents(pool());
 
   /* Tipps eines Mitglieds — bei mir die eigenen (live), sonst die gespeicherten. */
   const picksOf=m=>m.id==='me'?r.picks:((r.memberPicks&&r.memberPicks[m.id])||{});
-  /* Vor Anpfiff nur ein Strich (Tipp abgegeben, aber geheim). Danach: worauf getippt wurde. */
+  /* Vor Anpfiff nur ein Strich (Tipp abgegeben, aber geheim). Danach: worauf getippt wurde,
+     grün bei Treffer, rot bei Niete — sobald das Ergebnis feststeht.               */
   const cellFor=(m,ev)=>{
     const p=picksOf(m)[ev.id];
     if(!p) return '';
     if(!started(ev)) return '–';
-    if(p.type==='exact') return S.premium?esc(p.side):tendAbbr(p,ev);
-    return tendAbbr(p,ev);
+    const label=p.type==='exact'&&S.premium?esc(p.side):tendAbbr(p,ev);
+    const res=eventResult(ev,r);
+    if(!res) return label;                 // läuft noch, Ergebnis noch nicht da
+    const tend=p.type==='exact'?scoreTend(p.side):p.side;
+    return `<span style="color:${tend===res.side?'var(--win)':'var(--bad)'}">${label}</span>`;
   };
   const matchTable=evs.length?`
     <div style="overflow-x:auto;margin-bottom:20px;-webkit-overflow-scrolling:touch">
@@ -1925,7 +1988,7 @@ function tabTable(){
         <thead><tr>
           <th style="position:sticky;left:0;background:var(--surface);padding:0 12px 8px 0"></th>
           ${evs.map(ev=>`<th style="padding:0 10px 8px;font-weight:600;color:var(--muted)">
-            ${esc(abbr(ev.home))}–${esc(abbr(ev.away))}</th>`).join('')}
+            ${esc(teamAbbr(ev.home,ev))}–${esc(teamAbbr(ev.away,ev))}</th>`).join('')}
         </tr></thead>
         <tbody>${rows.map(m=>`<tr>
           <td style="position:sticky;left:0;background:var(--surface);padding:7px 12px 7px 0;
@@ -1943,16 +2006,24 @@ function tabTable(){
       <span class="dl" data-d="${m.id}"></span>
       <span class="pts" data-p="${m.id}">${fmt(m.pts)}</span></div>`).join('')+
     `<p class="hint" style="text-align:center;margin-top:16px">
-      Jede Runde wird getrennt gewertet.${S.premium?'':' Mit Premium siehst du nach Anpfiff auch die genau getippten Ergebnisse.'}</p>`;
+      Jede Runde wird getrennt gewertet.</p>`;
   app.querySelector('#foot').innerHTML='';
 }
-/* Tendenz-Kürzel für die Tipp-Tabelle: Heimteam, Auswärtsteam oder X. */
+/* Tendenz-Kürzel für die Tipp-Tabelle: erste Seite, zweite Seite oder X.
+   Bei Fußball sind die Seiten '1'/'X'/'2', bei UFC 'A'/'B' — deshalb nicht
+   fest auf '1' prüfen, sondern gegen die tatsächliche erste Quote der Partie. */
 function tendAbbr(p,ev){
-  if(p.type==='exact'){
-    const[h,a]=p.side.split(':').map(Number);
-    return h>a?abbr(ev.home):h<a?abbr(ev.away):'X';
-  }
-  return p.side==='X'?'X':abbr(p.side==='1'?ev.home:ev.away);
+  const key=p.type==='exact'?scoreTend(p.side):p.side;
+  if(key==='X') return 'X';
+  const homeKey=ev.sides[0].key;
+  return key===homeKey?teamAbbr(ev.home,ev):teamAbbr(ev.away,ev);
+}
+/* Kürzel aus dem Namen — bei UFC vom Nachnamen (letztes Wort), sonst vom Vereinsnamen. */
+function teamAbbr(name,ev){ return abbr(ev.sport==='mma'?name.split(' ').pop():name); }
+/* Tendenz ('1'/'X'/'2') aus einem exakten Ergebnis wie "2:1" ableiten. */
+function scoreTend(s){
+  const[h,a]=s.split(':').map(Number);
+  return h>a?'1':h<a?'2':'X';
 }
 
 function tabChat(){

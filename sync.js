@@ -332,8 +332,10 @@ function buildUFC(oddsEvents, scores){
   let fights = [];
   try{
     const [odds, scores] = await Promise.all([loadOdds(UFC.odds), loadScores(UFC.odds)]);
-    console.log(`  Diagnose: ${scores.length} Einträge von /scores zurück.`);
-    if(scores.length) console.log(`  Diagnose Beispiel: ${JSON.stringify(scores[0])}`);
+    const fertigeScores = scores.filter(s => s.completed);
+    console.log(`  Diagnose: ${scores.length} Einträge von /scores, davon ${fertigeScores.length} mit completed:true.`);
+    if(fertigeScores.length) console.log(`  Diagnose fertig: ${JSON.stringify(fertigeScores[0])}`);
+    else if(scores.length) console.log(`  Diagnose Beispiel: ${JSON.stringify(scores[0])}`);
     fights = buildUFC(odds, scores);
     if(fights.length) competitions.push({id:'ufc', name:'UFC', sport:'mma', matches:fights});
     bericht.push(`UFC: ${fights.length} Kämpfe, ${fights.filter(f=>f.finished).length} entschieden`);

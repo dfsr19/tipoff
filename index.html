@@ -430,10 +430,12 @@ let FB=null;
 async function initAuth(){
   if(!FB_ON) return null;
   try{
-    const [{initializeApp},auth]=await Promise.all([
+    const [{initializeApp},auth,fs]=await Promise.all([
       import('https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js'),
-      import('https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js')]);
-    return {auth:auth.getAuth(initializeApp(FIREBASE_CONFIG)),...auth};
+      import('https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js'),
+      import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js')]);
+    const app=initializeApp(FIREBASE_CONFIG);
+    return {auth:auth.getAuth(app),db:fs.getFirestore(app),...auth,...fs};
   }catch(e){ console.error('Firebase:',e); return null; }
 }
 const AUTH_ERR={
@@ -826,9 +828,20 @@ function vAuth(){
     }
     try{
       if(reg){
+        const uname=name.toLowerCase().replace(/\s+/g,'');
+        if(uname.length<2) return fail('Der Nutzername muss mindestens zwei Zeichen haben.');
+        const unameRef=FB.doc(FB.db,'usernames',uname);
+        if((await FB.getDoc(unameRef)).exists())
+          return fail('Dieser Nutzername ist schon vergeben. Wähl einen anderen.');
+
         const c=await FB.createUserWithEmailAndPassword(FB.auth,email,pass);
+        try{
+          await FB.setDoc(unameRef,{uid:c.user.uid,displayName:name});
+        }catch(e){
+          await FB.deleteUser(c.user).catch(()=>{});
+          return fail('Dieser Nutzername wurde gerade eben vergeben. Wähl einen anderen.');
+        }
         await FB.updateProfile(c.user,{displayName:name});
-        FB.sendEmailVerification(c.user).catch(e=>console.warn('Verifizierungsmail:',e));
         S.user={displayName:name,email};
         go('welcome');
       }else{
@@ -848,7 +861,6 @@ function vWelcome(){
     <div class="slogan">Lass dein Knowledge siegen.</div>
     <p>Verteile jeden Spieltag 100 Punkte auf die Tipps, an die du wirklich glaubst.
        Je mutiger die Quote, desto mehr springt raus.</p>
-    ${FB_ON?'<p class="legalnote">Wir haben dir eine Bestätigungsmail geschickt — schau kurz in dein Postfach.</p>':''}
     <button class="btn" id="start">Los geht's</button>
   </div>`;
   app.querySelector('#start').onclick=()=>go('home');

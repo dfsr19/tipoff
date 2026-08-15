@@ -226,12 +226,21 @@ function buildFootball(match, oddsEvents, table){
   return {...match, sport:'fb', source, sides, exact};
 }
 
-/* ══════════ Kampfsport ══════════ */
+/* ══════════ Kampfsport ══════════
+   The Odds API listet einen Kampf im /odds-Endpunkt nur, solange der Markt
+   offen ist — kurz nach Kampfende verschwindet er dort komplett, auch wenn
+   /scores das Ergebnis noch tagelang bereithält. Ohne Sonderbehandlung fiel
+   ein beendeter Kampf dadurch beim nächsten Sync-Lauf einfach aus der Liste.
+   Deshalb: erst alles aus den Live-Quoten aufbauen wie bisher, danach aus
+   /scores alles nachtragen, was da schon rausgefallen, aber entschieden ist. */
 function buildUFC(oddsEvents, scores){
+  const seen = new Set();
+
   const built = oddsEvents.map(ev => {
     const best = bestPrices(ev);
     const qa = best[ev.home_team], qb = best[ev.away_team];
     if(!qa || !qb) return null;
+    seen.add(ev.id);
 
     let finished = false, winner = null;
     const sc = (scores||[]).find(s => s.id === ev.id);
@@ -256,10 +265,32 @@ function buildUFC(oddsEvents, scores){
     };
   }).filter(Boolean);
 
+  /* Nachtragen: entschiedene Kämpfe, die aus den Live-Quoten schon raus sind.
+     Quote ist hier ohne Bedeutung — bereits abgegebene Tipps werten mit dem
+     Wert, der beim Tippen selbst eingefroren wurde, nicht mit diesem Platzhalter. */
+  for(const sc of scores||[]){
+    if(seen.has(sc.id)) continue;
+    if(!sc.completed || !Array.isArray(sc.scores)) continue;
+    const a = sc.scores.find(x => x.name === sc.home_team);
+    const b = sc.scores.find(x => x.name === sc.away_team);
+    const na = Number(a?.score), nb = Number(b?.score);
+    if(!Number.isFinite(na) || !Number.isFinite(nb) || na === nb) continue;
+    built.push({
+      id:'mma-'+sc.id, day:1, sport:'mma', source:'mkt',
+      start:sc.commence_time, home:sc.home_team, away:sc.away_team, finished:true,
+      winner: na>nb ? 'A' : 'B',
+      sides:[
+        {key:'A', label:sc.home_team.split(' ').pop(), q:1.01},
+        {key:'B', label:sc.away_team.split(' ').pop(), q:1.01}
+      ]
+    });
+  }
+
   /* Die Odds API liefert nicht nur die nächste Card, sondern auch spekulative
      Wettmärkte für mögliche Kämpfe Monate oder Jahre voraus. Nur die Kämpfe der
      nächsten anstehenden Veranstaltung behalten (Fenster von zwei Tagen ab dem
-     frühesten noch offenen Kampf) — alles Speziellere ist Zukunftsmusik. */
+     frühesten noch offenen Kampf) — alles Speziellere ist Zukunftsmusik.
+     Entschiedene Kämpfe bleiben davon unberührt und immer erhalten. */
   const open = built.filter(f => !f.finished);
   if(!open.length) return built.filter(f=>f.finished);      // nichts Anstehendes mehr
   const first = Math.min(...open.map(f => new Date(f.start).getTime()));

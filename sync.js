@@ -228,7 +228,7 @@ function buildFootball(match, oddsEvents, table){
 
 /* ══════════ Kampfsport ══════════ */
 function buildUFC(oddsEvents, scores){
-  return oddsEvents.map(ev => {
+  const built = oddsEvents.map(ev => {
     const best = bestPrices(ev);
     const qa = best[ev.home_team], qb = best[ev.away_team];
     if(!qa || !qb) return null;
@@ -255,6 +255,17 @@ function buildUFC(oddsEvents, scores){
       ]
     };
   }).filter(Boolean);
+
+  /* Die Odds API liefert nicht nur die nächste Card, sondern auch spekulative
+     Wettmärkte für mögliche Kämpfe Monate oder Jahre voraus. Nur die Kämpfe der
+     nächsten anstehenden Veranstaltung behalten (Fenster von zwei Tagen ab dem
+     frühesten noch offenen Kampf) — alles Speziellere ist Zukunftsmusik. */
+  const open = built.filter(f => !f.finished);
+  if(!open.length) return built.filter(f=>f.finished);      // nichts Anstehendes mehr
+  const first = Math.min(...open.map(f => new Date(f.start).getTime()));
+  const WINDOW = 2*864e5;
+  return built.filter(f =>
+    f.finished || new Date(f.start).getTime() - first <= WINDOW);
 }
 
 /* ══════════ Alles zusammenführen ══════════ */

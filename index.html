@@ -499,6 +499,7 @@ const RATING={'FC Bayern München':[2.15,.72],'Bayer 04 Leverkusen':[1.72,.98],
  'SSV Ulm 1846':[1.04,1.50]};
 const short=n=>n.replace(/^(1\.|SV 07|SC|FC|VfB|VfL|TSG)\s+/,'').replace(' München','')
   .replace('Borussia ','').replace(' 04','').replace(' 05','').replace(' 07','');
+const abbr=n=>short(n).replace(/[^A-Za-zÄÖÜäöüß]/g,'').slice(0,3).toUpperCase();
 
 /* ══════════ POISSON (Ersatzquoten + Simulation) ══════════ */
 const pois=(k,l)=>{let f=1;for(let i=2;i<=k;i++)f*=i;return Math.exp(-l)*l**k/f;};
@@ -596,7 +597,7 @@ const mkRound=(o)=>({id:o.id||'r'+(++SEQ),compId:o.compId||null,
   rules:o.rules||'',members:o.members||[],picks:{},settled:{},chat:o.chat||[],
   custom:!!o.custom,teams:o.teams||[],events:o.events||[],results:o.results||{},
   visibility:o.visibility||'private',code:o.code||code(),owner:o.owner||'me',
-  requests:o.requests||[],joined:o.joined!==false});
+  requests:o.requests||[],joined:o.joined!==false,pendingSync:{}});
 
 const ROUNDS={
   buli:mkRound({id:'buli',compId:'bl1',name:'Kellerkinder',
@@ -1805,7 +1806,7 @@ function matchCard(ev){
     const i=s.querySelector('input');
     i.oninput=e=>{p.stake=+e.target.value;
       s.querySelector('.v').innerHTML=`<b>${p.stake} P</b> → ${fmt(p.stake*p.q)} P`;};
-    i.onchange=()=>{render();fsSyncPick(r,ev.id);};
+    i.onchange=()=>{r.pendingSync=r.pendingSync||{};r.pendingSync[ev.id]=true;render();};
     el.appendChild(s);
   }
 
@@ -1834,8 +1835,19 @@ function pick(ev,s,type){
     if(!ev.noOdds&&left()<5) return toast('Budget aufgebraucht');
     r.picks[ev.id]={side:s.key,q:s.q,type,stake:ev.noOdds?0:Math.min(10,left())};
   }
+  r.pendingSync=r.pendingSync||{};r.pendingSync[ev.id]=true;
   render();
-  fsSyncPick(r,ev.id);
+}
+/* Erst beim Antippen von "Tipps abgeben" werden die Tipps wirklich gespeichert. */
+async function submitPicks(){
+  const r=R(),ids=Object.keys(r.pendingSync||{});
+  if(!ids.length) return;
+  const btn=app.querySelector('#submitPicks');
+  if(btn){btn.disabled=true;btn.textContent='Einen Moment …';}
+  for(const id of ids) await fsSyncPick(r,id);
+  r.pendingSync={};
+  toast('Tipps abgegeben');
+  render();
 }
 
 /* ══════════ ERGEBNISSE EINTRAGEN (nur eigene Ligen, nur Ersteller) ══════════ */
@@ -1895,15 +1907,52 @@ function tabEntry(){
 
 function tabTable(){
   const r=R(),rows=[...r.members].sort((a,b)=>b.pts-a.pts);
-  app.querySelector('#body').innerHTML=rows.map((m,i)=>`
+  const evs=pool().slice().sort((a,b)=>a.start-b.start);
+
+  /* Tipps eines Mitglieds — bei mir die eigenen (live), sonst die gespeicherten. */
+  const picksOf=m=>m.id==='me'?r.picks:((r.memberPicks&&r.memberPicks[m.id])||{});
+  /* Vor Anpfiff nur ein Strich (Tipp abgegeben, aber geheim). Danach: worauf getippt wurde. */
+  const cellFor=(m,ev)=>{
+    const p=picksOf(m)[ev.id];
+    if(!p) return '';
+    if(!started(ev)) return '–';
+    if(p.type==='exact') return S.premium?esc(p.side):tendAbbr(p,ev);
+    return tendAbbr(p,ev);
+  };
+  const matchTable=evs.length?`
+    <div style="overflow-x:auto;margin-bottom:20px;-webkit-overflow-scrolling:touch">
+      <table style="border-collapse:collapse;font-size:12px;white-space:nowrap">
+        <thead><tr>
+          <th style="position:sticky;left:0;background:var(--surface);padding:0 12px 8px 0"></th>
+          ${evs.map(ev=>`<th style="padding:0 10px 8px;font-weight:600;color:var(--muted)">
+            ${esc(abbr(ev.home))}–${esc(abbr(ev.away))}</th>`).join('')}
+        </tr></thead>
+        <tbody>${rows.map(m=>`<tr>
+          <td style="position:sticky;left:0;background:var(--surface);padding:7px 12px 7px 0;
+            font-weight:600">${esc(m.name)}</td>
+          ${evs.map(ev=>`<td style="text-align:center;padding:7px 10px;color:var(--muted)">
+            ${cellFor(m,ev)}</td>`).join('')}
+        </tr>`).join('')}</tbody>
+      </table>
+    </div>`:'';
+
+  app.querySelector('#body').innerHTML=matchTable+rows.map((m,i)=>`
     <div class="rank${i===0?' lead':''}${m.id==='me'?' me':''}">
       <span class="ps">${i+1}</span>
       <span class="nm">${esc(m.name)}</span>
       <span class="dl" data-d="${m.id}"></span>
       <span class="pts" data-p="${m.id}">${fmt(m.pts)}</span></div>`).join('')+
     `<p class="hint" style="text-align:center;margin-top:16px">
-      Jede Runde wird getrennt gewertet.</p>`;
+      Jede Runde wird getrennt gewertet.${S.premium?'':' Mit Premium siehst du nach Anpfiff auch die genau getippten Ergebnisse.'}</p>`;
   app.querySelector('#foot').innerHTML='';
+}
+/* Tendenz-Kürzel für die Tipp-Tabelle: Heimteam, Auswärtsteam oder X. */
+function tendAbbr(p,ev){
+  if(p.type==='exact'){
+    const[h,a]=p.side.split(':').map(Number);
+    return h>a?abbr(ev.home):h<a?abbr(ev.away):'X';
+  }
+  return p.side==='X'?'X':abbr(p.side==='1'?ev.home:ev.away);
 }
 
 function tabChat(){
@@ -2042,6 +2091,15 @@ function drawDock(){
 
   /* Noch offen: Tippen läuft */
   const frei=r.custom,offen=evs.filter(e=>!started(e)).length;
+  const pend=Object.keys(r.pendingSync||{}).filter(id=>evs.some(e=>e.id===id)).length;
+  if(n&&pend){
+    f.innerHTML=`<div class="dock">
+      <button class="btn" id="submitPicks">${n} Tipp${n>1?'s':''} abgeben</button>
+      ${!frei&&left()>0?`<p class="hint" style="text-align:center;margin-top:9px;font-size:11.5px">
+        noch ${left()} P übrig</p>`:''}</div>`;
+    f.querySelector('#submitPicks').onclick=submitPicks;
+    return;
+  }
   f.innerHTML=`<div class="dock">
     <div class="dockmsg">${n
       ?(frei?`${n} Tipp${n>1?'s':''} abgegeben`

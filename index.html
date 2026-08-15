@@ -2041,17 +2041,12 @@ function drawDock(){
   }
 
   /* Noch offen: Tippen läuft */
-  const l=left(),frei=r.custom,ok=frei?n>0:(n>0&&l===0);
-  const offen=evs.filter(e=>!started(e)).length;
+  const frei=r.custom,offen=evs.filter(e=>!started(e)).length;
   f.innerHTML=`<div class="dock">
     <div class="dockmsg">${n
-      ?(frei?`${n} Tipps abgegeben`:`${n} Tipps · ${used()} von ${CFG.budget} Punkten gesetzt`)
+      ?(frei?`${n} Tipp${n>1?'s':''} abgegeben`:`${n} Tipp${n>1?'s':''} · ${used()} von ${CFG.budget} Punkten gesetzt`)
       :offen?'Tipp auf eine Quote, dann Einsatz mit dem Regler wählen'
-             :'Für diesen Spieltag ist die Tippfrist vorbei'}</div>
-    <button class="btn ghost" id="ev" ${ok?'':'disabled'}>Probeweise auswerten</button>
-    <p class="hint" style="text-align:center;margin-top:9px;font-size:11.5px">
-      Echte Ergebnisse werden von selbst verrechnet, sobald sie feststehen.</p></div>`;
-  if(ok) f.querySelector('#ev').onclick=settleDay;
+             :'Für diesen Spieltag ist die Tippfrist vorbei'}</div></div>`;
 }
 /* Punkte gutschreiben — einmal je Spieltag.
    Bei echten (Firestore-)Runden zählen die wirklich abgegebenen Tipps aller Mitglieder.

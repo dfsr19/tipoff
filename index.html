@@ -205,18 +205,25 @@ textarea{min-height:88px;resize:vertical;line-height:1.55}
 .round.dash .nm{color:var(--text)}
 
 /* ═══════ WETTBEWERBS-AUSWAHL ═══════ */
-.compgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px}
-.compcard{background:var(--card);border:1px solid var(--line);border-radius:var(--r);
-  padding:16px 14px;text-align:left;display:flex;flex-direction:column;gap:9px;
-  transition:all .15s}
-.compcard:active{transform:scale(.98);border-color:var(--line-2)}
-.compcard .cicon{color:var(--blue)}
-.compcard .cname{font-family:'Poppins';font-weight:700;font-size:15px}
-.compcard .ctag{font-size:10.5px;font-weight:700;color:var(--win);text-transform:uppercase;
-  letter-spacing:.05em;display:flex;align-items:center;gap:5px}
-.compcard.locked{opacity:.72}
-.compcard.locked .cicon{color:var(--muted)}
-.compcard.locked .ctag{color:#D4AF6A}
+.complist{display:flex;flex-direction:column;gap:9px;margin-bottom:18px}
+.compbar{width:100%;display:flex;align-items:center;gap:13px;text-align:left;
+  background:var(--card);border:1px solid var(--line);border-radius:var(--r);
+  padding:12px 14px;transition:all .15s}
+.compbar:active{transform:scale(.99);border-color:var(--line-2)}
+.compbar .cbadge{width:44px;height:44px;border-radius:13px;flex-shrink:0;
+  display:grid;place-items:center;color:#fff}
+.compbar.bl1 .cbadge{background:linear-gradient(135deg,#3B82F6,#1D4ED8)}
+.compbar.bl2 .cbadge{background:linear-gradient(135deg,#22C1C3,#0E7C86)}
+.compbar.ufc .cbadge{background:linear-gradient(135deg,#F87171,#B91C1C)}
+.compbar.bl3 .cbadge,.compbar.ucl .cbadge{background:linear-gradient(135deg,#E8C77A,#B8923F)}
+.compbar .ctxt{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.compbar .ctxt b{font-family:'Poppins';font-weight:700;font-size:15px;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis}
+.compbar .ctxt small{font-size:11.5px;color:var(--muted)}
+.compbar .arw{color:var(--muted);font-size:19px;flex-shrink:0}
+.compbar .ctag{font-size:10.5px;font-weight:700;color:#D4AF6A;text-transform:uppercase;
+  letter-spacing:.04em;display:flex;align-items:center;gap:5px;flex-shrink:0}
+.compbar.locked{opacity:.82}
 
 /* ═══════ TEILEN ═══════ */
 .share{display:flex;gap:12px;align-items:center;width:100%;text-align:left;
@@ -496,6 +503,8 @@ const ICONS={
   plus:'<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>'
 };
 const compIcon=id=>ICONS[id==='ufc'?'glove':id==='ucl'?'trophy':'ball'];
+const COMPTAG={bl1:'Die Königsklasse',bl2:'Zweitklassig, nie zweitrangig',
+  bl3:'Für echte Kenner',ucl:'Europas beste Nächte',ufc:'Käfig statt Rasen'};
 /* Beschriftung einer Runde — verträgt auch fehlende Wettbewerbsangaben. */
 function compTag(r,kurz){
   if(r.custom||!COMPS[r.compId]) return '🏟 Eigene Liga';
@@ -1120,13 +1129,16 @@ function vHome(){
       <b>dfsr19.github.io/tipoff</b>.</div>`:''}
 
     <div class="sec">Worauf tippen?<span class="ln"></span></div>
-    <div class="compgrid">
-      ${Object.keys(COMPS).map(id=>{
+    <div class="complist">
+      ${['bl1','bl2','ufc','bl3','ucl'].map(id=>{
         const c=COMPS[id],locked=c.prem&&!S.premium;
-        return `<button class="compcard${locked?' locked':''}" data-comp="${id}">
-          <span class="cicon">${compIcon(id)}</span>
-          <span class="cname">${esc(c.kurz)}</span>
-          <span class="ctag">${locked?ICONS.lock+'Premium':'Kostenlos'}</span>
+        return `<button class="compbar ${id}${locked?' locked':''}" data-comp="${id}">
+          <span class="cbadge">${compIcon(id)}</span>
+          <span class="ctxt">
+            <b>${esc(c.name)}</b>
+            <small>${COMPTAG[id]}</small>
+          </span>
+          ${locked?`<span class="ctag">${ICONS.lock}Premium</span>`:'<span class="arw">›</span>'}
         </button>`;}).join('')}
     </div>
 

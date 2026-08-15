@@ -1670,22 +1670,17 @@ function vCreate(){
       </div>
       <div class="chips">${d.teams.map((t,i)=>
         `<span class="chip">${esc(t)}<button data-rm="${i}">×</button></span>`).join('')
-        ||'<span class="hint" style="margin:0">Noch keine Teams — mindestens vier eintragen.</span>'}</div>
+        ||'<span class="hint" style="margin:0">Noch keine Teams — mindestens zwei eintragen.</span>'}</div>
 
-      <label for="st">Erster Spieltag</label>
-      <input type="text" id="st" placeholder="TT.MM.JJJJ" value="${esc(d.start||'')}">
-
-      <p class="hint">Aus deinen Teams entsteht automatisch ein Spielplan, jeder gegen jeden,
-        ein Spieltag pro Woche. Da es für Amateurligen keine Quoten gibt, zählt jeder
-        richtige Tipp ${CFG.amateurPts} Punkte.</p>
+      <p class="hint">Im nächsten Schritt legst du fest, wer gegen wen spielt — bei mehreren
+        Spieltagen jeweils mit Datum, bei einem Turniertag reichen die Paarungen ohne Uhrzeit.
+        Da es für Amateurligen keine Quoten gibt, zählt jeder richtige Tipp ${CFG.amateurPts} Punkte.</p>
     </main>
     <div class="dock">
-      <div class="dockmsg">${d.teams.length} Teams${d.teams.length>=4
-        ? ' · '+(d.teams.length%2?d.teams.length:d.teams.length-1)+' Spieltage'
-        : ' · mindestens vier nötig'}</div>
-      <button class="btn" id="mk" ${d.teams.length<4?'disabled':''}>Runde erstellen</button>
+      <div class="dockmsg">${d.teams.length} Teams${d.teams.length<2?' · mindestens zwei nötig':''}</div>
+      <button class="btn" id="mk" ${d.teams.length<2?'disabled':''}>Weiter</button>
     </div>`;
-    const keep=()=>{d.name=app.querySelector('#ln').value;d.start=app.querySelector('#st').value;};
+    const keep=()=>{d.name=app.querySelector('#ln').value;};
     const ti=app.querySelector('#tm');
     const add=()=>{const v=ti.value.trim();if(!v)return;keep();d.teams.push(v);render();
       setTimeout(()=>app.querySelector('#tm')?.focus(),30);};
@@ -1697,8 +1692,65 @@ function vCreate(){
       d.visibility=b.dataset.v;render();});
     app.querySelector('#back').onclick=()=>go('create',{flow:'choice'});
     const m=app.querySelector('#mk');
-    if(m) m.onclick=async()=>{keep();d.name=(d.name||'').trim()||'Meine Runde';
-      m.disabled=true;m.textContent='Einen Moment …';await buildLeague(d);};
+    if(m) m.onclick=()=>{keep();d.name=(d.name||'').trim()||'Meine Runde';
+      go('create',{flow:'pairs',draft:d});};
+    return;
+  }
+
+  /* Schritt 2b — Paarungen manuell festlegen, kein automatischer Spielplan */
+  if(S.flow==='pairs'){
+    if(!d.matchdays||!d.matchdays.length){
+      d.matchdays=[{id:'md'+(++SEQ),date:'',pairings:[{id:'p'+(++SEQ),home:d.teams[0],away:d.teams[1]||d.teams[0]}]}];
+    }
+    const teamOpts=sel=>d.teams.map(t=>`<option ${t===sel?'selected':''}>${esc(t)}</option>`).join('');
+    app.innerHTML=head('Spielplan','Schritt 2 von 2')+`
+    <main>
+      <p class="hint" style="margin:0 3px 16px">Leg fest, wer gegen wen spielt. Mehrere
+        Spieltage? Für jeden ein Datum eintragen. Alles an einem Tag? Ein Spieltag reicht,
+        das Datum kannst du leer lassen.</p>
+      ${d.matchdays.map((md,mi)=>`
+        <div class="card" style="margin-bottom:11px" data-md="${md.id}">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:11px">
+            <b style="font-family:'Poppins';flex:1">Spieltag ${mi+1}</b>
+            ${d.matchdays.length>1?`<button class="mini no" data-rmmd="${md.id}">Entfernen</button>`:''}
+          </div>
+          <label>Datum (optional bei einem Turniertag)</label>
+          <input type="text" placeholder="TT.MM.JJJJ" value="${esc(md.date||'')}" data-date="${md.id}">
+          ${md.pairings.map(p=>`
+            <div style="display:flex;align-items:center;gap:8px;margin-top:12px">
+              <select data-home="${p.id}" style="flex:1">${teamOpts(p.home)}</select>
+              <span class="hint" style="margin:0">–</span>
+              <select data-away="${p.id}" style="flex:1">${teamOpts(p.away)}</select>
+              <button data-rmp="${p.id}" style="width:30px">×</button>
+            </div>`).join('')}
+          <button class="btn ghost" data-addp="${md.id}" style="margin-top:12px;padding:11px;font-size:13.5px">
+            + Paarung</button>
+        </div>`).join('')}
+      <button class="btn ghost" id="addmd" style="padding:12px">+ Spieltag hinzufügen</button>
+    </main>
+    <div class="dock"><button class="btn" id="mk">Runde erstellen</button></div>`;
+    bindBack();
+    app.querySelector('#back').onclick=()=>go('create',{flow:'self',draft:d});
+    app.querySelectorAll('[data-date]').forEach(i=>i.onchange=()=>{
+      d.matchdays.find(m=>m.id===i.dataset.date).date=i.value;});
+    app.querySelectorAll('[data-home]').forEach(s=>s.onchange=()=>{
+      d.matchdays.forEach(m=>{const p=m.pairings.find(x=>x.id===s.dataset.home);if(p)p.home=s.value;});});
+    app.querySelectorAll('[data-away]').forEach(s=>s.onchange=()=>{
+      d.matchdays.forEach(m=>{const p=m.pairings.find(x=>x.id===s.dataset.away);if(p)p.away=s.value;});});
+    app.querySelectorAll('[data-addp]').forEach(b=>b.onclick=()=>{
+      const md=d.matchdays.find(m=>m.id===b.dataset.addp);
+      md.pairings.push({id:'p'+(++SEQ),home:d.teams[0],away:d.teams[1]||d.teams[0]});render();});
+    app.querySelectorAll('[data-rmp]').forEach(b=>b.onclick=()=>{
+      d.matchdays.forEach(m=>{m.pairings=m.pairings.filter(p=>p.id!==b.dataset.rmp);});render();});
+    app.querySelectorAll('[data-rmmd]').forEach(b=>b.onclick=()=>{
+      d.matchdays=d.matchdays.filter(m=>m.id!==b.dataset.rmmd);render();});
+    app.querySelector('#addmd').onclick=()=>{
+      d.matchdays.push({id:'md'+(++SEQ),date:'',pairings:[{id:'p'+(++SEQ),home:d.teams[0],away:d.teams[1]||d.teams[0]}]});
+      render();};
+    app.querySelector('#mk').onclick=async e=>{
+      const total=d.matchdays.reduce((n,m)=>n+m.pairings.filter(p=>p.home!==p.away).length,0);
+      if(!total) return toast('Trag mindestens eine Paarung mit zwei verschiedenen Teams ein.');
+      e.target.disabled=true;e.target.textContent='Einen Moment …';await buildLeague(d);};
     return;
   }
 
@@ -1769,32 +1821,31 @@ async function buildOfficial(d){
   openRound(id);
 }
 
+/* Spielplan kommt komplett vom Ersteller — kein automatisches Jeder-gegen-jeden.
+   d.matchdays: [{date:'TT.MM.JJJJ'|'', pairings:[{home,away}]}] */
 async function buildLeague(d){
-  const teams=d.teams.slice(); if(teams.length%2) teams.push('spielfrei');
-  const n=teams.length,days=n-1,events=[],base=parseDay(d.start)||new Date(),rot=teams.slice(1);
   const idPrefix='c'+(++SEQ);
-  for(let r=0;r<days;r++){
-    const k=r%rot.length,ord=[teams[0],...rot.slice(k).concat(rot.slice(0,k))];
-    for(let i=0;i<n/2;i++){
-      let h=ord[i],a=ord[n-1-i];
-      if(h==='spielfrei'||a==='spielfrei') continue;
-      if((i+r)%2)[h,a]=[a,h];
-      events.push({id:`${idPrefix}-${r}-${i}`,day:r+1,home:h,away:a,sport:'fb',noOdds:true,source:'mdl',
-        start:new Date(base.getTime()+r*7*864e5+i*72e5),
+  const events=[];
+  d.matchdays.forEach((md,mi)=>{
+    const day=mi+1, base=parseDay(md.date)||new Date();
+    md.pairings.filter(p=>p.home&&p.away&&p.home!==p.away).forEach((p,pi)=>{
+      events.push({id:`${idPrefix}-${day}-${pi}`,day,home:p.home,away:p.away,
+        sport:'fb',noOdds:true,source:'mdl',start:base,
         sides:[{key:'1',label:'1',q:1},{key:'X',label:'X',q:1},{key:'2',label:'2',q:1}]});
-    }
-  }
-  const real=teams.filter(t=>t!=='spielfrei');
-  const rules=`${real.length} Teams, ${days} Spieltage. Ohne Quoten — jeder Treffer ${CFG.amateurPts} Punkte.`;
+    });
+  });
+  const teams=d.teams.slice();
+  const rules=`${teams.length} Teams, ${d.matchdays.length} Spieltag${d.matchdays.length>1?'e':''}. `+
+    `Ohne Quoten — jeder Treffer ${CFG.amateurPts} Punkte.`;
   if(FB_ON&&FB){
     const id=await fsCreateRound({sport:'fb',name:d.name,custom:true,visibility:d.visibility,
-      teams:real,events,rules});
+      teams,events,rules});
     if(!id) return toast('Da ist etwas schiefgelaufen. Versuch es nochmal.');
     toast('Runde erstellt');openRound(id);return;
   }
   const id=idPrefix;
   ROUNDS[id]=mkRound({id,sport:'fb',name:d.name,custom:true,
-    visibility:d.visibility,teams:real,events,rules,
+    visibility:d.visibility,teams,events,rules,
     members:[{id:'me',name:S.user?.displayName||'Du',pts:0}]});
   toast('Runde erstellt');
   openRound(id);

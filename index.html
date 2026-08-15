@@ -770,6 +770,35 @@ async function fsLeaveRound(r){
     return true;
   }catch(e){ console.warn('Runde verlassen:',e); return false; }
 }
+/* Rundenname ändern — nur Ersteller. */
+async function fsRenameRound(r,name){
+  if(!r.fsId||!FB) return true;
+  try{ await FB.updateDoc(FB.doc(FB.db,'rounds',r.fsId),{name}); return true; }
+  catch(e){ console.warn('Runde umbenennen:',e); return false; }
+}
+/* Sichtbarkeit ändern — nur Ersteller. */
+async function fsSetVisibility(r,vis){
+  if(!r.fsId||!FB) return true;
+  try{ await FB.updateDoc(FB.doc(FB.db,'rounds',r.fsId),{visibility:vis}); return true; }
+  catch(e){ console.warn('Sichtbarkeit ändern:',e); return false; }
+}
+/* Einladungscode neu erzeugen — nur Ersteller. Alter Code wird ungültig,
+   bereits beigetretene Mitglieder bleiben in der Runde (memberUids bleibt unberührt). */
+async function fsRegenCode(r){
+  const fresh=code();
+  if(!r.fsId||!FB) return fresh;
+  try{ await FB.updateDoc(FB.doc(FB.db,'rounds',r.fsId),{code:fresh}); return fresh; }
+  catch(e){ console.warn('Code erneuern:',e); return null; }
+}
+/* Mitglied aus der Runde entfernen — nur Ersteller. */
+async function fsKickMember(r,uid){
+  if(!r.fsId||!FB) return true;
+  try{
+    await FB.updateDoc(FB.doc(FB.db,'rounds',r.fsId),{
+      [`members.${uid}`]:FB.deleteField(), memberUids:FB.arrayRemove(uid)});
+    return true;
+  }catch(e){ console.warn('Mitglied entfernen:',e); return false; }
+}
 
 const R=()=>ROUNDS[S.roundId];
 const eventsOf=(r,d)=> r.custom ? r.events.filter(e=>e.day===d)
@@ -2119,7 +2148,9 @@ function tabInfo(){
 
     <div class="sec">Mitglieder · ${r.members.length}<span class="ln"></span></div>
     <div class="card" style="margin-bottom:11px">
-      <div class="chips">${r.members.map(m=>`<span class="chip">${esc(m.name)}</span>`).join('')}</div>
+      <div class="chips">${r.members.map(m=>`<span class="chip">${esc(m.name)}${
+        own&&m.id!=='me'?`<button data-kick="${esc(m.id)}">×</button>`:''}</span>`).join('')}</div>
+      ${own?'<p class="hint" style="margin-top:10px">Tippe auf × um jemanden aus der Runde zu entfernen.</p>':''}
     </div>
 
     <div class="sec">Punkte<span class="ln"></span></div>
@@ -2132,17 +2163,40 @@ function tabInfo(){
     </div>
 
     <div class="sec">Verwaltung<span class="ln"></span></div>
+    ${own?`
+    <div class="card" style="margin-bottom:11px">
+      <label for="rn">Rundenname</label>
+      <input type="text" id="rn" value="${esc(r.name)}">
+    </div>
+
+    <div class="card" style="margin-bottom:11px">
+      <label>Sichtbarkeit</label>
+      <div class="toggle">
+        <button data-vis="private" aria-pressed="${r.visibility==='private'}">
+          <span class="t">🔒 Privat</span><span class="d">Nur per Link oder Anfrage</span></button>
+        <button data-vis="public" aria-pressed="${r.visibility==='public'}">
+          <span class="t">🌍 Öffentlich</span><span class="d">Jeder kann beitreten</span></button>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:11px">
+      <p class="hint" style="margin:0 0 12px">Neuer Code macht den alten ungültig. Mitglieder,
+        die schon dabei sind, bleiben in der Runde.</p>
+      <button class="btn ghost" id="regencode">Neuen Einladungscode erzeugen</button>
+    </div>
+
     <div class="card">
-      ${own
-        ?`<p class="hint" style="margin:0 0 12px">Du hast diese Runde erstellt. Löschen entfernt
-            sie für alle Mitglieder unwiderruflich.</p>
-          <button class="btn ghost" id="delround" style="color:var(--bad);border-color:rgba(248,113,113,.35)">
-            Runde löschen</button>`
-        :`<p class="hint" style="margin:0 0 12px">Du verlierst dabei deine Tipps und Punkte in
-            dieser Runde. Das lässt sich nicht rückgängig machen.</p>
-          <button class="btn ghost" id="leaveround" style="color:var(--bad);border-color:rgba(248,113,113,.35)">
-            Runde verlassen</button>`}
-    </div>`;
+      <p class="hint" style="margin:0 0 12px">Du hast diese Runde erstellt. Löschen entfernt
+        sie für alle Mitglieder unwiderruflich.</p>
+      <button class="btn ghost" id="delround" style="color:var(--bad);border-color:rgba(248,113,113,.35)">
+        Runde löschen</button>
+    </div>`
+    :`<div class="card">
+      <p class="hint" style="margin:0 0 12px">Du verlierst dabei deine Tipps und Punkte in
+        dieser Runde. Das lässt sich nicht rückgängig machen.</p>
+      <button class="btn ghost" id="leaveround" style="color:var(--bad);border-color:rgba(248,113,113,.35)">
+        Runde verlassen</button>
+    </div>`}`;
   app.querySelector('#foot').innerHTML='';
   const rl=app.querySelector('#rl'); if(own&&rl) rl.onchange=e=>r.rules=e.target.value;
   app.querySelector('#inv').onclick=()=>share(
@@ -2155,6 +2209,40 @@ function tabInfo(){
   app.querySelectorAll('[data-dec]').forEach(b=>b.onclick=()=>{
     r.requests=r.requests.filter(x=>x.id!==b.dataset.dec);toast('Anfrage abgelehnt');render();});
 
+  const nameInp=app.querySelector('#rn');
+  if(nameInp) nameInp.onchange=async e=>{
+    const v=e.target.value.trim();
+    if(!v||v===r.name){ e.target.value=r.name; return; }
+    const prev=r.name; r.name=v; toast('Wird gespeichert …');
+    const ok=await fsRenameRound(r,v);
+    if(!ok){ r.name=prev; e.target.value=prev; toast('Konnte nicht gespeichert werden. Versuch es nochmal.'); }
+    else toast('Name gespeichert');
+  };
+  app.querySelectorAll('[data-vis]').forEach(b=>b.onclick=async()=>{
+    const v=b.dataset.vis; if(v===r.visibility) return;
+    const prev=r.visibility; r.visibility=v; render();
+    const ok=await fsSetVisibility(r,v);
+    if(!ok){ r.visibility=prev; toast('Konnte nicht geändert werden. Versuch es nochmal.'); render(); }
+  });
+  const regenBtn=app.querySelector('#regencode');
+  if(regenBtn) regenBtn.onclick=async()=>{
+    if(!confirm('Neuen Code erzeugen? Der alte Code funktioniert danach nicht mehr.')) return;
+    regenBtn.disabled=true;regenBtn.textContent='Einen Moment …';
+    const fresh=await fsRegenCode(r);
+    if(!fresh){ regenBtn.disabled=false;regenBtn.textContent='Neuen Einladungscode erzeugen';
+      return toast('Hat nicht geklappt. Versuch es nochmal.'); }
+    r.code=fresh; toast('Neuer Code erzeugt'); render();
+  };
+  app.querySelectorAll('[data-kick]').forEach(b=>b.onclick=async()=>{
+    const uid=b.dataset.kick, m=r.members.find(x=>x.id===uid);
+    if(!confirm(`${m?esc(m.name):'Diese Person'} wirklich aus der Runde entfernen?`)) return;
+    b.disabled=true;
+    const ok=await fsKickMember(r,uid);
+    if(!ok){ b.disabled=false; return toast('Hat nicht geklappt. Versuch es nochmal.'); }
+    r.members=r.members.filter(x=>x.id!==uid);
+    r.memberUids=(r.memberUids||[]).filter(x=>x!==uid);
+    toast((m?m.name:'Mitglied')+' entfernt'); render();
+  });
   const delBtn=app.querySelector('#delround');
   if(delBtn) delBtn.onclick=async()=>{
     if(!confirm(`"${r.name}" wirklich unwiderruflich für alle Mitglieder löschen?`)) return;

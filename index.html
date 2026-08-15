@@ -619,12 +619,13 @@ const S={screen:'auth',authMode:'register',user:null,menu:false,
          premium:false,flow:null,picker:false,
          draft:{teams:[],visibility:'private',compId:'bl1'},
          joinTab:'suchen'};
-/* Kommt der Aufruf von einem Passwort-Zurücksetzen-Mail-Link? */
+/* Kommt der Aufruf von einem Passwort-Zurücksetzen-Mail-Link oder einem Einladungslink? */
 {
   const qp=new URLSearchParams(location.search);
   if(qp.get('mode')==='resetPassword' && qp.get('oobCode')){
     S.screen='resetpw'; S.resetCode=qp.get('oobCode');
   }
+  if(qp.get('code')) S.pendingCode=qp.get('code').trim().toUpperCase();
 }
 /* Alle Spiele eines Wettbewerbs */
 const evOf=id=>S.ev[id]||[];
@@ -715,6 +716,20 @@ async function fsCreateRound(data){
   await FB.setDoc(ref,payload);
   ROUNDS[ref.id]=fireToLocal(ref.id,payload,uid);
   return ref.id;
+}
+/* Einladungslink (?code=...) nach dem Laden bzw. nach dem Login automatisch einlösen. */
+async function tryPendingJoin(){
+  if(!S.pendingCode) return;
+  const c=S.pendingCode;
+  if(FB_ON&&FB){
+    if(!myUid()) return;                    // erst nach Login möglich — wird dann erneut aufgerufen
+    S.pendingCode=null;
+    const res=await fsJoinByCode(c);
+    if(res&&!res.error){ toast('Runde beigetreten'); return openRound(res.id||res.already); }
+    S.joinPrefill=c; S.joinPrefillErr=res&&res.error; go('join',{joinTab:'code'});
+  }else{
+    S.pendingCode=null; S.joinPrefill=c; go('join',{joinTab:'code'});
+  }
 }
 async function fsJoinByCode(v){
   const uid=myUid(); if(!uid) return {error:'Da ist etwas schiefgelaufen. Versuch es nochmal.'};
@@ -1421,6 +1436,7 @@ function vJoin(){
     <button data-j="code" aria-selected="${t==='code'}">Mit Code</button>
   </nav>
   <main>${t==='suchen'?joinSearch():joinCode()}</main>`;
+  S.joinPrefill=null;S.joinPrefillErr=null;
   bindBack();
   app.querySelectorAll('[data-j]').forEach(b=>b.onclick=()=>{S.joinTab=b.dataset.j;render();});
 
@@ -1503,8 +1519,9 @@ function joinCode(){
     <p class="hint">Du hast einen Link oder Code von Freunden bekommen? Hier rein damit.</p>
     <label for="cd">Code</label>
     <input type="text" id="cd" placeholder="TIP-XXXXX" autocapitalize="characters"
+      value="${esc(S.joinPrefill||'')}"
       style="font-family:'Poppins';font-weight:700;letter-spacing:.12em">
-    <div class="err" id="cerr"></div>
+    <div class="err" id="cerr" ${S.joinPrefillErr?'style="display:block"':''}>${esc(S.joinPrefillErr||'')}</div>
     <button class="btn" id="join" style="margin-top:18px">Beitreten</button>
   </div>
   <p class="hint" style="text-align:center;margin-top:16px">
@@ -2667,11 +2684,12 @@ function vLegal(){
           Object.keys(ROUNDS).forEach(k=>delete ROUNDS[k]);
           render();
           await fsLoadMyRounds();
+          await tryPendingJoin();
         }
       }
       render();
     });
-  }else render();
+  }else{ await tryPendingJoin(); render(); }
 
   /* Dem Video bis zu 3,5s Zeit zum Laden geben. Läuft es, darf es bis zu 4,5s weiterlaufen
      oder natürlich zu Ende spielen ("ended"). Läuft es nicht, kurz das Standbild zeigen,

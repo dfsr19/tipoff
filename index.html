@@ -164,6 +164,8 @@ textarea{min-height:88px;resize:vertical;line-height:1.55}
 .seg button{flex:1;padding:10px;border-radius:9px;font-size:13.5px;font-weight:600;color:var(--muted)}
 .seg button[aria-selected="true"]{background:var(--blue);color:#04121F}
 .legalnote{text-align:center;font-size:11.5px;color:#5C6672;line-height:1.6;margin-top:18px}
+.linklike{display:block;margin:0 auto;background:none;border:none;color:var(--blue);
+  font-size:13.5px;text-decoration:underline;cursor:pointer;padding:2px}
 .legalnote button{color:var(--muted);text-decoration:underline;font-size:11.5px}
 
 /* ═══════ WILLKOMMEN ═══════ */
@@ -791,6 +793,7 @@ function vAuth(){
     <label for="p">Passwort</label>
     <input type="password" id="p" placeholder="Mindestens sechs Zeichen"
       autocomplete="${reg?'new-password':'current-password'}">
+    ${!reg?'<button class="linklike" id="forgot" type="button" style="margin-top:8px">Passwort vergessen?</button>':''}
     <div class="err" id="err"></div>
     <button class="btn" id="sub" style="margin-top:22px">${reg?'Konto erstellen':'Anmelden'}</button>
     ${reg?`<p class="legalnote">Mit dem Erstellen eines Kontos stimmst du den
@@ -851,6 +854,20 @@ function vAuth(){
   };
   btn.onclick=submit;
   app.querySelectorAll('input').forEach(i=>i.onkeydown=e=>{if(e.key==='Enter')submit();});
+
+  const forgotBtn=app.querySelector('#forgot');
+  if(forgotBtn) forgotBtn.onclick=async()=>{
+    const email=app.querySelector('#e').value.trim();
+    err.style.display='none';
+    if(!email) return fail('Trag oben erst deine E-Mail-Adresse ein.');
+    forgotBtn.disabled=true;forgotBtn.textContent='Einen Moment …';
+    const done=()=>{ err.textContent='Falls zu dieser E-Mail ein Konto existiert, ist gerade eine Mail zum Zurücksetzen unterwegs.';
+      err.style.cssText='display:block;color:var(--muted)';
+      forgotBtn.disabled=false;forgotBtn.textContent='Passwort vergessen?'; };
+    if(!FB_ON) return done();
+    try{ await FB.sendPasswordResetEmail(FB.auth,email); }catch(e){ /* nichts verraten, ob's das Konto gibt */ }
+    done();
+  };
 }
 
 /* ═══════════ WILLKOMMEN ═══════════ */

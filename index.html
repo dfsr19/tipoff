@@ -637,7 +637,7 @@ const mkRound=(o)=>({id:o.id||'r'+(++SEQ),compId:o.compId||null,
   sport:o.sport||(o.compId?COMPS[o.compId].sport:'fb'),name:o.name,
   comp:o.comp||(o.compId?COMPS[o.compId].name:'Eigene Runde'),
   rules:o.rules||'',members:o.members||[],picks:{},settled:{},chat:o.chat||[],
-  custom:!!o.custom,useDates:o.useDates!==false,teams:o.teams||[],events:o.events||[],results:o.results||{},
+  custom:!!o.custom,useDates:o.useDates!==false,tipDeadline:o.tipDeadline||null,teams:o.teams||[],events:o.events||[],results:o.results||{},
   visibility:o.visibility||'private',code:o.code||code(),owner:o.owner||'me',
   requests:o.requests||[],joined:o.joined!==false,pendingSync:{}});
 
@@ -687,7 +687,7 @@ function fireToLocal(id,d,uid){
   const membersArr=Object.entries(d.members||{}).map(([mid,m])=>
     ({id:mid===uid?'me':mid,name:m.name,pts:m.pts||0}));
   const r=mkRound({id,compId:d.compId,sport:d.sport,name:d.name,comp:d.comp,rules:d.rules,
-    custom:d.custom,useDates:d.useDates,teams:d.teams,events:d.events,visibility:d.visibility,code:d.code,
+    custom:d.custom,useDates:d.useDates,tipDeadline:d.tipDeadline,teams:d.teams,events:d.events,visibility:d.visibility,code:d.code,
     owner:d.ownerUid===uid?'me':(d.ownerName||d.ownerUid),members:membersArr,requests:[],chat:[]});
   r.results=d.results||{};
   r.picks=(d.picks&&d.picks[uid])||{};
@@ -709,7 +709,7 @@ async function fsCreateRound(data){
   const uid=myUid(); if(!uid) return null;
   const ref=FB.doc(FB.collection(FB.db,'rounds'));
   const payload={compId:data.compId||null,sport:data.sport||'fb',name:data.name,comp:data.comp||'',
-    rules:data.rules||'',custom:!!data.custom,useDates:data.useDates!==false,
+    rules:data.rules||'',custom:!!data.custom,useDates:data.useDates!==false,tipDeadline:data.tipDeadline||null,
     teams:data.teams||[],events:data.events||[],
     results:{},visibility:data.visibility||'private',code:code(),
     ownerUid:uid,ownerName:S.user?.displayName||'Du',
@@ -817,9 +817,9 @@ async function fsKickMember(r,uid){
   }catch(e){ console.warn('Mitglied entfernen:',e); return false; }
 }
 /* Spielplan einer eigenen Liga nachträglich ändern — nur Ersteller. */
-async function fsSyncSchedule(r,events,useDates){
+async function fsSyncSchedule(r,events,useDates,tipDeadline){
   if(!r.fsId||!FB) return true;
-  try{ await FB.updateDoc(FB.doc(FB.db,'rounds',r.fsId),{events,useDates}); return true; }
+  try{ await FB.updateDoc(FB.doc(FB.db,'rounds',r.fsId),{events,useDates,tipDeadline:tipDeadline||null}); return true; }
   catch(e){ console.warn('Spielplan speichern:',e); return false; }
 }
 
@@ -1729,7 +1729,20 @@ function vCreate(){
       </div>
       <p class="hint" style="margin-top:9px">${d.useDates
         ?'Mit Datum kann am Spieltag selbst nicht mehr getippt werden — Annahmeschluss ist der Tag davor, damit alle eine Übersicht haben.'
-        :'Ohne Datum bleibt das Tippen offen, bis du selbst die Ergebnisse einträgst und die Runde auswertest.'}</p>
+        :'Ohne Datum bleibt das Tippen offen, bis du selbst die Ergebnisse einträgst und die Runde auswertest — es sei denn, du legst unten eine feste Frist fest.'}</p>
+
+      ${!d.useDates?`
+      <div class="card" style="margin-top:16px;margin-bottom:11px">
+        <label>Tipp-Annahmeschluss (optional)</label>
+        ${d.tipDeadline?`
+          <p class="hint" style="margin:0 0 12px">Danach kann niemand mehr tippen, egal an
+            welchem Spieltag. Alle Mitglieder sehen die Frist auffällig im Tippen-Bereich.</p>
+          ${deadlineWheels(d.tipDeadline)}
+          <button class="btn ghost" id="clrdl" style="margin-top:12px;padding:10px;font-size:13px">
+            Frist entfernen</button>`
+        :`<p class="hint" style="margin:0 0 12px">Ohne Frist bleibt das Tippen unbegrenzt offen.</p>
+          <button class="btn ghost" id="setdl" style="padding:12px">+ Frist festlegen</button>`}
+      </div>`:''}
 
       ${d.matchdays.map((md,mi)=>`
         <div class="card" style="margin-top:16px;margin-bottom:11px" data-md="${md.id}">
@@ -1754,6 +1767,7 @@ function vCreate(){
     bindBack();
     app.querySelector('#back').onclick=()=>go('create',{flow:'self',draft:d});
     app.querySelectorAll('[data-ud]').forEach(b=>b.onclick=()=>{d.useDates=b.dataset.ud==='1';render();});
+    bindDeadlineWheels(d);
     const setDate=(id,y,m,day)=>{const md=d.matchdays.find(x=>x.id===id);
       if(md) md.date=`${y}-${String(m).padStart(2,'0')}-${String(day).padStart(2,'0')}`;};
     app.querySelectorAll('[data-day]').forEach(s=>s.onchange=()=>{
@@ -1862,12 +1876,13 @@ async function buildOfficial(d){
             Ersteller die Runde selbst auswertet. */
 /* Baut aus den Matchday-Entwürfen die flache events-Liste — von buildLeague()
    und vom nachträglichen Spielplan-Editor gemeinsam genutzt. */
-function matchdaysToEvents(matchdays,useDates,idPrefix){
+function matchdaysToEvents(matchdays,useDates,idPrefix,tipDeadline){
   const events=[];
+  const globalLock=useDates?null:parseISODateTime(tipDeadline);
   matchdays.forEach((md,mi)=>{
     const day=mi+1;
     const start=useDates?(parseISODate(md.date,19)||new Date()):null;
-    const lockAt=useDates?(parseISODate(md.date,0)||new Date()):null;
+    const lockAt=useDates?(parseISODate(md.date,0)||new Date()):globalLock;
     md.pairings.filter(p=>p.home&&p.away&&p.home!==p.away).forEach((p,pi)=>{
       events.push({id:`${idPrefix}-${day}-${pi}`,day,home:p.home,away:p.away,
         sport:'fb',noOdds:true,source:'mdl',start,lockAt,
@@ -1887,20 +1902,21 @@ function eventsToMatchdays(events){
   });
 }
 async function buildLeague(d){
-  const idPrefix='c'+(++SEQ), useDates=d.useDates!==false;
-  const events=matchdaysToEvents(d.matchdays,useDates,idPrefix);
+  const idPrefix='c'+(++SEQ), useDates=d.useDates!==false, tipDeadline=useDates?null:(d.tipDeadline||null);
+  const events=matchdaysToEvents(d.matchdays,useDates,idPrefix,tipDeadline);
   const teams=d.teams.slice();
   const rules=`${teams.length} Teams, ${d.matchdays.length} Spieltag${d.matchdays.length>1?'e':''}. `+
     `Ohne Quoten — jeder Treffer ${CFG.amateurPts} Punkte.`+
-    (useDates?` Tipp-Annahmeschluss ist jeweils der Tag vor dem Spieltag.`:'');
+    (useDates?` Tipp-Annahmeschluss ist jeweils der Tag vor dem Spieltag.`
+             :tipDeadline?` Tipp-Annahmeschluss: ${when(parseISODateTime(tipDeadline))} Uhr.`:'');
   if(FB_ON&&FB){
-    const id=await fsCreateRound({sport:'fb',name:d.name,custom:true,useDates,visibility:d.visibility,
+    const id=await fsCreateRound({sport:'fb',name:d.name,custom:true,useDates,tipDeadline,visibility:d.visibility,
       teams,events,rules});
     if(!id) return toast('Da ist etwas schiefgelaufen. Versuch es nochmal.');
     toast('Runde erstellt');openRound(id);return;
   }
   const id=idPrefix;
-  ROUNDS[id]=mkRound({id,sport:'fb',name:d.name,custom:true,useDates,
+  ROUNDS[id]=mkRound({id,sport:'fb',name:d.name,custom:true,useDates,tipDeadline,
     visibility:d.visibility,teams,events,rules,
     members:[{id:'me',name:S.user?.displayName||'Du',pts:0}]});
   toast('Runde erstellt');
@@ -1921,7 +1937,20 @@ function vEditSchedule(){
     </div>
     <p class="hint" style="margin-top:9px">${d.useDates
       ?'Mit Datum kann am Spieltag selbst nicht mehr getippt werden — Annahmeschluss ist der Tag davor.'
-      :'Ohne Datum bleibt das Tippen offen, bis du selbst die Ergebnisse einträgst und auswertest.'}</p>
+      :'Ohne Datum bleibt das Tippen offen, bis du selbst die Ergebnisse einträgst und auswertest — es sei denn, unten steht eine feste Frist.'}</p>
+
+    ${!d.useDates?`
+    <div class="card" style="margin-top:16px;margin-bottom:11px">
+      <label>Tipp-Annahmeschluss (optional)</label>
+      ${d.tipDeadline?`
+        <p class="hint" style="margin:0 0 12px">Danach kann niemand mehr tippen, egal an
+          welchem Spieltag.</p>
+        ${deadlineWheels(d.tipDeadline)}
+        <button class="btn ghost" id="clrdl" style="margin-top:12px;padding:10px;font-size:13px">
+          Frist entfernen</button>`
+      :`<p class="hint" style="margin:0 0 12px">Ohne Frist bleibt das Tippen unbegrenzt offen.</p>
+        <button class="btn ghost" id="setdl" style="padding:12px">+ Frist festlegen</button>`}
+    </div>`:''}
 
     ${d.matchdays.map((md,mi)=>`
       <div class="card" style="margin-top:16px;margin-bottom:11px" data-md="${md.id}">
@@ -1946,6 +1975,7 @@ function vEditSchedule(){
   bindBack();
   app.querySelector('#back').onclick=()=>{S.tab='info';go('round');};
   app.querySelectorAll('[data-ud]').forEach(b=>b.onclick=()=>{d.useDates=b.dataset.ud==='1';render();});
+  bindDeadlineWheels(d);
   const setDate=(id,y,m,day)=>{const md=d.matchdays.find(x=>x.id===id);
     if(md) md.date=`${y}-${String(m).padStart(2,'0')}-${String(day).padStart(2,'0')}`;};
   app.querySelectorAll('[data-day]').forEach(s=>s.onchange=()=>{
@@ -1976,12 +2006,12 @@ function vEditSchedule(){
     if(!total) return toast('Trag mindestens eine Paarung mit zwei verschiedenen Teams ein.');
     if(!confirm('Spielplan speichern? Bereits abgegebene Tipps zu geänderten oder entfernten Spielen gehen dabei verloren.')) return;
     e.target.disabled=true;e.target.textContent='Einen Moment …';
-    const useDates=d.useDates!==false;
-    const events=matchdaysToEvents(d.matchdays,useDates,r.id);
-    const ok=await fsSyncSchedule(r,events,useDates);
+    const useDates=d.useDates!==false, tipDeadline=useDates?null:(d.tipDeadline||null);
+    const events=matchdaysToEvents(d.matchdays,useDates,r.id,tipDeadline);
+    const ok=await fsSyncSchedule(r,events,useDates,tipDeadline);
     if(!ok){ e.target.disabled=false;e.target.textContent='Speichern';
       return toast('Konnte nicht gespeichert werden. Versuch es nochmal.'); }
-    r.events=events; r.useDates=useDates;
+    r.events=events; r.useDates=useDates; r.tipDeadline=tipDeadline;
     toast('Spielplan gespeichert'); S.tab='info'; go('round');
   };
 }
@@ -1999,6 +2029,12 @@ function parseISODate(s,hour=19){
 }
 const isoDate=(dt=new Date())=>dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');
 const isoToday=()=>isoDate();
+const isoDateTime=(dt=new Date())=>isoDate(dt)+'T'+String(dt.getHours()).padStart(2,'0')+':'+String(dt.getMinutes()).padStart(2,'0');
+function parseISODateTime(s){
+  const m=String(s||'').match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/); if(!m) return null;
+  const dt=new Date(+m[1],+m[2]-1,+m[3],+m[4],+m[5]);
+  return isNaN(dt)?null:dt;
+}
 const MONTHE=['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
 /* Drei einzelne <select> statt <input type="date"> — auf dem iPhone öffnet jedes für sich
    ein Scroll-Rad (Tag 1–31, Monat, Jahr), kein Kalenderblatt. */
@@ -2015,6 +2051,48 @@ function dateWheels(md){
     <select data-year="${md.id}" style="flex:.9">${years.map(x=>
       `<option ${x===y?'selected':''}>${x}</option>`).join('')}</select>
   </div>`;
+}
+/* Gesamt-Tippfrist für "Ohne Datum"-Runden — Datum + Uhrzeit, gleiche Rad-Optik.
+   Eigene data-Attribute (data-dl*), damit sie nicht mit den Spieltag-Feldern kollidieren. */
+function deadlineDefault(){ const t=new Date(); t.setDate(t.getDate()+7); t.setHours(20,0,0,0); return t; }
+function deadlineWheels(iso){
+  const dt=parseISODateTime(iso)||deadlineDefault();
+  const y=dt.getFullYear(), m=dt.getMonth()+1, dd=dt.getDate(), hh=dt.getHours(), mi=dt.getMinutes();
+  const nowY=new Date().getFullYear();
+  const days=Array.from({length:31},(_,i)=>i+1);
+  const years=Array.from({length:6},(_,i)=>nowY-1+i);
+  const hours=Array.from({length:24},(_,i)=>i);
+  const mins=[0,15,30,45];
+  return `<div style="display:flex;gap:8px">
+    <select data-dlday style="flex:.8">${days.map(x=>
+      `<option ${x===dd?'selected':''}>${x}</option>`).join('')}</select>
+    <select data-dlmonth style="flex:1.6">${MONTHE.map((mn,i)=>
+      `<option value="${i+1}" ${i+1===m?'selected':''}>${mn}</option>`).join('')}</select>
+    <select data-dlyear style="flex:.9">${years.map(x=>
+      `<option ${x===y?'selected':''}>${x}</option>`).join('')}</select>
+  </div>
+  <div style="display:flex;gap:8px;margin-top:8px">
+    <select data-dlhour style="flex:1">${hours.map(h=>
+      `<option value="${h}" ${h===hh?'selected':''}>${String(h).padStart(2,'0')} Uhr</option>`).join('')}</select>
+    <select data-dlmin style="flex:1">${mins.map(mn=>
+      `<option value="${mn}" ${mn===mi?'selected':''}>${String(mn).padStart(2,'0')} Min</option>`).join('')}</select>
+  </div>`;
+}
+/* Bindet die Frist-Räder an ein Draft-Objekt mit .tipDeadline — für Erstellen und
+   nachträgliches Bearbeiten identisch nutzbar. */
+function bindDeadlineWheels(d){
+  const patch=p=>{
+    const dt=parseISODateTime(d.tipDeadline)||deadlineDefault();
+    const merged={y:dt.getFullYear(),m:dt.getMonth()+1,day:dt.getDate(),h:dt.getHours(),mi:dt.getMinutes(),...p};
+    d.tipDeadline=isoDateTime(new Date(merged.y,merged.m-1,merged.day,merged.h,merged.mi));
+  };
+  const b=app.querySelector('[data-dlday]'); if(b) b.onchange=e=>{patch({day:+e.target.value});};
+  const mo=app.querySelector('[data-dlmonth]'); if(mo) mo.onchange=e=>{patch({m:+e.target.value});};
+  const yr=app.querySelector('[data-dlyear]'); if(yr) yr.onchange=e=>{patch({y:+e.target.value});};
+  const hr=app.querySelector('[data-dlhour]'); if(hr) hr.onchange=e=>{patch({h:+e.target.value});};
+  const mi=app.querySelector('[data-dlmin]'); if(mi) mi.onchange=e=>{patch({mi:+e.target.value});};
+  const set=app.querySelector('#setdl'); if(set) set.onclick=()=>{d.tipDeadline=isoDateTime(deadlineDefault());render();};
+  const clr=app.querySelector('#clrdl'); if(clr) clr.onclick=()=>{d.tipDeadline=null;render();};
 }
 /* Vorschlag für den Spielplan — klassisches Rundenverfahren (jeder gegen jeden).
    Nur ein Startpunkt: jede Paarung, jedes Datum bleibt danach frei editierbar. */
@@ -2086,9 +2164,15 @@ function tabTip(){
   if(!S.ready&&!r.custom) return b.innerHTML='<div class="empty">Spielplan wird geladen …</div>';
   if(!evs.length) return b.innerHTML='<div class="empty">Für diesen Spieltag liegen noch keine Ansetzungen vor.</div>';
   const st=settled(),l=left();
+  const dl=r.custom&&!r.useDates&&r.tipDeadline?parseISODateTime(r.tipDeadline):null;
   b.innerHTML=r.custom
-    ?(r.useDates?`<p class="hint" style="margin:0 0 14px;text-align:center">
-        ⏱ Tipp-Annahmeschluss: der Tag vor dem Spieltag.</p>`:'')
+    ?((r.useDates?`<p class="hint" style="margin:0 0 14px;text-align:center">
+        ⏱ Tipp-Annahmeschluss: der Tag vor dem Spieltag.</p>`
+      :dl?`<div style="background:rgba(248,113,113,.14);border:1px solid rgba(248,113,113,.4);
+          border-radius:12px;padding:12px 14px;margin:0 0 14px;text-align:center;
+          color:var(--bad);font-weight:700;font-size:13.5px">
+          ${dl<=new Date()?'⏱ Tippen ist beendet — Frist war':'⏱ Tipp-Annahmeschluss'}: ${when(dl)} Uhr</div>`
+      :''))
     :`<div class="budget">
     <span class="lb">${st?'Ergebnis':'Budget'}</span>
     <span class="bar"><i style="width:${st?100:l/CFG.budget*100}%"></i></span>
@@ -2271,7 +2355,9 @@ function tabEntry(){
 
 function tabTable(){
   const r=R(),rows=[...r.members].sort((a,b)=>b.pts-a.pts);
-  const evs=orderEvents(pool());
+  const mx=maxDay(r);
+  const days=[]; for(let d=1;d<=mx;d++){ const de=orderEvents(eventsOf(r,d)); if(de.length) days.push({d,evs:de}); }
+  const evs=days.flatMap(x=>x.evs);
 
   /* Tipps eines Mitglieds — bei mir die eigenen (live), sonst die gespeicherten. */
   const picksOf=m=>m.id==='me'?r.picks:((r.memberPicks&&r.memberPicks[m.id])||{});
@@ -2287,10 +2373,18 @@ function tabTable(){
     const tend=p.type==='exact'?scoreTend(p.side):p.side;
     return `<span style="color:${tend===res.side?'var(--win)':'var(--bad)'}">${label}</span>`;
   };
+  /* Alle Spieltage nebeneinander, mit einer Kopfzeile "Spieltag N" über den jeweiligen Spielen. */
   const matchTable=evs.length?`
     <div style="overflow-x:auto;margin-bottom:20px;-webkit-overflow-scrolling:touch">
       <table style="border-collapse:collapse;font-size:12px;white-space:nowrap">
-        <thead><tr>
+        <thead>
+          ${mx>1?`<tr>
+            <th style="position:sticky;left:0;background:var(--surface)"></th>
+            ${days.map(x=>`<th colspan="${x.evs.length}" style="padding:0 10px 4px;
+              font-weight:700;color:var(--muted);font-size:10.5px;text-transform:uppercase;
+              letter-spacing:.06em;text-align:left">Spieltag ${x.d}</th>`).join('')}
+          </tr>`:''}
+          <tr>
           <th style="position:sticky;left:0;background:var(--surface);padding:0 12px 8px 0"></th>
           ${evs.map(ev=>`<th style="padding:0 10px 8px;font-weight:600;color:var(--muted)">
             ${esc(teamAbbr(ev.home,ev))}–${esc(teamAbbr(ev.away,ev))}</th>`).join('')}
@@ -2486,7 +2580,7 @@ function tabInfo(){
   });
   const editSchedBtn=app.querySelector('#editsched');
   if(editSchedBtn) editSchedBtn.onclick=()=>{
-    S.editDraft={matchdays:eventsToMatchdays(r.events||[]),useDates:r.useDates!==false};
+    S.editDraft={matchdays:eventsToMatchdays(r.events||[]),useDates:r.useDates!==false,tipDeadline:r.tipDeadline||null};
     go('editSchedule');
   };
   const regenBtn=app.querySelector('#regencode');
@@ -2546,17 +2640,22 @@ function drawDock(){
     return;
   }
 
-  /* Eigene Liga: der Ersteller muss die Ergebnisse eintragen */
+  /* Eigene Liga: der Ersteller muss die Ergebnisse eintragen — aber erst,
+     nachdem er selbst (falls er mitspielt) seine eigenen Tipps abgegeben hat.
+     Sonst bekommt der Ersteller nie die Chance, "Tipps abgeben" zu drücken. */
   if(r.custom){
     const fehlt=evs.filter(e=>!eventResult(e,r)).length;
-    if(fehlt&&own){
+    const n0=dayPicks().length;
+    const pend0=Object.keys(r.pendingSync||{}).filter(id=>evs.some(e=>e.id===id)).length;
+    const wartetAufAbgabe=n0&&pend0;
+    if(fehlt&&own&&!wartetAufAbgabe){
       f.innerHTML=`<div class="dock">
         <div class="dockmsg">${fehlt} von ${evs.length} Ergebnissen fehlen noch</div>
         <button class="btn" id="ent">Ergebnisse eintragen</button></div>`;
       f.querySelector('#ent').onclick=()=>{S.tab='ergebnis';render();};
       return;
     }
-    if(fehlt){
+    if(fehlt&&!wartetAufAbgabe){
       f.innerHTML=`<div class="dock"><div class="dockmsg">
         Warte auf die Ergebnisse — die trägt ${esc(r.owner==='me'?'du':'der Ersteller der Runde')} ein.
         </div></div>`;

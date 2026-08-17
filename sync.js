@@ -4,6 +4,9 @@
  *
  * Spielplan + Ergebnisse : OpenLigaDB   (kostenlos, ohne Schlüssel)
  * Quoten                 : The Odds API (Schlüssel als Secret ODDS_API_KEY)
+ * UFC-Ergebnisse         : ESPN Scoreboard (kostenlos, ohne Schlüssel —
+ *                           die Odds API liefert bei MMA keine verlässliche
+ *                           "wer hat gewonnen"-Information)
  *
  * Wettbewerbe: Bundesliga, 2. Bundesliga, 3. Liga, Champions League, UFC.
  *
@@ -140,7 +143,7 @@ async function loadSchedule(league){
   });
 }
 
-/* ══════════ Quoten und Ergebnisse von The Odds API ══════════ */
+/* ══════════ Quoten von The Odds API ══════════ */
 async function loadOdds(sportKey){
   if(!KEY){ console.log('  Kein ODDS_API_KEY — nur Modellquoten'); return []; }
   const u = new URLSearchParams({apiKey:KEY, regions:'eu', markets:'h2h', oddsFormat:'decimal'});
@@ -152,14 +155,38 @@ async function loadOdds(sportKey){
     return await r.json();
   }catch(e){ console.log(`  Quoten ${sportKey}: ${e.message}`); return []; }
 }
-async function loadScores(sportKey){
-  if(!KEY) return [];
-  const u = new URLSearchParams({apiKey:KEY, daysFrom:'3'});
-  try{
-    const r = await fetch(`https://api.the-odds-api.com/v4/sports/${sportKey}/scores/?${u}`);
-    if(!r.ok){ console.log(`  Ergebnisse ${sportKey}: HTTP ${r.status}`); return []; }
-    return await r.json();
-  }catch(e){ console.log(`  Ergebnisse ${sportKey}: ${e.message}`); return []; }
+/* Die Odds API liefert für MMA praktisch nie completed:true — bei UFC kommt
+   daher ESPNs kostenlose, schlüssellose Scoreboard-API zum Einsatz. Die kennt
+   den fairen "wer hat gewonnen"-Stand direkt nach jedem Kampf. */
+const espnDate = ts => {
+  const d = new Date(ts);
+  return d.getUTCFullYear()+String(d.getUTCMonth()+1).padStart(2,'0')+String(d.getUTCDate()).padStart(2,'0');
+};
+const normName = s => String(s).toLowerCase().normalize('NFD')
+  .replace(/[\u0300-\u036f]/g,'').replace(/[^a-z]/g,'');
+function sameFighter(a,b){
+  const x=normName(a), y=normName(b);
+  if(!x || !y) return false;
+  return x===y || x.includes(y) || y.includes(x);
+}
+async function loadEspnResults(dateStrs){
+  const out=[];
+  for(const ds of dateStrs){
+    try{
+      const r = await fetch(`https://site.api.espn.com/apis/site/v2/sports/mma/ufc/scoreboard?dates=${ds}`);
+      if(!r.ok) continue;
+      const data = await r.json();
+      for(const ev of data.events||[])
+        for(const comp of ev.competitions||[]){
+          if(!comp.status?.type?.completed) continue;
+          const cs = comp.competitors||[];
+          const winner = cs.find(c=>c.winner===true), loser = cs.find(c=>c.winner===false);
+          if(!winner?.athlete?.fullName || !loser?.athlete?.fullName) continue;
+          out.push({winnerName:winner.athlete.fullName, loserName:loser.athlete.fullName, date:comp.date});
+        }
+    }catch(e){ console.log(`  ESPN ${ds}: ${e.message}`); }
+  }
+  return out;
 }
 function bestPrices(ev){
   const best={};
@@ -227,32 +254,24 @@ function buildFootball(match, oddsEvents, table){
 }
 
 /* ══════════ Kampfsport ══════════
-   The Odds API listet einen Kampf im /odds-Endpunkt nur, solange der Markt
-   offen ist — kurz nach Kampfende verschwindet er dort komplett, auch wenn
-   /scores das Ergebnis noch tagelang bereithält. Ohne Sonderbehandlung fiel
-   ein beendeter Kampf dadurch beim nächsten Sync-Lauf einfach aus der Liste.
-   Deshalb: erst alles aus den Live-Quoten aufbauen wie bisher, danach aus
-   /scores alles nachtragen, was da schon rausgefallen, aber entschieden ist. */
+   Wer gegen wen antritt und zu welchen Quoten kommt weiter von der Odds API.
+   Wer gewonnen hat, kommt jetzt von ESPN — die Odds API liefert das für MMA
+   praktisch nie zuverlässig (siehe loadEspnResults oben). Ein Kampf verschwindet
+   außerdem aus den Live-Quoten, sobald er vorbei ist — deshalb wird zusätzlich
+   alles aus den ESPN-Ergebnissen nachgetragen, was da schon rausgefallen ist. */
 const isWeekend = ts => { const d = new Date(ts).getUTCDay(); return d===0 || d===6; };
-function buildUFC(oddsEvents, scores){
-  const seen = new Set();
-
+function buildUFC(oddsEvents, results){
   const built = oddsEvents.map(ev => {
     const best = bestPrices(ev);
     const qa = best[ev.home_team], qb = best[ev.away_team];
     if(!qa || !qb) return null;
-    seen.add(ev.id);
 
-    let finished = false, winner = null;
-    const sc = (scores||[]).find(s => s.id === ev.id);
-    if(sc && sc.completed && Array.isArray(sc.scores)){
-      const a = sc.scores.find(x => x.name === ev.home_team);
-      const b = sc.scores.find(x => x.name === ev.away_team);
-      const na = Number(a?.score), nb = Number(b?.score);
-      if(Number.isFinite(na) && Number.isFinite(nb) && na !== nb){
-        finished = true; winner = na > nb ? 'A' : 'B';
-      }
-    }
+    let finished=false, winner=null;
+    const hit = results.find(f =>
+      (sameFighter(f.winnerName, ev.home_team) && sameFighter(f.loserName, ev.away_team)) ||
+      (sameFighter(f.winnerName, ev.away_team) && sameFighter(f.loserName, ev.home_team)));
+    if(hit){ finished=true; winner = sameFighter(hit.winnerName, ev.home_team) ? 'A' : 'B'; }
+
     return {
       /* Kennung von der API — bleibt über Wochen gleich, damit
          abgegebene Tipps beim nächsten Abruf nicht ins Leere laufen. */
@@ -266,23 +285,20 @@ function buildUFC(oddsEvents, scores){
     };
   }).filter(Boolean);
 
-  /* Nachtragen: entschiedene Kämpfe, die aus den Live-Quoten schon raus sind.
-     Quote ist hier ohne Bedeutung — bereits abgegebene Tipps werten mit dem
-     Wert, der beim Tippen selbst eingefroren wurde, nicht mit diesem Platzhalter. */
-  for(const sc of scores||[]){
-    if(seen.has(sc.id)) continue;
-    if(!sc.completed || !Array.isArray(sc.scores)) continue;
-    const a = sc.scores.find(x => x.name === sc.home_team);
-    const b = sc.scores.find(x => x.name === sc.away_team);
-    const na = Number(a?.score), nb = Number(b?.score);
-    if(!Number.isFinite(na) || !Number.isFinite(nb) || na === nb) continue;
+  /* Nachtragen: von ESPN entschiedene Kämpfe, die aus den Live-Quoten schon
+     raus sind. Die Quote spielt hier keine Rolle mehr — ein bereits abgegebener
+     Tipp wertet mit dem beim Tippen eingefrorenen Wert, nicht mit diesem Platzhalter. */
+  for(const f of results){
+    const already = built.some(b =>
+      (sameFighter(f.winnerName,b.home) && sameFighter(f.loserName,b.away)) ||
+      (sameFighter(f.winnerName,b.away) && sameFighter(f.loserName,b.home)));
+    if(already) continue;
     built.push({
-      id:'mma-'+sc.id, day:1, sport:'mma', source:'mkt',
-      start:sc.commence_time, home:sc.home_team, away:sc.away_team, finished:true,
-      winner: na>nb ? 'A' : 'B',
+      id:'mma-'+normName(f.winnerName)+'-'+normName(f.loserName), day:1, sport:'mma', source:'mkt',
+      start:f.date||null, home:f.winnerName, away:f.loserName, finished:true, winner:'A',
       sides:[
-        {key:'A', label:sc.home_team.split(' ').pop(), q:1.01},
-        {key:'B', label:sc.away_team.split(' ').pop(), q:1.01}
+        {key:'A', label:f.winnerName.split(' ').pop(), q:1.01},
+        {key:'B', label:f.loserName.split(' ').pop(), q:1.01}
       ]
     });
   }
@@ -331,12 +347,16 @@ function buildUFC(oddsEvents, scores){
   console.log(`\n${UFC.name}:`);
   let fights = [];
   try{
-    const [odds, scores] = await Promise.all([loadOdds(UFC.odds), loadScores(UFC.odds)]);
-    const fertigeScores = scores.filter(s => s.completed);
-    console.log(`  Diagnose: ${scores.length} Einträge von /scores, davon ${fertigeScores.length} mit completed:true.`);
-    if(fertigeScores.length) console.log(`  Diagnose fertig: ${JSON.stringify(fertigeScores[0])}`);
-    else if(scores.length) console.log(`  Diagnose Beispiel: ${JSON.stringify(scores[0])}`);
-    fights = buildUFC(odds, scores);
+    const odds = await loadOdds(UFC.odds);
+    /* Datumsfenster für ESPN: alle Tage, an denen laut Odds API gerade Kämpfe
+       anstehen, plus ein rollierendes 3-Tage-Fenster zurück — damit Ergebnisse
+       auch dann noch gefunden werden, wenn der Kampf schon aus /odds raus ist. */
+    const dateSet = new Set();
+    odds.forEach(ev => dateSet.add(espnDate(ev.commence_time)));
+    for(let i=0;i<3;i++) dateSet.add(espnDate(Date.now()-i*864e5));
+    const results = await loadEspnResults(dateSet);
+    console.log(`  ESPN: ${results.length} Ergebnisse für ${dateSet.size} Tage geladen`);
+    fights = buildUFC(odds, results);
     if(fights.length) competitions.push({id:'ufc', name:'UFC', sport:'mma', matches:fights});
     bericht.push(`UFC: ${fights.length} Kämpfe, ${fights.filter(f=>f.finished).length} entschieden`);
     console.log(`  OK — ${fights.length} Kämpfe, ${fights.filter(f=>f.finished).length} entschieden`);

@@ -683,11 +683,16 @@ const stk=i=>STICKERS.find(s=>s.id===i)||STICKERS[0];
    Mit Firebase läuft alles über die Datenbank: erstellen, beitreten, tippen, auswerten. */
 const myUid=()=>FB?.auth?.currentUser?.uid||null;
 
+/* Firestore liefert Date-Felder als Timestamp-Objekt zurück, nicht als JS-Date —
+   ein einfacher <=-Vergleich (wie in started()) verhält sich damit unberechenbar.
+   Deshalb hier einmal sauber in echte Date-Objekte umwandeln. */
+const toJSDate=v=>v&&typeof v.toDate==='function'?v.toDate():v;
 function fireToLocal(id,d,uid){
   const membersArr=Object.entries(d.members||{}).map(([mid,m])=>
     ({id:mid===uid?'me':mid,name:m.name,pts:m.pts||0}));
+  const events=(d.events||[]).map(e=>({...e,start:toJSDate(e.start),lockAt:toJSDate(e.lockAt)}));
   const r=mkRound({id,compId:d.compId,sport:d.sport,name:d.name,comp:d.comp,rules:d.rules,
-    custom:d.custom,useDates:d.useDates,tipDeadline:d.tipDeadline,teams:d.teams,events:d.events,visibility:d.visibility,code:d.code,
+    custom:d.custom,useDates:d.useDates,tipDeadline:d.tipDeadline,teams:d.teams,events,visibility:d.visibility,code:d.code,
     owner:d.ownerUid===uid?'me':(d.ownerName||d.ownerUid),members:membersArr,requests:[],chat:[]});
   r.results=d.results||{};
   r.picks=(d.picks&&d.picks[uid])||{};
@@ -2626,6 +2631,11 @@ function tabInfo(){
 
 function drawDock(){
   const f=app.querySelector('#foot'),r=R(),k=dayKey(),evs=pool(),own=r.owner==='me';
+  /* Bei eigenen Ligen zählt der Fortschritt über alle Spieltage hinweg — nicht nur
+     für den gerade sichtbaren Tab. Bei offiziellen Wettbewerben bleibt's wie gehabt
+     pro Spieltag (da jeder Spieltag für sich ausgewertet wird). */
+  const scopeEvs=r.custom?(r.events||[]):evs;
+  const scopePicks=()=>Object.entries(r.picks).filter(([id])=>scopeEvs.some(e=>e.id===id));
 
   /* Bereits gewertet */
   if(r.settled[k]){
@@ -2644,13 +2654,13 @@ function drawDock(){
      nachdem er selbst (falls er mitspielt) seine eigenen Tipps abgegeben hat.
      Sonst bekommt der Ersteller nie die Chance, "Tipps abgeben" zu drücken. */
   if(r.custom){
-    const fehlt=evs.filter(e=>!eventResult(e,r)).length;
-    const n0=dayPicks().length;
-    const pend0=Object.keys(r.pendingSync||{}).filter(id=>evs.some(e=>e.id===id)).length;
+    const fehlt=scopeEvs.filter(e=>!eventResult(e,r)).length;
+    const n0=scopePicks().length;
+    const pend0=Object.keys(r.pendingSync||{}).filter(id=>scopeEvs.some(e=>e.id===id)).length;
     const wartetAufAbgabe=n0&&pend0;
     if(fehlt&&own&&!wartetAufAbgabe){
       f.innerHTML=`<div class="dock">
-        <div class="dockmsg">${fehlt} von ${evs.length} Ergebnissen fehlen noch</div>
+        <div class="dockmsg">${fehlt} von ${scopeEvs.length} Ergebnissen fehlen noch</div>
         <button class="btn" id="ent">Ergebnisse eintragen</button></div>`;
       f.querySelector('#ent').onclick=()=>{S.tab='ergebnis';render();};
       return;
@@ -2664,19 +2674,19 @@ function drawDock(){
   }
 
   /* Alle Ergebnisse da, aber noch nicht getippt worden */
-  const n=dayPicks().length;
-  if(allResults(evs,r)&&!n){
+  const n=scopePicks().length;
+  if(allResults(scopeEvs,r)&&!n){
     f.innerHTML=`<div class="dock"><div class="dockmsg">
-      Ergebnisse liegen vor — für diesen Spieltag hast du nicht getippt.</div></div>`;
+      Ergebnisse liegen vor — ${r.custom?'du hast nicht getippt.':'für diesen Spieltag hast du nicht getippt.'}</div></div>`;
     return;
   }
 
   /* Noch offen: Tippen läuft */
-  const frei=r.custom,offen=evs.filter(e=>!started(e)).length;
-  const pend=Object.keys(r.pendingSync||{}).filter(id=>evs.some(e=>e.id===id)).length;
+  const frei=r.custom,offen=scopeEvs.filter(e=>!started(e)).length;
+  const pend=Object.keys(r.pendingSync||{}).filter(id=>scopeEvs.some(e=>e.id===id)).length;
   if(n&&pend){
     f.innerHTML=`<div class="dock">
-      <button class="btn" id="submitPicks">${n} Tipp${n>1?'s':''} abgeben</button>
+      <button class="btn" id="submitPicks">${frei?`${n} von ${scopeEvs.length} Tipps abgeben`:`${n} Tipp${n>1?'s':''} abgeben`}</button>
       ${!frei&&left()>0?`<p class="hint" style="text-align:center;margin-top:9px;font-size:11.5px">
         noch ${left()} P übrig</p>`:''}</div>`;
     f.querySelector('#submitPicks').onclick=submitPicks;
@@ -2684,10 +2694,10 @@ function drawDock(){
   }
   f.innerHTML=`<div class="dock">
     <div class="dockmsg">${n
-      ?(frei?`${n} Tipp${n>1?'s':''} abgegeben`
+      ?(frei?`${n} von ${scopeEvs.length} Tipps abgegeben`
              :`${n} Tipp${n>1?'s':''} abgegeben${left()>0?` · noch ${left()} P übrig`:''}`)
       :offen?'Tipp auf eine Quote, dann Einsatz mit dem Regler wählen'
-             :'Für diesen Spieltag ist die Tippfrist vorbei'}</div></div>`;
+             :(frei?'Die Tippfrist ist vorbei':'Für diesen Spieltag ist die Tippfrist vorbei')}</div></div>`;
 }
 /* Punkte gutschreiben — einmal je Spieltag.
    Bei echten (Firestore-)Runden zählen die wirklich abgegebenen Tipps aller Mitglieder.

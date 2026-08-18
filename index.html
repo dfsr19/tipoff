@@ -2330,8 +2330,12 @@ function tabEntry(){
         </div></div>`;}).join('')}`;
 
   const fehlt=()=>evs.filter(e=>!eventResult(e,r)).length;
+  /* Zähler zeigt den Fortschritt über die ganze Runde, nicht nur den sichtbaren Spieltag —
+     analog zur Tipp-Abgabe. Das Formular selbst bleibt pro Spieltag, nur die Zahl oben zählt alles. */
+  const allEvs=r.custom?(r.events||[]):evs;
+  const fehltAlle=()=>allEvs.filter(e=>!eventResult(e,r)).length;
   app.querySelector('#foot').innerHTML=`<div class="dock">
-    <div class="dockmsg" id="cnt">${evs.length-fehlt()} von ${evs.length} eingetragen</div>
+    <div class="dockmsg" id="cnt">${allEvs.length-fehltAlle()} von ${allEvs.length} eingetragen</div>
     <button class="btn" id="sv">Ergebnisse speichern</button></div>`;
 
   /* Eingaben laufend übernehmen, damit der Zähler stimmt */
@@ -2346,7 +2350,7 @@ function tabEntry(){
   b.querySelectorAll('input').forEach(i=>i.oninput=()=>{
     i.value=i.value.replace(/\D/g,'');
     lesen();
-    app.querySelector('#cnt').textContent=`${evs.length-fehlt()} von ${evs.length} eingetragen`;
+    app.querySelector('#cnt').textContent=`${allEvs.length-fehltAlle()} von ${allEvs.length} eingetragen`;
   });
   app.querySelector('#sv').onclick=async()=>{
     lesen();
@@ -2367,13 +2371,15 @@ function tabTable(){
   /* Tipps eines Mitglieds — bei mir die eigenen (live), sonst die gespeicherten. */
   const picksOf=m=>m.id==='me'?r.picks:((r.memberPicks&&r.memberPicks[m.id])||{});
   /* Vor Anpfiff nur ein Strich (Tipp abgegeben, aber geheim). Danach: worauf getippt wurde,
-     grün bei Treffer, rot bei Niete — sobald das Ergebnis feststeht.               */
+     grün bei Treffer, rot bei Niete — sobald das Ergebnis feststeht. Ein Ergebnis, das
+     schon vorliegt, enthüllt den Tipp auch dann, wenn started() (noch) nicht zutrifft —
+     etwa bei "Ohne Datum"-Runden ganz ohne Frist, wo started() sonst nie eintritt. */
   const cellFor=(m,ev)=>{
     const p=picksOf(m)[ev.id];
     if(!p) return '';
-    if(!started(ev)) return '–';
-    const label=p.type==='exact'&&S.premium?esc(p.side):tendAbbr(p,ev);
     const res=eventResult(ev,r);
+    if(!started(ev)&&!res) return '–';
+    const label=p.type==='exact'&&S.premium?esc(p.side):tendAbbr(p,ev);
     if(!res) return label;                 // läuft noch, Ergebnis noch nicht da
     const tend=p.type==='exact'?scoreTend(p.side):p.side;
     return `<span style="color:${tend===res.side?'var(--win)':'var(--bad)'}">${label}</span>`;
@@ -2730,7 +2736,7 @@ function settleDay(){
 
 /* ══════════ AUTOMATISCHE AUSWERTUNG ══════════
    Läuft nach jedem Datenabruf: Sobald für einen Spieltag alle Ergebnisse
-   vorliegen und du getippt hast, werden die Punkte von selbst gutgeschrieben. */
+   vorliegen und irgendwer getippt hat, werden die Punkte von selbst gutgeschrieben. */
 function autoSettle(){
   let n=0;
   Object.values(ROUNDS).forEach(r=>{
@@ -2744,7 +2750,12 @@ function autoSettle(){
       const res=allResults(evs,r); if(!res) return;
       const picks=Object.fromEntries(
         Object.entries(r.picks).filter(([id])=>evs.some(e=>e.id===id)));
-      if(!Object.keys(picks).length) return;      // nichts getippt, nichts zu werten
+      /* Nicht nur die eigenen Tipps zählen — auch andere Mitglieder könnten
+         schon getippt haben, auch wenn man selbst diesen Spieltag ausgelassen hat. */
+      const irgendwerHatGetippt=Object.keys(picks).length ||
+        (r.memberPicks&&Object.values(r.memberPicks).some(mp=>
+          mp&&evs.some(e=>Object.prototype.hasOwnProperty.call(mp,e.id))));
+      if(!irgendwerHatGetippt) return;      // niemand getippt, nichts zu werten
       applySettle(r,d,evs,res,picks,true); n++;
     });
   });

@@ -909,6 +909,8 @@ function nextDayOf(r){
 }
 
 const fmt=n=>n.toLocaleString('de-DE',{minimumFractionDigits:1,maximumFractionDigits:1});
+/* Bei eigenen Ligen gibt's nur ganze Punkte — keine Nachkommastelle nötig. */
+const fmtPts=(n,custom)=>custom?String(Math.round(n)):fmt(n);
 const fq=n=>n.toLocaleString('de-DE',{minimumFractionDigits:2,maximumFractionDigits:2});
 const when=d=>d.toLocaleString('de-DE',{weekday:'short',day:'2-digit',month:'2-digit',
   hour:'2-digit',minute:'2-digit'}).replace(',','');
@@ -1242,7 +1244,7 @@ function vHome(){
         <div class="nm" style="margin-bottom:12px">${esc(r.name)}</div>
         <div class="row">
           <div>Platz<b>${rank(r)}<span style="font-size:12px;color:var(--muted)">/${r.members.length}</span></b></div>
-          <div>Punkte<b>${fmt(r.members.find(m=>m.id==='me').pts)}</b></div>
+          <div>Punkte<b>${fmtPts(r.members.find(m=>m.id==='me').pts,r.custom)}</b></div>
           <div>${r.sport==='mma'?'Kämpfe':'Als nächstes'}
             <b class="hot">${r.sport==='mma'?eventsOf(r,1).length:'ST '+nextDayOf(r)}</b></div>
         </div>
@@ -2222,14 +2224,18 @@ function tabTip(){
   if(!evs.length) return b.innerHTML='<div class="empty">Für diesen Spieltag liegen noch keine Ansetzungen vor.</div>';
   const st=settled(),l=left();
   const dl=r.custom&&!r.useDates&&r.tipDeadline?parseISODateTime(r.tipDeadline):null;
+  const stage=r.custom&&evs[0]&&evs[0].stage;
   b.innerHTML=r.custom
-    ?((r.useDates?`<p class="hint" style="margin:0 0 14px;text-align:center">
+    ?(`${stage?`<div class="sec" style="margin:0 0 10px">${esc(stage)}<span class="ln"></span></div>`:''}
+      <p class="hint" style="margin:0 0 14px;text-align:center">Jeder richtige Tipp bringt
+        <b style="color:var(--win)">${CFG.amateurPts} Punkte</b></p>
+      ${r.useDates?`<p class="hint" style="margin:0 0 14px;text-align:center">
         ⏱ Tipp-Annahmeschluss: der Tag vor dem Spieltag.</p>`
       :dl?`<div style="background:rgba(248,113,113,.14);border:1px solid rgba(248,113,113,.4);
           border-radius:12px;padding:12px 14px;margin:0 0 14px;text-align:center;
           color:var(--bad);font-weight:700;font-size:13.5px">
           ${dl<=new Date()?'⏱ Tippen ist beendet — Frist war':'⏱ Tipp-Annahmeschluss'}: ${when(dl)} Uhr</div>`
-      :''))
+      :''}`)
     :`<div class="budget">
     <span class="lb">${st?'Ergebnis':'Budget'}</span>
     <span class="bar"><i style="width:${st?100:l/CFG.budget*100}%"></i></span>
@@ -2248,8 +2254,7 @@ function matchCard(ev,isMain){
   const el=document.createElement('article');el.className='match'+(isMain?' headline':'');
   const nm=ev.sport==='mma'?[ev.home,ev.away]:[short(ev.home),short(ev.away)];
   el.innerHTML=`<div class="mtop">${ev.sport==='mma'?(isMain?'<span class="src headtag">Hauptkampf</span>':''):(ev.start?when(ev.start):'')}
-    ${ev.noOdds?'<span class="src">Ohne Quoten</span>'
-      :`<span class="src ${ev.source==='mkt'?'mkt':''}">${ev.source==='mkt'?'Marktquote':'Modell'}</span>`}</div>
+    ${ev.noOdds?'':`<span class="src ${ev.source==='mkt'?'mkt':''}">${ev.source==='mkt'?'Marktquote':'Modell'}</span>`}</div>
     <div class="who">${esc(nm[0])} <em>${ev.sport==='mma'?'vs':'—'}</em> ${esc(nm[1])}</div>
     <div class="odds"></div>`;
   if(zu&&!st) el.querySelector('.mtop').insertAdjacentHTML('beforeend',
@@ -2259,8 +2264,9 @@ function matchCard(ev,isMain){
   ev.sides.forEach(s=>{
     const b=document.createElement('button');
     b.setAttribute('aria-pressed',!!(p&&p.type!=='exact'&&p.side===s.key));
-    b.innerHTML=`<span class="sd">${esc(s.label)}</span>
-      <span class="q">${ev.noOdds?'·':fq(s.q)}</span>`;
+    b.innerHTML=ev.noOdds
+      ?`<span class="q" style="font-size:13.5px;line-height:1.25">${esc(s.label)}</span>`
+      :`<span class="sd">${esc(s.label)}</span><span class="q">${fq(s.q)}</span>`;
     if(!zu) b.onclick=()=>pick(ev,s,'tendency');
     else b.style.opacity=p&&p.side===s.key?'1':'.55';
     if(res&&res.side===s.key) b.classList.add('win');
@@ -2477,7 +2483,7 @@ function tabTable(){
       <span class="ps">${i+1}</span>
       <span class="nm">${esc(m.name)}</span>
       <span class="dl" data-d="${m.id}"></span>
-      <span class="pts" data-p="${m.id}">${fmt(m.pts)}</span></div>`).join('')+
+      <span class="pts" data-p="${m.id}">${fmtPts(m.pts,r.custom)}</span></div>`).join('')+
     `<p class="hint" style="text-align:center;margin-top:16px">
       Jede Runde wird getrennt gewertet.</p>`;
   app.querySelector('#foot').innerHTML='';
@@ -2710,7 +2716,7 @@ function drawDock(){
   if(r.settled[k]){
     const real=r.settled[k].real;
     f.innerHTML=`<div class="dock">
-      <div class="dockmsg">${real?'Ausgewertet':'Probelauf'} · +${fmt(r.settled[k].me)} Punkte für dich</div>
+      <div class="dockmsg">${real?'Ausgewertet':'Probelauf'} · +${fmtPts(r.settled[k].me,r.custom)} Punkte für dich</div>
       ${real?'':'<button class="btn ghost" id="rs">Probelauf zurücksetzen</button>'}</div>`;
     const rs=f.querySelector('#rs');
     if(rs) rs.onclick=()=>{
@@ -2825,14 +2831,15 @@ function autoSettle(){
   return n;
 }
 function rollUp(gain){
+  const custom=R().custom;
   app.querySelectorAll('[data-p]').forEach(el=>{
     const id=el.dataset.p,to=R().members.find(m=>m.id===id).pts,g=gain[id]||0,from=to-g;
     const dl=app.querySelector(`[data-d="${id}"]`),t0=performance.now();
     (function step(t){
       const k=Math.min(1,(t-t0)/950),e=1-(1-k)**3;
-      el.textContent=fmt(from+(to-from)*e);
+      el.textContent=fmtPts(from+(to-from)*e,custom);
       if(k<1) requestAnimationFrame(step);
-      else{el.textContent=fmt(to);if(dl&&g){dl.textContent='+'+fmt(g);dl.classList.add('on');}}
+      else{el.textContent=fmtPts(to,custom);if(dl&&g){dl.textContent='+'+fmtPts(g,custom);dl.classList.add('on');}}
     })(t0);
   });
 }
@@ -2866,7 +2873,7 @@ function vProfile(){
     ${mine.map(r=>`<button class="round" data-r="${r.id}">
       <div class="top"><span class="pill b">${esc(compTag(r,true))}</span>
         <span class="nm">${esc(r.name)}</span><span class="arw">›</span></div>
-      <div class="row"><div>Punkte<b class="hot">${fmt(r.members.find(m=>m.id==='me').pts)}</b></div>
+      <div class="row"><div>Punkte<b class="hot">${fmtPts(r.members.find(m=>m.id==='me').pts,r.custom)}</b></div>
         <div>Mitglieder<b>${r.members.length}</b></div></div>
     </button>`).join('')}
   </main>`;

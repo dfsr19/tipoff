@@ -1891,7 +1891,7 @@ function matchdaysToEvents(matchdays,useDates,idPrefix,tipDeadline){
     md.pairings.filter(p=>p.home&&p.away&&p.home!==p.away).forEach((p,pi)=>{
       events.push({id:`${idPrefix}-${day}-${pi}`,day,home:p.home,away:p.away,
         sport:'fb',noOdds:true,source:'mdl',start,lockAt,
-        sides:[{key:'1',label:'1',q:1},{key:'X',label:'X',q:1},{key:'2',label:'2',q:1}]});
+        sides:[{key:'1',label:p.home,q:1},{key:'X',label:'X',q:1},{key:'2',label:p.away,q:1}]});
     });
   });
   return events;
@@ -2067,7 +2067,7 @@ function deadlineWheels(iso){
   const days=Array.from({length:31},(_,i)=>i+1);
   const years=Array.from({length:6},(_,i)=>nowY-1+i);
   const hours=Array.from({length:24},(_,i)=>i);
-  const mins=[0,15,30,45];
+  const mins=Array.from({length:60},(_,i)=>i);
   return `<div style="display:flex;gap:8px">
     <select data-dlday style="flex:.8">${days.map(x=>
       `<option ${x===dd?'selected':''}>${x}</option>`).join('')}</select>

@@ -1734,6 +1734,21 @@ function vCreate(){
         — jeder gegen jeden. Team, Datum oder Paarung antippen, um etwas zu ändern.</p>
 
       <label>Mit Termin oder ohne?</label>
+      <div style="display:flex;flex-direction:column;gap:8px;margin:0 0 14px">
+        <div style="background:var(--blue-gl);border:1px solid rgba(80,170,240,.35);
+          border-radius:12px;padding:11px 13px">
+          <b style="color:var(--blue);font-size:13px">📅 Mit Datum passt für …</b>
+          <p style="margin:3px 0 0;font-size:12.5px;color:var(--muted)">… eine ganze Saison über
+            mehrere Wochen — z. B. eine Hobby-Liga mit einem Spieltag pro Woche.</p>
+        </div>
+        <div style="background:rgba(251,191,36,.12);border:1px solid rgba(251,191,36,.35);
+          border-radius:12px;padding:11px 13px">
+          <b style="color:var(--warn);font-size:13px">⚡ Ohne Datum passt für …</b>
+          <p style="margin:3px 0 0;font-size:12.5px;color:var(--muted)">… ein Turnier an einem Tag
+            — z. B. ein Kinderturnier, wo Spiele nur wenige Minuten dauern und die nächste
+            Paarung erst kurz vorher feststeht.</p>
+        </div>
+      </div>
       <div class="toggle">
         <button data-ud="1" aria-pressed="${d.useDates}">
           <span class="t">Mit Datum</span><span class="d">Jeder Spieltag hat ein Datum</span></button>
@@ -1760,10 +1775,11 @@ function vCreate(){
       ${d.matchdays.map((md,mi)=>`
         <div class="card" style="margin-top:16px;margin-bottom:11px" data-md="${md.id}">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:11px">
-            <b style="font-family:'Poppins';flex:1">Spieltag ${mi+1}</b>
+            <b style="font-family:'Poppins';flex:1">${esc(md.stage||('Spieltag '+(mi+1)))}</b>
             ${d.matchdays.length>1?`<button class="mini no" data-rmmd="${md.id}">Entfernen</button>`:''}
           </div>
           ${d.useDates?`<label>Datum</label>${dateWheels(md)}`:''}
+          <label>Turnierphase (optional)</label>${stageSelect(md,mi+1)}
           ${md.pairings.map(p=>`
             <div style="display:flex;align-items:center;gap:8px;margin-top:12px">
               <select data-home="${p.id}" style="flex:1">${teamOpts(p.home)}</select>
@@ -1781,6 +1797,8 @@ function vCreate(){
     app.querySelector('#back').onclick=()=>go('create',{flow:'self',draft:d});
     app.querySelectorAll('[data-ud]').forEach(b=>b.onclick=()=>{d.useDates=b.dataset.ud==='1';render();});
     bindDeadlineWheels(d);
+    app.querySelectorAll('[data-stage]').forEach(s=>s.onchange=()=>{
+      const md=d.matchdays.find(m=>m.id===s.dataset.stage); if(md) md.stage=s.value; render();});
     const setDate=(id,y,m,day)=>{const md=d.matchdays.find(x=>x.id===id);
       if(md) md.date=`${y}-${String(m).padStart(2,'0')}-${String(day).padStart(2,'0')}`;};
     app.querySelectorAll('[data-day]').forEach(s=>s.onchange=()=>{
@@ -1804,7 +1822,7 @@ function vCreate(){
     app.querySelectorAll('[data-rmmd]').forEach(b=>b.onclick=()=>{
       d.matchdays=d.matchdays.filter(m=>m.id!==b.dataset.rmmd);render();});
     app.querySelector('#addmd').onclick=()=>{
-      d.matchdays.push({id:'md'+(++SEQ),date:isoToday(),pairings:[{id:'p'+(++SEQ),home:d.teams[0],away:d.teams[1]||d.teams[0]}]});
+      d.matchdays.push({id:'md'+(++SEQ),date:isoToday(),stage:'',pairings:[{id:'p'+(++SEQ),home:d.teams[0],away:d.teams[1]||d.teams[0]}]});
       render();};
     app.querySelector('#mk').onclick=async e=>{
       const total=d.matchdays.reduce((n,m)=>n+m.pairings.filter(p=>p.home!==p.away).length,0);
@@ -1898,7 +1916,7 @@ function matchdaysToEvents(matchdays,useDates,idPrefix,tipDeadline){
     const lockAt=useDates?(parseISODate(md.date,0)||new Date()):globalLock;
     md.pairings.filter(p=>p.home&&p.away&&p.home!==p.away).forEach((p,pi)=>{
       events.push({id:`${idPrefix}-${day}-${pi}`,day,home:p.home,away:p.away,
-        sport:'fb',noOdds:true,source:'mdl',start,lockAt,
+        sport:'fb',noOdds:true,source:'mdl',start,lockAt,stage:md.stage||null,
         sides:[{key:'1',label:p.home,q:1},{key:'X',label:'X',q:1},{key:'2',label:p.away,q:1}]});
     });
   });
@@ -1910,7 +1928,7 @@ function eventsToMatchdays(events){
   (events||[]).forEach(e=>{(byDay[e.day||1]=byDay[e.day||1]||[]).push(e);});
   return Object.keys(byDay).map(Number).sort((a,b)=>a-b).map(day=>{
     const evs=byDay[day], t=evs[0]&&(evs[0].lockAt||evs[0].start);
-    return {id:'md'+(++SEQ), date:t?isoDate(t):isoToday(),
+    return {id:'md'+(++SEQ), date:t?isoDate(t):isoToday(), stage:evs[0]&&evs[0].stage||'',
       pairings:evs.map(e=>({id:'p'+(++SEQ),home:e.home,away:e.away}))};
   });
 }
@@ -1942,6 +1960,21 @@ function vEditSchedule(){
   app.innerHTML=head('Spielplan bearbeiten',r.name)+`
   <main>
     <label>Mit Termin oder ohne?</label>
+    <div style="display:flex;flex-direction:column;gap:8px;margin:0 0 14px">
+      <div style="background:var(--blue-gl);border:1px solid rgba(80,170,240,.35);
+        border-radius:12px;padding:11px 13px">
+        <b style="color:var(--blue);font-size:13px">📅 Mit Datum passt für …</b>
+        <p style="margin:3px 0 0;font-size:12.5px;color:var(--muted)">… eine ganze Saison über
+          mehrere Wochen — z. B. eine Hobby-Liga mit einem Spieltag pro Woche.</p>
+      </div>
+      <div style="background:rgba(251,191,36,.12);border:1px solid rgba(251,191,36,.35);
+        border-radius:12px;padding:11px 13px">
+        <b style="color:var(--warn);font-size:13px">⚡ Ohne Datum passt für …</b>
+        <p style="margin:3px 0 0;font-size:12.5px;color:var(--muted)">… ein Turnier an einem Tag
+          — z. B. ein Kinderturnier, wo Spiele nur wenige Minuten dauern und die nächste
+          Paarung erst kurz vorher feststeht.</p>
+      </div>
+    </div>
     <div class="toggle">
       <button data-ud="1" aria-pressed="${d.useDates}">
         <span class="t">Mit Datum</span><span class="d">Jeder Spieltag hat ein Datum</span></button>
@@ -1968,10 +2001,11 @@ function vEditSchedule(){
     ${d.matchdays.map((md,mi)=>`
       <div class="card" style="margin-top:16px;margin-bottom:11px" data-md="${md.id}">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:11px">
-          <b style="font-family:'Poppins';flex:1">Spieltag ${mi+1}</b>
+          <b style="font-family:'Poppins';flex:1">${esc(md.stage||('Spieltag '+(mi+1)))}</b>
           ${d.matchdays.length>1?`<button class="mini no" data-rmmd="${md.id}">Entfernen</button>`:''}
         </div>
         ${d.useDates?`<label>Datum</label>${dateWheels(md)}`:''}
+        <label>Turnierphase (optional)</label>${stageSelect(md,mi+1)}
         ${md.pairings.map(p=>`
           <div style="display:flex;align-items:center;gap:8px;margin-top:12px">
             <select data-home="${p.id}" style="flex:1">${teamOpts(p.home)}</select>
@@ -1989,6 +2023,8 @@ function vEditSchedule(){
   app.querySelector('#back').onclick=()=>{S.tab='info';go('round');};
   app.querySelectorAll('[data-ud]').forEach(b=>b.onclick=()=>{d.useDates=b.dataset.ud==='1';render();});
   bindDeadlineWheels(d);
+  app.querySelectorAll('[data-stage]').forEach(s=>s.onchange=()=>{
+    const md=d.matchdays.find(m=>m.id===s.dataset.stage); if(md) md.stage=s.value; render();});
   const setDate=(id,y,m,day)=>{const md=d.matchdays.find(x=>x.id===id);
     if(md) md.date=`${y}-${String(m).padStart(2,'0')}-${String(day).padStart(2,'0')}`;};
   app.querySelectorAll('[data-day]').forEach(s=>s.onchange=()=>{
@@ -2012,7 +2048,7 @@ function vEditSchedule(){
   app.querySelectorAll('[data-rmmd]').forEach(b=>b.onclick=()=>{
     d.matchdays=d.matchdays.filter(m=>m.id!==b.dataset.rmmd);render();});
   app.querySelector('#addmd').onclick=()=>{
-    d.matchdays.push({id:'md'+(++SEQ),date:isoToday(),pairings:[{id:'p'+(++SEQ),home:r.teams[0],away:r.teams[1]||r.teams[0]}]});
+    d.matchdays.push({id:'md'+(++SEQ),date:isoToday(),stage:'',pairings:[{id:'p'+(++SEQ),home:r.teams[0],away:r.teams[1]||r.teams[0]}]});
     render();};
   app.querySelector('#save').onclick=async e=>{
     const total=d.matchdays.reduce((n,m)=>n+m.pairings.filter(p=>p.home!==p.away).length,0);
@@ -2049,6 +2085,14 @@ function parseISODateTime(s){
   return isNaN(dt)?null:dt;
 }
 const MONTHE=['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+/* Optionale Turnierphase statt "Spieltag N" — für K.-o.-Runden. Leer lassen = normaler Spieltag. */
+const STAGES=['Achtelfinale','Viertelfinale','Halbfinale','Finale'];
+function stageSelect(md,dayNum){
+  return `<select data-stage="${md.id}" style="margin-top:8px">
+    <option value="">Kein Turniername (Spieltag ${dayNum})</option>
+    ${STAGES.map(s=>`<option ${md.stage===s?'selected':''}>${s}</option>`).join('')}
+  </select>`;
+}
 /* Drei einzelne <select> statt <input type="date"> — auf dem iPhone öffnet jedes für sich
    ein Scroll-Rad (Tag 1–31, Monat, Jahr), kein Kalenderblatt. */
 function dateWheels(md){
@@ -2122,7 +2166,7 @@ function autoSchedule(teamsIn){
       pairings.push({id:'p'+(++SEQ),home:h,away:a});
     }
     const dt=new Date(); dt.setDate(dt.getDate()+r*7);
-    out.push({id:'md'+(++SEQ),date:isoDate(dt),pairings});
+    out.push({id:'md'+(++SEQ),date:isoDate(dt),stage:'',pairings});
   }
   return out;
 }
@@ -2312,15 +2356,31 @@ async function submitPicks(){
 }
 
 /* ══════════ ERGEBNISSE EINTRAGEN (nur eigene Ligen, nur Ersteller) ══════════ */
+/* Tippen für einen Spieltag sofort schließen — unabhängig von jedem Datum.
+   Nützlich bei "Ohne Datum"-Turnieren, wo ein Spiel nur wenige Minuten dauert
+   und man nicht auf eine Uhrzeit warten will. */
+async function closeTippingNow(){
+  if(!confirm('Tippen für diesen Spieltag sofort schließen? Das lässt sich nicht rückgängig machen.')) return;
+  const r=R(),k=dayKey(),now=new Date();
+  (r.events||[]).forEach(e=>{ if(e.day===k) e.lockAt=now; });
+  const ok=await fsSyncSchedule(r,r.events,r.useDates,r.tipDeadline);
+  if(!ok) return toast('Konnte nicht gespeichert werden. Versuch es nochmal.');
+  toast('Tippen für diesen Spieltag ist jetzt geschlossen');
+  render();
+}
 function tabEntry(){
   const r=R(),evs=orderEvents(pool()),k=dayKey();
   const b=app.querySelector('#body');
   if(!evs.length) return b.innerHTML='<div class="empty">Für diesen Spieltag gibt es keine Spiele.</div>';
 
+  const nochOffen=evs.some(e=>!started(e));
   b.innerHTML=`<p class="hint" style="margin:0 3px 16px">
       Für eigene Ligen gibt es keine Datenquelle — du legst den Sieger selbst fest.
       Sobald alle Spiele eines Spieltags feststehen, werden die Punkte
       automatisch verteilt.${r.settled[k]?'<br><br><b>Dieser Spieltag ist bereits gewertet.</b> Änderungen wirken sich nicht mehr aus.':''}</p>
+    ${r.owner==='me'&&nochOffen&&!r.settled[k]?`<button class="btn ghost" id="closeNow"
+        style="margin:0 0 16px;padding:11px;font-size:13px">
+        Tippen für diesen Spieltag jetzt schließen</button>`:''}
     ${evs.map(ev=>{
       const x=r.results[ev.id]||{};
       return `<div class="card" style="margin-bottom:10px">
@@ -2349,6 +2409,8 @@ function tabEntry(){
     else r.results[id]={side};
     render();
   });
+  const closeBtn=app.querySelector('#closeNow');
+  if(closeBtn) closeBtn.onclick=closeTippingNow;
   app.querySelector('#sv').onclick=async()=>{
     if(fehlt()) return toast(`Noch ${fehlt()} Ergebnis${fehlt()>1?'se':''} offen`);
     await fsSyncResults(r);
@@ -2361,7 +2423,7 @@ function tabEntry(){
 function tabTable(){
   const r=R(),rows=[...r.members].sort((a,b)=>b.pts-a.pts);
   const mx=maxDay(r);
-  const days=[]; for(let d=1;d<=mx;d++){ const de=orderEvents(eventsOf(r,d)); if(de.length) days.push({d,evs:de}); }
+  const days=[]; for(let d=1;d<=mx;d++){ const de=orderEvents(eventsOf(r,d)); if(de.length) days.push({d,evs:de,stage:de[0]&&de[0].stage}); }
   const evs=days.flatMap(x=>x.evs);
 
   /* Tipps eines Mitglieds — bei mir die eigenen (live), sonst die gespeicherten. */
@@ -2380,26 +2442,31 @@ function tabTable(){
     const tend=p.type==='exact'?scoreTend(p.side):p.side;
     return `<span style="color:${tend===res.side?'var(--win)':'var(--bad)'}">${label}</span>`;
   };
-  /* Alle Spieltage nebeneinander, mit einer Kopfzeile "Spieltag N" über den jeweiligen Spielen. */
+  /* Alle Spieltage nebeneinander, mit einer Kopfzeile "Spieltag N" (oder Turnierphase) über
+     den jeweiligen Spielen, getrennt durch eine dünne hellblaue Linie. */
+  const dayStart=new Set(days.slice(1).map(x=>x.evs[0]&&x.evs[0].id).filter(Boolean));
+  const div='border-left:1px solid rgba(80,170,240,.35);';
   const matchTable=evs.length?`
     <div style="overflow-x:auto;margin-bottom:20px;-webkit-overflow-scrolling:touch">
       <table style="border-collapse:collapse;font-size:12px;white-space:nowrap">
         <thead>
           ${mx>1?`<tr>
             <th style="position:sticky;left:0;background:var(--surface)"></th>
-            ${days.map(x=>`<th colspan="${x.evs.length}" style="padding:0 10px 4px;
+            ${days.map((x,i)=>`<th colspan="${x.evs.length}" style="padding:0 10px 4px;
               font-weight:700;color:var(--muted);font-size:10.5px;text-transform:uppercase;
-              letter-spacing:.06em;text-align:left">Spieltag ${x.d}</th>`).join('')}
+              letter-spacing:.06em;text-align:left;${i>0?div:''}">${esc(x.stage||('Spieltag '+x.d))}</th>`).join('')}
           </tr>`:''}
           <tr>
           <th style="position:sticky;left:0;background:var(--surface);padding:0 12px 8px 0"></th>
-          ${evs.map(ev=>`<th style="padding:0 10px 8px;font-weight:600;color:var(--muted)">
+          ${evs.map(ev=>`<th style="padding:0 10px 8px;font-weight:600;color:var(--muted);
+            ${dayStart.has(ev.id)?div:''}">
             ${esc(teamAbbr(ev.home,ev))}–${esc(teamAbbr(ev.away,ev))}</th>`).join('')}
         </tr></thead>
         <tbody>${rows.map(m=>`<tr>
           <td style="position:sticky;left:0;background:var(--surface);padding:7px 12px 7px 0;
             font-weight:600">${esc(m.name)}</td>
-          ${evs.map(ev=>`<td style="text-align:center;padding:7px 10px;color:var(--muted)">
+          ${evs.map(ev=>`<td style="text-align:center;padding:7px 10px;color:var(--muted);
+            ${dayStart.has(ev.id)?div:''}">
             ${cellFor(m,ev)}</td>`).join('')}
         </tr>`).join('')}</tbody>
       </table>

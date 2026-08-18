@@ -378,6 +378,8 @@ textarea{min-height:88px;resize:vertical;line-height:1.55}
 .toggle .t{display:block;font-size:13.5px;font-weight:600}
 .toggle .d{display:block;font-size:10.5px;color:var(--muted);margin-top:3px}
 .toggle button[aria-pressed="true"] .d{color:rgba(80,170,240,.75)}
+.res3 button{background:var(--raise);border:1px solid var(--line-2);border-radius:11px;color:inherit}
+.res3 button[aria-pressed="true"]{background:var(--blue);border-color:var(--blue);color:#04121F}
 .reqrow{display:flex;align-items:center;gap:11px;background:var(--card);border:1px solid var(--line);
   border-radius:13px;padding:12px;margin-bottom:9px}
 .reqrow .nm{flex:1;font-size:14px;font-weight:500}
@@ -841,6 +843,12 @@ function eventResult(ev,r){
   if(r&&r.custom){
     const x=r.results[ev.id];
     if(!x) return null;
+    /* Sieger/Unentschieden statt Zahlen — bei eigenen Ligen zählt eh nur die Tendenz.
+       Ältere Runden, die noch mit Zahlen (h/a) gespeichert wurden, bleiben lesbar. */
+    if(x.side){
+      const label=x.side==='1'?ev.home:x.side==='2'?ev.away:null;
+      return{side:x.side,text:label?`Sieg ${label}`:'Unentschieden',real:true};
+    }
     const h=+x.h,a=+x.a;
     if(!isFinite(h)||!isFinite(a)) return null;
     return{side:h>a?'1':h<a?'2':'X',exact:`${h}:${a}`,text:`Endstand ${h}:${a}`,real:true};
@@ -2201,7 +2209,7 @@ function matchCard(ev,isMain){
     <div class="who">${esc(nm[0])} <em>${ev.sport==='mma'?'vs':'—'}</em> ${esc(nm[1])}</div>
     <div class="odds"></div>`;
   if(zu&&!st) el.querySelector('.mtop').insertAdjacentHTML('beforeend',
-    `<span class="src" style="margin-left:0">${res?'Beendet':'Angepfiffen'}</span>`);
+    `<span class="src" style="margin-left:0">${res?'Beendet':(ev.sport==='mma'||ev.noOdds?'Läuft':'Gestartet')}</span>`);
 
   const od=el.querySelector('.odds');
   ev.sides.forEach(s=>{
@@ -2310,23 +2318,20 @@ function tabEntry(){
   if(!evs.length) return b.innerHTML='<div class="empty">Für diesen Spieltag gibt es keine Spiele.</div>';
 
   b.innerHTML=`<p class="hint" style="margin:0 3px 16px">
-      Für eigene Ligen gibt es keine Datenquelle — du trägst die Endstände selbst ein.
-      Sobald alle Spiele eines Spieltags eingetragen sind, werden die Punkte
+      Für eigene Ligen gibt es keine Datenquelle — du legst den Sieger selbst fest.
+      Sobald alle Spiele eines Spieltags feststehen, werden die Punkte
       automatisch verteilt.${r.settled[k]?'<br><br><b>Dieser Spieltag ist bereits gewertet.</b> Änderungen wirken sich nicht mehr aus.':''}</p>
     ${evs.map(ev=>{
       const x=r.results[ev.id]||{};
       return `<div class="card" style="margin-bottom:10px">
         <div class="mtop">${ev.start?when(ev.start):''}</div>
-        <div style="display:flex;align-items:center;gap:10px;margin-top:11px">
-          <span style="flex:1;font-size:14px;font-weight:500;text-align:right">${esc(ev.home)}</span>
-          <input type="text" inputmode="numeric" maxlength="2" data-h="${ev.id}"
-            value="${x.h??''}" style="width:46px;text-align:center;padding:9px;
-            font-family:'Poppins';font-weight:700;font-size:16px">
-          <span style="color:var(--muted);font-weight:700">:</span>
-          <input type="text" inputmode="numeric" maxlength="2" data-a="${ev.id}"
-            value="${x.a??''}" style="width:46px;text-align:center;padding:9px;
-            font-family:'Poppins';font-weight:700;font-size:16px">
-          <span style="flex:1;font-size:14px;font-weight:500">${esc(ev.away)}</span>
+        <div class="res3" style="display:flex;gap:8px;margin-top:8px">
+          <button data-res="${ev.id}" data-side="1" aria-pressed="${x.side==='1'}"
+            style="flex:1;padding:11px 6px;font-size:12.5px;font-weight:600">${esc(ev.home)}</button>
+          <button data-res="${ev.id}" data-side="X" aria-pressed="${x.side==='X'}"
+            style="flex:.6;padding:11px 6px;font-size:12.5px;font-weight:600">X</button>
+          <button data-res="${ev.id}" data-side="2" aria-pressed="${x.side==='2'}"
+            style="flex:1;padding:11px 6px;font-size:12.5px;font-weight:600">${esc(ev.away)}</button>
         </div></div>`;}).join('')}`;
 
   const fehlt=()=>evs.filter(e=>!eventResult(e,r)).length;
@@ -2338,22 +2343,13 @@ function tabEntry(){
     <div class="dockmsg" id="cnt">${allEvs.length-fehltAlle()} von ${allEvs.length} eingetragen</div>
     <button class="btn" id="sv">Ergebnisse speichern</button></div>`;
 
-  /* Eingaben laufend übernehmen, damit der Zähler stimmt */
-  const lesen=()=>{
-    evs.forEach(ev=>{
-      const h=b.querySelector(`[data-h="${ev.id}"]`).value.replace(/\D/g,'');
-      const a=b.querySelector(`[data-a="${ev.id}"]`).value.replace(/\D/g,'');
-      if(h!==''&&a!=='') r.results[ev.id]={h:+h,a:+a};
-      else delete r.results[ev.id];
-    });
-  };
-  b.querySelectorAll('input').forEach(i=>i.oninput=()=>{
-    i.value=i.value.replace(/\D/g,'');
-    lesen();
-    app.querySelector('#cnt').textContent=`${allEvs.length-fehltAlle()} von ${allEvs.length} eingetragen`;
+  b.querySelectorAll('[data-res]').forEach(btn=>btn.onclick=()=>{
+    const id=btn.dataset.res,side=btn.dataset.side,cur=r.results[id];
+    if(cur&&cur.side===side) delete r.results[id];
+    else r.results[id]={side};
+    render();
   });
   app.querySelector('#sv').onclick=async()=>{
-    lesen();
     if(fehlt()) return toast(`Noch ${fehlt()} Ergebnis${fehlt()>1?'se':''} offen`);
     await fsSyncResults(r);
     const n=autoSettle();

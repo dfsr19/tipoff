@@ -1745,7 +1745,7 @@ function vCreate(){
       <div class="sec" style="color:#A78BFA">K.-o.-Phase (optional)<span class="ln"></span></div>
       <p class="hint" style="margin:0 0 4px">Achtelfinale, Viertelfinale usw. — kannst du jetzt
         schon anlegen oder auch erst später ergänzen, wenn die Paarungen feststehen.</p>
-      ${koMd.map(md=>matchdayCardHtml(md,md.stage,true,d.useDates,teamOpts,true)).join('')}
+      ${koMd.map(md=>{const usedByOthers=new Set(koMd.filter(m=>m.id!==md.id).map(m=>m.stage).filter(Boolean));const avail=STAGES.filter(s=>!usedByOthers.has(s));return matchdayCardHtml(md,md.stage,true,d.useDates,teamOpts,true,avail);}).join('')}
       <button class="btn ghost" id="addko" style="padding:12px;margin-top:16px;
         border-color:rgba(167,139,250,.4);color:#A78BFA">+ K.-o.-Runde hinzufügen</button>
     </main>
@@ -1784,7 +1784,9 @@ function vCreate(){
       if(koStart===-1) d.matchdays.push(md); else d.matchdays.splice(koStart,0,md);
       render();};
     app.querySelector('#addko').onclick=()=>{
-      d.matchdays.push({id:'md'+(++SEQ),date:isoToday(),stage:STAGES[0],
+      const used=new Set(d.matchdays.map(m=>m.stage).filter(Boolean));
+      const next=STAGES.find(s=>!used.has(s))||STAGES[0];
+      d.matchdays.push({id:'md'+(++SEQ),date:isoToday(),stage:next,
         pairings:[{id:'p'+(++SEQ),home:d.teams[0],away:d.teams[1]||d.teams[0]}]});
       render();};
     app.querySelector('#mk').onclick=async e=>{
@@ -1939,7 +1941,7 @@ function vEditSchedule(){
     <div class="sec" style="color:#A78BFA">K.-o.-Phase (optional)<span class="ln"></span></div>
     <p class="hint" style="margin:0 0 4px">Achtelfinale, Viertelfinale usw. — kannst du jetzt
       schon anlegen oder auch erst später ergänzen, wenn die Paarungen feststehen.</p>
-    ${koMd.map(md=>matchdayCardHtml(md,md.stage,true,d.useDates,teamOpts,true)).join('')}
+    ${koMd.map(md=>{const usedByOthers=new Set(koMd.filter(m=>m.id!==md.id).map(m=>m.stage).filter(Boolean));const avail=STAGES.filter(s=>!usedByOthers.has(s));return matchdayCardHtml(md,md.stage,true,d.useDates,teamOpts,true,avail);}).join('')}
     <button class="btn ghost" id="addko" style="padding:12px;margin-top:16px;
       border-color:rgba(167,139,250,.4);color:#A78BFA">+ K.-o.-Runde hinzufügen</button>
   </main>
@@ -1978,7 +1980,9 @@ function vEditSchedule(){
     if(koStart===-1) d.matchdays.push(md); else d.matchdays.splice(koStart,0,md);
     render();};
   app.querySelector('#addko').onclick=()=>{
-    d.matchdays.push({id:'md'+(++SEQ),date:isoToday(),stage:STAGES[0],
+    const used=new Set(d.matchdays.map(m=>m.stage).filter(Boolean));
+    const next=STAGES.find(s=>!used.has(s))||STAGES[0];
+    d.matchdays.push({id:'md'+(++SEQ),date:isoToday(),stage:next,
       pairings:[{id:'p'+(++SEQ),home:r.teams[0],away:r.teams[1]||r.teams[0]}]});
     render();};
   app.querySelector('#save').onclick=async e=>{
@@ -2054,14 +2058,18 @@ function dateModeSelector(d){
 }
 /* Eine Spieltag- bzw. K.-o.-Runden-Karte. isKO=true → eigene Turnierphasen-Auswahl statt
    Spieltag-Nummer, plus optionale eigene Frist. */
-function matchdayCardHtml(md,title,isKO,useDates,teamOpts,canRemove){
+/* Eine Spieltag- bzw. K.-o.-Runden-Karte. isKO=true → eigene Turnierphasen-Auswahl statt
+   Spieltag-Nummer, plus optionale eigene Frist. stageOptions grenzt die Auswahl auf die
+   noch nicht verwendeten Phasen ein (plus die eigene, damit die aktuelle Wahl sichtbar bleibt). */
+function matchdayCardHtml(md,title,isKO,useDates,teamOpts,canRemove,stageOptions){
+  const opts=stageOptions||STAGES;
   return `<div class="card" style="margin-top:16px;margin-bottom:11px" data-md="${md.id}">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:11px">
       <b style="font-family:'Poppins';flex:1;${isKO?'color:#A78BFA':''}">${esc(title)}</b>
       ${canRemove?`<button class="mini no" data-rmmd="${md.id}">Entfernen</button>`:''}
     </div>
     ${isKO?`<select data-stage="${md.id}" style="margin-bottom:12px">
-      ${STAGES.map(s=>`<option ${md.stage===s?'selected':''}>${s}</option>`).join('')}
+      ${opts.map(s=>`<option ${md.stage===s?'selected':''}>${s}</option>`).join('')}
     </select>`:''}
     ${useDates?`<label>Datum</label>${dateWheels(md)}`:''}
     ${isKO&&!useDates?`
@@ -2252,21 +2260,6 @@ function tabTip(){
     <span class="nm" style="${st?'color:var(--win)':''}">${
       st?'+'+fmt(r.settled[dayKey()].me)+' P':l+' / '+CFG.budget}</span></div>`;
   orderEvents(evs).forEach((ev,i)=>b.appendChild(matchCard(ev,ev.sport==='mma'&&i===0)));
-  /* Admin auf dem letzten (noch nicht als K.-o. markierten) Spieltag dezent daran erinnern,
-     dass er hier noch eine K.-o.-Phase ergänzen kann — direkt antippbar, springt in den
-     Bearbeiten-Screen und legt gleich eine neue K.-o.-Runde an. */
-  if(r.custom&&r.owner==='me'&&S.day===maxDay(r)&&!stage&&!(r.events||[]).some(e=>e.stage))
-    b.insertAdjacentHTML('beforeend',`<button id="koHint" class="btn ghost" style="margin-top:14px;
-      padding:12px;border-color:rgba(167,139,250,.4);color:#A78BFA">
-      + K.-o.-Phase ergänzen</button>`);
-  const koHintBtn=app.querySelector('#koHint');
-  if(koHintBtn) koHintBtn.onclick=()=>{
-    const matchdays=eventsToMatchdays(r.events||[]);
-    matchdays.push({id:'md'+(++SEQ),date:isoToday(),stage:STAGES[0],
-      pairings:[{id:'p'+(++SEQ),home:r.teams[0],away:r.teams[1]||r.teams[0]}]});
-    S.editDraft={matchdays,useDates:r.useDates!==false};
-    go('editSchedule');
-  };
   drawDock();
 }
 
@@ -2425,6 +2418,24 @@ function tabEntry(){
       Für eigene Ligen gibt es keine Datenquelle — du legst den Sieger selbst fest.
       Sobald alle Spiele eines Spieltags feststehen, werden die Punkte
       automatisch verteilt.${r.settled[k]?'<br><br><b>Dieser Spieltag ist bereits gewertet.</b> Änderungen wirken sich nicht mehr aus.':''}</p>`;
+
+  /* Admin auf dem letzten Spieltag direkt anbieten, die nächste K.-o.-Phase anzulegen —
+     antippbar, springt in den Bearbeiten-Screen und legt die Runde gleich mit der
+     nächsten noch freien Turnierphase an (Achtelfinale → Viertelfinale → … → Finale). */
+  const belegteStages=new Set((r.events||[]).map(e=>e.stage).filter(Boolean));
+  const naechsteStage=STAGES.find(s=>!belegteStages.has(s));
+  if(r.custom&&r.owner==='me'&&S.day===maxDay(r)&&naechsteStage)
+    app.querySelector('#body').insertAdjacentHTML('beforeend',`<button id="koHint" class="btn ghost"
+      style="margin-top:14px;padding:12px;border-color:rgba(167,139,250,.4);color:#A78BFA">
+      + ${esc(naechsteStage)} ergänzen</button>`);
+  const koHintBtn=app.querySelector('#koHint');
+  if(koHintBtn) koHintBtn.onclick=()=>{
+    const matchdays=eventsToMatchdays(r.events||[]);
+    matchdays.push({id:'md'+(++SEQ),date:isoToday(),stage:naechsteStage,
+      pairings:[{id:'p'+(++SEQ),home:r.teams[0],away:r.teams[1]||r.teams[0]}]});
+    S.editDraft={matchdays,useDates:r.useDates!==false};
+    go('editSchedule');
+  };
 
   const fehlt=()=>evs.filter(e=>!eventResult(e,r)).length;
   /* Zähler zeigt den Fortschritt über die ganze Runde, nicht nur den sichtbaren Spieltag —

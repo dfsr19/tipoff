@@ -712,9 +712,9 @@ async function fsLoadMyRounds(){
     qs.forEach(docu=>{ ROUNDS[docu.id]=fireToLocal(docu.id,docu.data(),uid); });
   }catch(e){ console.warn('Runden laden:',e); }
 }
-async function fsCreateRound(data){
+async function fsCreateRound(data,id){
   const uid=myUid(); if(!uid) return null;
-  const ref=FB.doc(FB.collection(FB.db,'rounds'));
+  const ref=id?FB.doc(FB.db,'rounds',id):FB.doc(FB.collection(FB.db,'rounds'));
   const payload={compId:data.compId||null,sport:data.sport||'fb',name:data.name,comp:data.comp||'',
     rules:data.rules||'',custom:!!data.custom,useDates:data.useDates!==false,
     teams:data.teams||[],events:data.events||[],
@@ -1738,7 +1738,7 @@ function vCreate(){
 
       ${dateModeSelector(d)}
 
-      ${groupMd.map((md,i)=>matchdayCardHtml(md,'Spieltag '+(i+1),false,d.useDates,teamOpts,groupMd.length>1,i===groupMd.length-1)).join('')}
+      ${groupMd.map((md,i)=>matchdayCardHtml(md,'Spieltag '+(i+1),false,d.useDates,teamOpts,groupMd.length>1)).join('')}
       <button class="btn ghost" id="addmd" style="padding:12px">+ Spieltag hinzufügen</button>
 
       <div style="border-top:1px dashed var(--line-2);margin:24px 0 14px"></div>
@@ -1898,25 +1898,30 @@ function eventsToMatchdays(events){
       pairings:evs.map(e=>({id:'p'+(++SEQ),home:e.home,away:e.away}))};
   });
 }
+/* Die Runden-ID wird VOR dem Anlegen festgelegt und sowohl für die Event-IDs als auch
+   fürs Firestore-Dokument selbst verwendet. Vorher entstanden zwei verschiedene IDs
+   (eine lokale beim Bauen der Events, eine andere beim Speichern in Firestore) —
+   das ließ jeden späteren "Spielplan bearbeiten"-Speichervorgang alle Event-IDs
+   ändern und damit sämtliche bereits abgegebenen Tipps und Ergebnisse verwaisen. */
 async function buildLeague(d){
-  const idPrefix='c'+(++SEQ), useDates=d.useDates!==false;
-  const events=matchdaysToEvents(d.matchdays,useDates,idPrefix);
+  const useDates=d.useDates!==false;
+  const roundId=(FB_ON&&FB)?FB.doc(FB.collection(FB.db,'rounds')).id:'c'+(++SEQ);
+  const events=matchdaysToEvents(d.matchdays,useDates,roundId);
   const teams=d.teams.slice();
   const rules=`${teams.length} Teams, ${d.matchdays.length} Spieltag${d.matchdays.length>1?'e':''}. `+
     `Ohne Quoten — jeder Treffer ${CFG.amateurPts} Punkte.`+
     (useDates?` Tipp-Annahmeschluss ist jeweils der Tag vor dem Spieltag.`:'');
   if(FB_ON&&FB){
     const id=await fsCreateRound({sport:'fb',name:d.name,custom:true,useDates,visibility:d.visibility,
-      teams,events,rules});
+      teams,events,rules},roundId);
     if(!id) return toast('Da ist etwas schiefgelaufen. Versuch es nochmal.');
     toast('Runde erstellt');openRound(id);return;
   }
-  const id=idPrefix;
-  ROUNDS[id]=mkRound({id,sport:'fb',name:d.name,custom:true,useDates,
+  ROUNDS[roundId]=mkRound({id:roundId,sport:'fb',name:d.name,custom:true,useDates,
     visibility:d.visibility,teams,events,rules,
     members:[{id:'me',name:S.user?.displayName||'Du',pts:0}]});
   toast('Runde erstellt');
-  openRound(id);
+  openRound(roundId);
 }
 /* ═══════════ SPIELPLAN NACHTRÄGLICH BEARBEITEN (nur Ersteller, eigene Liga) ═══════════ */
 function vEditSchedule(){
@@ -1927,7 +1932,7 @@ function vEditSchedule(){
   <main>
     ${dateModeSelector(d)}
 
-    ${groupMd.map((md,i)=>matchdayCardHtml(md,'Spieltag '+(i+1),false,d.useDates,teamOpts,groupMd.length>1,i===groupMd.length-1)).join('')}
+    ${groupMd.map((md,i)=>matchdayCardHtml(md,'Spieltag '+(i+1),false,d.useDates,teamOpts,groupMd.length>1)).join('')}
     <button class="btn ghost" id="addmd" style="padding:12px">+ Spieltag hinzufügen</button>
 
     <div style="border-top:1px dashed var(--line-2);margin:24px 0 14px"></div>
@@ -2048,9 +2053,8 @@ function dateModeSelector(d){
       :'Ohne Datum bleibt das Tippen offen, bis du selbst die Ergebnisse einträgst — es sei denn, du legst pro Spieltag unten eine Frist fest.'}</p>`;
 }
 /* Eine Spieltag- bzw. K.-o.-Runden-Karte. isKO=true → eigene Turnierphasen-Auswahl statt
-   Spieltag-Nummer, plus optionale eigene Frist. hintKO=true → kleiner Hinweis am Kartenende,
-   dass danach noch eine K.-o.-Phase ergänzt werden kann (nur an der letzten Spieltag-Karte). */
-function matchdayCardHtml(md,title,isKO,useDates,teamOpts,canRemove,hintKO){
+   Spieltag-Nummer, plus optionale eigene Frist. */
+function matchdayCardHtml(md,title,isKO,useDates,teamOpts,canRemove){
   return `<div class="card" style="margin-top:16px;margin-bottom:11px" data-md="${md.id}">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:11px">
       <b style="font-family:'Poppins';flex:1;${isKO?'color:#A78BFA':''}">${esc(title)}</b>
@@ -2083,8 +2087,6 @@ function matchdayCardHtml(md,title,isKO,useDates,teamOpts,canRemove,hintKO){
       </div>`).join('')}
     <button class="btn ghost" data-addp="${md.id}" style="margin-top:12px;padding:11px;font-size:13.5px">
       + Paarung</button>
-    ${hintKO?`<p class="hint" style="margin:12px 2px 0;color:#A78BFA">+ Danach kannst du weiter
-      unten noch eine K.-o.-Phase ergänzen, falls gewünscht.</p>`:''}
   </div>`;
 }
 /* Drei einzelne <select> statt <input type="date"> — auf dem iPhone öffnet jedes für sich
@@ -2250,6 +2252,11 @@ function tabTip(){
     <span class="nm" style="${st?'color:var(--win)':''}">${
       st?'+'+fmt(r.settled[dayKey()].me)+' P':l+' / '+CFG.budget}</span></div>`;
   orderEvents(evs).forEach((ev,i)=>b.appendChild(matchCard(ev,ev.sport==='mma'&&i===0)));
+  /* Admin auf dem letzten (noch nicht als K.-o. markierten) Spieltag dezent daran erinnern,
+     dass er hier noch eine K.-o.-Phase ergänzen kann, falls gewünscht. */
+  if(r.custom&&r.owner==='me'&&S.day===maxDay(r)&&!stage&&!(r.events||[]).some(e=>e.stage))
+    b.insertAdjacentHTML('beforeend',`<p class="hint" style="margin:14px 3px 0;color:#A78BFA">
+      + Du kannst in der Verwaltung noch eine K.-o.-Phase ergänzen, falls gewünscht.</p>`);
   drawDock();
 }
 

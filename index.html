@@ -1738,13 +1738,13 @@ function vCreate(){
 
       ${dateModeSelector(d)}
 
-      ${groupMd.map((md,i)=>matchdayCardHtml(md,'Spieltag '+(i+1),false,d.useDates,teamOpts,groupMd.length>1)).join('')}
+      ${groupMd.map((md,i)=>matchdayCardHtml(md,'Spieltag '+(i+1),false,d.useDates,teamOpts,groupMd.length>1,i===groupMd.length-1)).join('')}
       <button class="btn ghost" id="addmd" style="padding:12px">+ Spieltag hinzufügen</button>
 
       <div style="border-top:1px dashed var(--line-2);margin:24px 0 14px"></div>
       <div class="sec" style="color:#A78BFA">K.-o.-Phase (optional)<span class="ln"></span></div>
-      <p class="hint" style="margin:0 0 4px">Achtelfinale, Viertelfinale usw. — am besten erst
-        hinzufügen, wenn die Paarungen feststehen.</p>
+      <p class="hint" style="margin:0 0 4px">Achtelfinale, Viertelfinale usw. — kannst du jetzt
+        schon anlegen oder auch erst später ergänzen, wenn die Paarungen feststehen.</p>
       ${koMd.map(md=>matchdayCardHtml(md,md.stage,true,d.useDates,teamOpts,true)).join('')}
       <button class="btn ghost" id="addko" style="padding:12px;margin-top:16px;
         border-color:rgba(167,139,250,.4);color:#A78BFA">+ K.-o.-Runde hinzufügen</button>
@@ -1927,13 +1927,13 @@ function vEditSchedule(){
   <main>
     ${dateModeSelector(d)}
 
-    ${groupMd.map((md,i)=>matchdayCardHtml(md,'Spieltag '+(i+1),false,d.useDates,teamOpts,groupMd.length>1)).join('')}
+    ${groupMd.map((md,i)=>matchdayCardHtml(md,'Spieltag '+(i+1),false,d.useDates,teamOpts,groupMd.length>1,i===groupMd.length-1)).join('')}
     <button class="btn ghost" id="addmd" style="padding:12px">+ Spieltag hinzufügen</button>
 
     <div style="border-top:1px dashed var(--line-2);margin:24px 0 14px"></div>
     <div class="sec" style="color:#A78BFA">K.-o.-Phase (optional)<span class="ln"></span></div>
-    <p class="hint" style="margin:0 0 4px">Achtelfinale, Viertelfinale usw. — am besten erst
-      hinzufügen, wenn die Paarungen feststehen.</p>
+    <p class="hint" style="margin:0 0 4px">Achtelfinale, Viertelfinale usw. — kannst du jetzt
+      schon anlegen oder auch erst später ergänzen, wenn die Paarungen feststehen.</p>
     ${koMd.map(md=>matchdayCardHtml(md,md.stage,true,d.useDates,teamOpts,true)).join('')}
     <button class="btn ghost" id="addko" style="padding:12px;margin-top:16px;
       border-color:rgba(167,139,250,.4);color:#A78BFA">+ K.-o.-Runde hinzufügen</button>
@@ -1979,10 +1979,18 @@ function vEditSchedule(){
   app.querySelector('#save').onclick=async e=>{
     const total=d.matchdays.reduce((n,m)=>n+m.pairings.filter(p=>p.home!==p.away).length,0);
     if(!total) return toast('Trag mindestens eine Paarung mit zwei verschiedenen Teams ein.');
-    if(!confirm('Spielplan speichern? Bereits abgegebene Tipps zu geänderten oder entfernten Spielen gehen dabei verloren.')) return;
-    e.target.disabled=true;e.target.textContent='Einen Moment …';
     const useDates=d.useDates!==false;
     const events=matchdaysToEvents(d.matchdays,useDates,r.id);
+    /* Nur warnen, wenn wirklich ein bereits getipptes Spiel verschwindet — nicht bei
+       jedem Speichern pauschal, z.B. nicht beim bloßen Hinzufügen einer K.-o.-Runde. */
+    const neueIds=new Set(events.map(x=>x.id));
+    const getippteIds=new Set([
+      ...Object.keys(r.picks||{}),
+      ...Object.values(r.memberPicks||{}).flatMap(mp=>Object.keys(mp||{}))
+    ]);
+    const gehtVerloren=(r.events||[]).some(alt=>getippteIds.has(alt.id)&&!neueIds.has(alt.id));
+    if(gehtVerloren&&!confirm('Spielplan speichern? Bereits abgegebene Tipps zu geänderten oder entfernten Spielen gehen dabei verloren.')) return;
+    e.target.disabled=true;e.target.textContent='Einen Moment …';
     const ok=await fsSyncSchedule(r,events,useDates);
     if(!ok){ e.target.disabled=false;e.target.textContent='Speichern';
       return toast('Konnte nicht gespeichert werden. Versuch es nochmal.'); }
@@ -2040,8 +2048,9 @@ function dateModeSelector(d){
       :'Ohne Datum bleibt das Tippen offen, bis du selbst die Ergebnisse einträgst — es sei denn, du legst pro Spieltag unten eine Frist fest.'}</p>`;
 }
 /* Eine Spieltag- bzw. K.-o.-Runden-Karte. isKO=true → eigene Turnierphasen-Auswahl statt
-   Spieltag-Nummer, plus optionale eigene Frist. */
-function matchdayCardHtml(md,title,isKO,useDates,teamOpts,canRemove){
+   Spieltag-Nummer, plus optionale eigene Frist. hintKO=true → kleiner Hinweis am Kartenende,
+   dass danach noch eine K.-o.-Phase ergänzt werden kann (nur an der letzten Spieltag-Karte). */
+function matchdayCardHtml(md,title,isKO,useDates,teamOpts,canRemove,hintKO){
   return `<div class="card" style="margin-top:16px;margin-bottom:11px" data-md="${md.id}">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:11px">
       <b style="font-family:'Poppins';flex:1;${isKO?'color:#A78BFA':''}">${esc(title)}</b>
@@ -2074,6 +2083,8 @@ function matchdayCardHtml(md,title,isKO,useDates,teamOpts,canRemove){
       </div>`).join('')}
     <button class="btn ghost" data-addp="${md.id}" style="margin-top:12px;padding:11px;font-size:13.5px">
       + Paarung</button>
+    ${hintKO?`<p class="hint" style="margin:12px 2px 0;color:#A78BFA">+ Danach kannst du weiter
+      unten noch eine K.-o.-Phase ergänzen, falls gewünscht.</p>`:''}
   </div>`;
 }
 /* Drei einzelne <select> statt <input type="date"> — auf dem iPhone öffnet jedes für sich
@@ -2191,12 +2202,22 @@ function vRound(){
   if((S.tab==='tippen'||S.tab==='ergebnis')&&fb) drawDays();
   ({tippen:tabTip,ergebnis:tabEntry,tabelle:tabTable,chat:tabChat,info:tabInfo}[S.tab])();
 }
+/* Kleines, schlichtes Pokal-Symbol fürs Finale — bewusst kein Standard-Emoji. */
+const TROPHY_SVG=`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+  stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block;margin:1px auto 0">
+  <path d="M8 4h8v5a4 4 0 0 1-8 0V4z"/><path d="M8 5H5a2 2 0 0 0 0 4h1.6"/>
+  <path d="M16 5h3a2 2 0 0 1 0 4h-1.6"/><path d="M12 13v3.5"/><path d="M9 20h6"/>
+  <path d="M10 16.5h4l.5 3.5h-5z"/></svg>`;
+const STAGE_ABBR={Achtelfinale:'AF',Viertelfinale:'VF',Halbfinale:'HF'};
 function drawDays(){
   const el=app.querySelector('#days'),r=R(),mx=maxDay(r);
   el.innerHTML='';
   for(let d=1;d<=mx;d++){
     const b=document.createElement('button');
-    b.textContent=d;b.setAttribute('aria-current',d===S.day);
+    const stage=r.custom&&eventsOf(r,d)[0]&&eventsOf(r,d)[0].stage;
+    if(stage==='Finale') b.innerHTML=TROPHY_SVG;
+    else b.textContent=stage?STAGE_ABBR[stage]||stage:d;
+    b.setAttribute('aria-current',d===S.day);
     if(r.settled[d]||anyResult(eventsOf(r,d),r)) b.classList.add('done');
     b.onclick=()=>{S.day=d;render();};
     el.appendChild(b);
@@ -2367,10 +2388,7 @@ function tabEntry(){
   if(!evs.length) return b.innerHTML='<div class="empty">Für diesen Spieltag gibt es keine Spiele.</div>';
 
   const nochOffen=evs.some(e=>!started(e));
-  b.innerHTML=`<p class="hint" style="margin:0 3px 16px">
-      Für eigene Ligen gibt es keine Datenquelle — du legst den Sieger selbst fest.
-      Sobald alle Spiele eines Spieltags feststehen, werden die Punkte
-      automatisch verteilt.${r.settled[k]?'<br><br><b>Dieser Spieltag ist bereits gewertet.</b> Änderungen wirken sich nicht mehr aus.':''}</p>
+  b.innerHTML=`
     ${r.owner==='me'&&nochOffen&&!r.settled[k]?`<button class="btn ghost" id="closeNow"
         style="margin:0 0 16px;padding:11px;font-size:13px">
         Tippen für diesen Spieltag jetzt schließen</button>`:''}
@@ -2385,7 +2403,11 @@ function tabEntry(){
             style="flex:.6;padding:11px 6px;font-size:12.5px;font-weight:600">X</button>
           <button data-res="${ev.id}" data-side="2" aria-pressed="${x.side==='2'}"
             style="flex:1;padding:11px 6px;font-size:12.5px;font-weight:600">${esc(ev.away)}</button>
-        </div></div>`;}).join('')}`;
+        </div></div>`;}).join('')}
+    <p class="hint" style="margin:16px 3px 0">
+      Für eigene Ligen gibt es keine Datenquelle — du legst den Sieger selbst fest.
+      Sobald alle Spiele eines Spieltags feststehen, werden die Punkte
+      automatisch verteilt.${r.settled[k]?'<br><br><b>Dieser Spieltag ist bereits gewertet.</b> Änderungen wirken sich nicht mehr aus.':''}</p>`;
 
   const fehlt=()=>evs.filter(e=>!eventResult(e,r)).length;
   /* Zähler zeigt den Fortschritt über die ganze Runde, nicht nur den sichtbaren Spieltag —

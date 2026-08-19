@@ -1889,7 +1889,9 @@ function matchdaysToEvents(matchdays,useDates,idPrefix){
   return events;
 }
 /* Umgekehrte Richtung — vorhandene events wieder in bearbeitbare Matchdays gruppieren. */
-function eventsToMatchdays(events){
+/* r optional: wenn übergeben, markiert jede Matchday, ob für sie schon ein Ergebnis
+   feststeht — dann macht eine Frist-Empfehlung keinen Sinn mehr. */
+function eventsToMatchdays(events,r){
   const byDay={};
   (events||[]).forEach(e=>{(byDay[e.day||1]=byDay[e.day||1]||[]).push(e);});
   return Object.keys(byDay).map(Number).sort((a,b)=>a-b).map(day=>{
@@ -1897,6 +1899,7 @@ function eventsToMatchdays(events){
     return {id:'md'+(++SEQ), date:t?isoDate(t):isoToday(),
       deadline:evs[0]&&evs[0].lockAt?isoDateTime(evs[0].lockAt):null,
       stage:evs[0]&&evs[0].stage||'',
+      played:r?evs.every(e=>eventResult(e,r)):false,
       pairings:evs.map(e=>({id:'p'+(++SEQ),home:e.home,away:e.away}))};
   });
 }
@@ -2004,7 +2007,10 @@ function vEditSchedule(){
     if(!ok){ e.target.disabled=false;e.target.textContent='Speichern';
       return toast('Konnte nicht gespeichert werden. Versuch es nochmal.'); }
     r.events=events; r.useDates=useDates;
-    toast('Spielplan gespeichert'); S.tab='info'; go('round');
+    toast('Spielplan gespeichert');
+    /* Direkt zum Tippen des neuesten Spieltags, nicht zu den Rundeneinstellungen —
+       genau da will man nach dem Anlegen einer neuen Runde eigentlich hin. */
+    S.tab='tippen'; S.day=Math.max(1,...events.map(x=>x.day||1)); go('round');
   };
 }
 function parseDay(s){
@@ -2072,7 +2078,11 @@ function matchdayCardHtml(md,title,isKO,useDates,teamOpts,canRemove,stageOptions
       ${opts.map(s=>`<option ${md.stage===s?'selected':''}>${s}</option>`).join('')}
     </select>`:''}
     ${useDates?`<label>Datum</label>${dateWheels(md)}`:''}
-    ${isKO&&!useDates?`
+    ${isKO&&!useDates?(md.played?`
+      <div style="margin-top:0;background:rgba(52,211,153,.10);border:1px solid rgba(52,211,153,.35);
+        border-radius:12px;padding:12px;display:flex;align-items:center;gap:8px">
+        <span style="color:var(--win);font-weight:700;font-size:13.5px">✓ Bereits gespielt</span>
+      </div>`:`
       <div style="margin-top:${useDates?'12px':'0'};background:rgba(167,139,250,.08);
         border:1px solid rgba(167,139,250,.3);border-radius:12px;padding:12px">
         ${md.deadline?`
@@ -2085,7 +2095,7 @@ function matchdayCardHtml(md,title,isKO,useDates,teamOpts,canRemove,stageOptions
             sonst können Teilnehmer tippen, während das Spiel schon läuft.</p>
           <button class="btn ghost" data-setdl="${md.id}" style="padding:9px;font-size:12.5px">
             + Frist für diesen Spieltag</button>`}
-      </div>`:''}
+      </div>`):''}
     ${md.pairings.map(p=>`
       <div style="display:flex;align-items:center;gap:8px;margin-top:12px">
         <select data-home="${p.id}" style="flex:1">${teamOpts(p.home)}</select>
@@ -2430,7 +2440,7 @@ function tabEntry(){
       + ${esc(naechsteStage)} ergänzen</button>`);
   const koHintBtn=app.querySelector('#koHint');
   if(koHintBtn) koHintBtn.onclick=()=>{
-    const matchdays=eventsToMatchdays(r.events||[]);
+    const matchdays=eventsToMatchdays(r.events||[],r);
     matchdays.push({id:'md'+(++SEQ),date:isoToday(),stage:naechsteStage,
       pairings:[{id:'p'+(++SEQ),home:r.teams[0],away:r.teams[1]||r.teams[0]}]});
     S.editDraft={matchdays,useDates:r.useDates!==false};
@@ -2711,7 +2721,7 @@ function tabInfo(){
   });
   const editSchedBtn=app.querySelector('#editsched');
   if(editSchedBtn) editSchedBtn.onclick=()=>{
-    S.editDraft={matchdays:eventsToMatchdays(r.events||[]),useDates:r.useDates!==false};
+    S.editDraft={matchdays:eventsToMatchdays(r.events||[],r),useDates:r.useDates!==false};
     go('editSchedule');
   };
   const regenBtn=app.querySelector('#regencode');

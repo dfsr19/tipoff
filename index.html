@@ -2253,10 +2253,20 @@ function tabTip(){
       st?'+'+fmt(r.settled[dayKey()].me)+' P':l+' / '+CFG.budget}</span></div>`;
   orderEvents(evs).forEach((ev,i)=>b.appendChild(matchCard(ev,ev.sport==='mma'&&i===0)));
   /* Admin auf dem letzten (noch nicht als K.-o. markierten) Spieltag dezent daran erinnern,
-     dass er hier noch eine K.-o.-Phase ergänzen kann, falls gewünscht. */
+     dass er hier noch eine K.-o.-Phase ergänzen kann — direkt antippbar, springt in den
+     Bearbeiten-Screen und legt gleich eine neue K.-o.-Runde an. */
   if(r.custom&&r.owner==='me'&&S.day===maxDay(r)&&!stage&&!(r.events||[]).some(e=>e.stage))
-    b.insertAdjacentHTML('beforeend',`<p class="hint" style="margin:14px 3px 0;color:#A78BFA">
-      + Du kannst in der Verwaltung noch eine K.-o.-Phase ergänzen, falls gewünscht.</p>`);
+    b.insertAdjacentHTML('beforeend',`<button id="koHint" class="btn ghost" style="margin-top:14px;
+      padding:12px;border-color:rgba(167,139,250,.4);color:#A78BFA">
+      + K.-o.-Phase ergänzen</button>`);
+  const koHintBtn=app.querySelector('#koHint');
+  if(koHintBtn) koHintBtn.onclick=()=>{
+    const matchdays=eventsToMatchdays(r.events||[]);
+    matchdays.push({id:'md'+(++SEQ),date:isoToday(),stage:STAGES[0],
+      pairings:[{id:'p'+(++SEQ),home:r.teams[0],away:r.teams[1]||r.teams[0]}]});
+    S.editDraft={matchdays,useDates:r.useDates!==false};
+    go('editSchedule');
+  };
   drawDock();
 }
 

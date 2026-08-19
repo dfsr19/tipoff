@@ -1730,76 +1730,24 @@ function vCreate(){
     }
     if(d.useDates===undefined) d.useDates=true;
     const teamOpts=sel=>d.teams.map(t=>`<option ${t===sel?'selected':''}>${esc(t)}</option>`).join('');
+    const groupMd=d.matchdays.filter(m=>!m.stage), koMd=d.matchdays.filter(m=>m.stage);
     app.innerHTML=head('Spielplan','Schritt 2 von 2')+`
     <main>
       <p class="hint" style="margin:0 3px 16px">Wir haben dir schon einen Spielplan vorgeschlagen
         — jeder gegen jeden. Team, Datum oder Paarung antippen, um etwas zu ändern.</p>
 
-      <label>Mit Termin oder ohne?</label>
-      <div style="display:flex;flex-direction:column;gap:8px;margin:0 0 14px">
-        <div style="background:var(--blue-gl);border:1px solid rgba(80,170,240,.35);
-          border-radius:12px;padding:11px 13px">
-          <b style="color:var(--blue);font-size:13px">📅 Mit Datum passt für …</b>
-          <p style="margin:3px 0 0;font-size:12.5px;color:var(--muted)">… eine ganze Saison über
-            mehrere Wochen — z. B. eine Hobby-Liga mit einem Spieltag pro Woche.</p>
-        </div>
-        <div style="background:rgba(251,191,36,.12);border:1px solid rgba(251,191,36,.35);
-          border-radius:12px;padding:11px 13px">
-          <b style="color:var(--warn);font-size:13px">⚡ Ohne Datum passt für …</b>
-          <p style="margin:3px 0 0;font-size:12.5px;color:var(--muted)">… ein Turnier an einem Tag
-            — z. B. ein Kinderturnier, wo Spiele nur wenige Minuten dauern und die nächste
-            Paarung erst kurz vorher feststeht.</p>
-        </div>
-      </div>
-      <div class="toggle">
-        <button data-ud="1" aria-pressed="${d.useDates}">
-          <span class="t">Mit Datum</span><span class="d">Jeder Spieltag hat ein Datum</span></button>
-        <button data-ud="0" aria-pressed="${!d.useDates}">
-          <span class="t">Ohne Datum</span><span class="d">Kein fester Termin</span></button>
-      </div>
-      <p class="hint" style="margin-top:9px">${d.useDates
-        ?'Mit Datum kann am Spieltag selbst nicht mehr getippt werden — Annahmeschluss ist der Tag davor, damit alle eine Übersicht haben.'
-        :'Ohne Datum bleibt das Tippen offen, bis du selbst die Ergebnisse einträgst und die Runde auswertest — es sei denn, du legst pro Spieltag unten eine Frist fest.'}</p>
+      ${dateModeSelector(d)}
 
-      ${d.matchdays.map((md,mi)=>`
-        <div class="card" style="margin-top:16px;margin-bottom:11px" data-md="${md.id}">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:11px">
-            <b style="font-family:'Poppins';flex:1">${esc(md.stage||('Spieltag '+(mi+1)))}</b>
-            ${d.matchdays.length>1?`<button class="mini no" data-rmmd="${md.id}">Entfernen</button>`:''}
-          </div>
-          ${d.useDates?`<label>Datum</label>${dateWheels(md)}`:''}
-
-          <div style="border-top:1px dashed var(--line-2);margin:14px 0 12px"></div>
-          <div style="background:rgba(167,139,250,.08);border:1px solid rgba(167,139,250,.3);
-            border-radius:12px;padding:12px">
-            <label style="color:#A78BFA;margin-top:0">K.-o.-Phase (optional)</label>
-            ${stageSelect(md,mi+1)}
-            ${!d.useDates?`
-            <div style="margin-top:10px">
-              ${md.deadline?`
-                <p class="hint" style="margin:0 0 8px;color:#A78BFA">Ohne Frist können
-                  Teilnehmer tippen, während das Spiel schon läuft.</p>
-                ${deadlineWheels(md.id,md.deadline)}
-                <button class="btn ghost" data-clrdl="${md.id}"
-                  style="margin-top:10px;padding:9px;font-size:12.5px">Frist entfernen</button>`
-              :`<p class="hint" style="margin:0 0 8px;color:#A78BFA">Empfehlung: Frist setzen —
-                  sonst können Teilnehmer tippen, während das Spiel schon läuft.</p>
-                <button class="btn ghost" data-setdl="${md.id}" style="padding:9px;font-size:12.5px">
-                  + Frist für diesen Spieltag</button>`}
-            </div>`:''}
-          </div>
-
-          ${md.pairings.map(p=>`
-            <div style="display:flex;align-items:center;gap:8px;margin-top:12px">
-              <select data-home="${p.id}" style="flex:1">${teamOpts(p.home)}</select>
-              <span class="hint" style="margin:0">–</span>
-              <select data-away="${p.id}" style="flex:1">${teamOpts(p.away)}</select>
-              <button data-rmp="${p.id}" style="width:30px">×</button>
-            </div>`).join('')}
-          <button class="btn ghost" data-addp="${md.id}" style="margin-top:12px;padding:11px;font-size:13.5px">
-            + Paarung</button>
-        </div>`).join('')}
+      ${groupMd.map((md,i)=>matchdayCardHtml(md,'Spieltag '+(i+1),false,d.useDates,teamOpts,groupMd.length>1)).join('')}
       <button class="btn ghost" id="addmd" style="padding:12px">+ Spieltag hinzufügen</button>
+
+      <div style="border-top:1px dashed var(--line-2);margin:24px 0 14px"></div>
+      <div class="sec" style="color:#A78BFA">K.-o.-Phase (optional)<span class="ln"></span></div>
+      <p class="hint" style="margin:0 0 4px">Achtelfinale, Viertelfinale usw. — am besten erst
+        hinzufügen, wenn die Paarungen feststehen.</p>
+      ${koMd.map(md=>matchdayCardHtml(md,md.stage,true,d.useDates,teamOpts,true)).join('')}
+      <button class="btn ghost" id="addko" style="padding:12px;margin-top:16px;
+        border-color:rgba(167,139,250,.4);color:#A78BFA">+ K.-o.-Runde hinzufügen</button>
     </main>
     <div class="dock"><button class="btn" id="mk">Runde erstellen</button></div>`;
     bindBack();
@@ -1831,7 +1779,13 @@ function vCreate(){
     app.querySelectorAll('[data-rmmd]').forEach(b=>b.onclick=()=>{
       d.matchdays=d.matchdays.filter(m=>m.id!==b.dataset.rmmd);render();});
     app.querySelector('#addmd').onclick=()=>{
-      d.matchdays.push({id:'md'+(++SEQ),date:isoToday(),stage:'',pairings:[{id:'p'+(++SEQ),home:d.teams[0],away:d.teams[1]||d.teams[0]}]});
+      const md={id:'md'+(++SEQ),date:isoToday(),stage:'',pairings:[{id:'p'+(++SEQ),home:d.teams[0],away:d.teams[1]||d.teams[0]}]};
+      const koStart=d.matchdays.findIndex(m=>m.stage);
+      if(koStart===-1) d.matchdays.push(md); else d.matchdays.splice(koStart,0,md);
+      render();};
+    app.querySelector('#addko').onclick=()=>{
+      d.matchdays.push({id:'md'+(++SEQ),date:isoToday(),stage:STAGES[0],
+        pairings:[{id:'p'+(++SEQ),home:d.teams[0],away:d.teams[1]||d.teams[0]}]});
       render();};
     app.querySelector('#mk').onclick=async e=>{
       const total=d.matchdays.reduce((n,m)=>n+m.pairings.filter(p=>p.home!==p.away).length,0);
@@ -1968,73 +1922,21 @@ async function buildLeague(d){
 function vEditSchedule(){
   const r=R(),d=S.editDraft;
   const teamOpts=sel=>r.teams.map(t=>`<option ${t===sel?'selected':''}>${esc(t)}</option>`).join('');
+  const groupMd=d.matchdays.filter(m=>!m.stage), koMd=d.matchdays.filter(m=>m.stage);
   app.innerHTML=head('Spielplan bearbeiten',r.name)+`
   <main>
-    <label>Mit Termin oder ohne?</label>
-    <div style="display:flex;flex-direction:column;gap:8px;margin:0 0 14px">
-      <div style="background:var(--blue-gl);border:1px solid rgba(80,170,240,.35);
-        border-radius:12px;padding:11px 13px">
-        <b style="color:var(--blue);font-size:13px">📅 Mit Datum passt für …</b>
-        <p style="margin:3px 0 0;font-size:12.5px;color:var(--muted)">… eine ganze Saison über
-          mehrere Wochen — z. B. eine Hobby-Liga mit einem Spieltag pro Woche.</p>
-      </div>
-      <div style="background:rgba(251,191,36,.12);border:1px solid rgba(251,191,36,.35);
-        border-radius:12px;padding:11px 13px">
-        <b style="color:var(--warn);font-size:13px">⚡ Ohne Datum passt für …</b>
-        <p style="margin:3px 0 0;font-size:12.5px;color:var(--muted)">… ein Turnier an einem Tag
-          — z. B. ein Kinderturnier, wo Spiele nur wenige Minuten dauern und die nächste
-          Paarung erst kurz vorher feststeht.</p>
-      </div>
-    </div>
-    <div class="toggle">
-      <button data-ud="1" aria-pressed="${d.useDates}">
-        <span class="t">Mit Datum</span><span class="d">Jeder Spieltag hat ein Datum</span></button>
-      <button data-ud="0" aria-pressed="${!d.useDates}">
-        <span class="t">Ohne Datum</span><span class="d">Kein fester Termin</span></button>
-    </div>
-    <p class="hint" style="margin-top:9px">${d.useDates
-      ?'Mit Datum kann am Spieltag selbst nicht mehr getippt werden — Annahmeschluss ist der Tag davor.'
-      :'Ohne Datum bleibt das Tippen offen, bis du selbst die Ergebnisse einträgst und auswertest — es sei denn, du legst pro Spieltag unten eine Frist fest.'}</p>
+    ${dateModeSelector(d)}
 
-    ${d.matchdays.map((md,mi)=>`
-      <div class="card" style="margin-top:16px;margin-bottom:11px" data-md="${md.id}">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:11px">
-          <b style="font-family:'Poppins';flex:1">${esc(md.stage||('Spieltag '+(mi+1)))}</b>
-          ${d.matchdays.length>1?`<button class="mini no" data-rmmd="${md.id}">Entfernen</button>`:''}
-        </div>
-        ${d.useDates?`<label>Datum</label>${dateWheels(md)}`:''}
-
-        <div style="border-top:1px dashed var(--line-2);margin:14px 0 12px"></div>
-        <div style="background:rgba(167,139,250,.08);border:1px solid rgba(167,139,250,.3);
-          border-radius:12px;padding:12px">
-          <label style="color:#A78BFA;margin-top:0">K.-o.-Phase (optional)</label>
-          ${stageSelect(md,mi+1)}
-          ${!d.useDates?`
-          <div style="margin-top:10px">
-            ${md.deadline?`
-              <p class="hint" style="margin:0 0 8px;color:#A78BFA">Ohne Frist können
-                Teilnehmer tippen, während das Spiel schon läuft.</p>
-              ${deadlineWheels(md.id,md.deadline)}
-              <button class="btn ghost" data-clrdl="${md.id}"
-                style="margin-top:10px;padding:9px;font-size:12.5px">Frist entfernen</button>`
-            :`<p class="hint" style="margin:0 0 8px;color:#A78BFA">Empfehlung: Frist setzen —
-                sonst können Teilnehmer tippen, während das Spiel schon läuft.</p>
-              <button class="btn ghost" data-setdl="${md.id}" style="padding:9px;font-size:12.5px">
-                + Frist für diesen Spieltag</button>`}
-          </div>`:''}
-        </div>
-
-        ${md.pairings.map(p=>`
-          <div style="display:flex;align-items:center;gap:8px;margin-top:12px">
-            <select data-home="${p.id}" style="flex:1">${teamOpts(p.home)}</select>
-            <span class="hint" style="margin:0">–</span>
-            <select data-away="${p.id}" style="flex:1">${teamOpts(p.away)}</select>
-            <button data-rmp="${p.id}" style="width:30px">×</button>
-          </div>`).join('')}
-        <button class="btn ghost" data-addp="${md.id}" style="margin-top:12px;padding:11px;font-size:13.5px">
-          + Paarung</button>
-      </div>`).join('')}
+    ${groupMd.map((md,i)=>matchdayCardHtml(md,'Spieltag '+(i+1),false,d.useDates,teamOpts,groupMd.length>1)).join('')}
     <button class="btn ghost" id="addmd" style="padding:12px">+ Spieltag hinzufügen</button>
+
+    <div style="border-top:1px dashed var(--line-2);margin:24px 0 14px"></div>
+    <div class="sec" style="color:#A78BFA">K.-o.-Phase (optional)<span class="ln"></span></div>
+    <p class="hint" style="margin:0 0 4px">Achtelfinale, Viertelfinale usw. — am besten erst
+      hinzufügen, wenn die Paarungen feststehen.</p>
+    ${koMd.map(md=>matchdayCardHtml(md,md.stage,true,d.useDates,teamOpts,true)).join('')}
+    <button class="btn ghost" id="addko" style="padding:12px;margin-top:16px;
+      border-color:rgba(167,139,250,.4);color:#A78BFA">+ K.-o.-Runde hinzufügen</button>
   </main>
   <div class="dock"><button class="btn" id="save">Speichern</button></div>`;
   bindBack();
@@ -2066,7 +1968,13 @@ function vEditSchedule(){
   app.querySelectorAll('[data-rmmd]').forEach(b=>b.onclick=()=>{
     d.matchdays=d.matchdays.filter(m=>m.id!==b.dataset.rmmd);render();});
   app.querySelector('#addmd').onclick=()=>{
-    d.matchdays.push({id:'md'+(++SEQ),date:isoToday(),stage:'',pairings:[{id:'p'+(++SEQ),home:r.teams[0],away:r.teams[1]||r.teams[0]}]});
+    const md={id:'md'+(++SEQ),date:isoToday(),stage:'',pairings:[{id:'p'+(++SEQ),home:r.teams[0],away:r.teams[1]||r.teams[0]}]};
+    const koStart=d.matchdays.findIndex(m=>m.stage);
+    if(koStart===-1) d.matchdays.push(md); else d.matchdays.splice(koStart,0,md);
+    render();};
+  app.querySelector('#addko').onclick=()=>{
+    d.matchdays.push({id:'md'+(++SEQ),date:isoToday(),stage:STAGES[0],
+      pairings:[{id:'p'+(++SEQ),home:r.teams[0],away:r.teams[1]||r.teams[0]}]});
     render();};
   app.querySelector('#save').onclick=async e=>{
     const total=d.matchdays.reduce((n,m)=>n+m.pairings.filter(p=>p.home!==p.away).length,0);
@@ -2103,13 +2011,70 @@ function parseISODateTime(s){
   return isNaN(dt)?null:dt;
 }
 const MONTHE=['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
-/* Optionale Turnierphase statt "Spieltag N" — für K.-o.-Runden. Leer lassen = normaler Spieltag. */
+/* K.-o.-Runden (Achtelfinale usw.) sind ein eigener, klar abgetrennter Bereich unterhalb
+   der normalen Spieltage — nicht als Option innerhalb jeder einzelnen Spieltag-Karte. */
 const STAGES=['Achtelfinale','Viertelfinale','Halbfinale','Finale'];
-function stageSelect(md,dayNum){
-  return `<select data-stage="${md.id}" style="margin-top:8px">
-    <option value="">Normaler Spieltag ${dayNum}</option>
-    ${STAGES.map(s=>`<option ${md.stage===s?'selected':''}>${s}</option>`).join('')}
-  </select>`;
+/* Mit/Ohne Datum: die farbigen Erklär-Boxen SIND der Schalter, nebeneinander, antippbar. */
+function dateModeSelector(d){
+  return `<label>Mit Termin oder ohne?</label>
+    <div style="display:flex;gap:8px;margin:0 0 14px">
+      <button data-ud="1" aria-pressed="${d.useDates}" style="flex:1;text-align:left;
+        background:rgba(80,170,240,.10);border:1px solid rgba(80,170,240,${d.useDates?'.8':'.28'});
+        border-radius:12px;padding:12px 13px">
+        <span style="display:block;font-size:13px;font-weight:700;color:var(--blue)">📅 Mit Datum</span>
+        <span style="display:block;font-size:11.5px;color:var(--muted);margin-top:4px;line-height:1.4">
+          Für eine ganze Saison über mehrere Wochen — z. B. eine Hobby-Liga mit einem
+          Spieltag pro Woche.</span>
+      </button>
+      <button data-ud="0" aria-pressed="${!d.useDates}" style="flex:1;text-align:left;
+        background:rgba(251,191,36,.10);border:1px solid rgba(251,191,36,${!d.useDates?'.8':'.28'});
+        border-radius:12px;padding:12px 13px">
+        <span style="display:block;font-size:13px;font-weight:700;color:var(--warn)">⚡ Ohne Datum</span>
+        <span style="display:block;font-size:11.5px;color:var(--muted);margin-top:4px;line-height:1.4">
+          Für ein Turnier an einem Tag — z. B. ein Kinderturnier oder ein Fußballturnier
+          mit Freunden.</span>
+      </button>
+    </div>
+    <p class="hint" style="margin:0 0 16px">${d.useDates
+      ?'Mit Datum kann am Spieltag selbst nicht mehr getippt werden — Annahmeschluss ist der Tag davor.'
+      :'Ohne Datum bleibt das Tippen offen, bis du selbst die Ergebnisse einträgst — es sei denn, du legst pro Spieltag unten eine Frist fest.'}</p>`;
+}
+/* Eine Spieltag- bzw. K.-o.-Runden-Karte. isKO=true → eigene Turnierphasen-Auswahl statt
+   Spieltag-Nummer, plus optionale eigene Frist. */
+function matchdayCardHtml(md,title,isKO,useDates,teamOpts,canRemove){
+  return `<div class="card" style="margin-top:16px;margin-bottom:11px" data-md="${md.id}">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:11px">
+      <b style="font-family:'Poppins';flex:1;${isKO?'color:#A78BFA':''}">${esc(title)}</b>
+      ${canRemove?`<button class="mini no" data-rmmd="${md.id}">Entfernen</button>`:''}
+    </div>
+    ${isKO?`<select data-stage="${md.id}" style="margin-bottom:12px">
+      ${STAGES.map(s=>`<option ${md.stage===s?'selected':''}>${s}</option>`).join('')}
+    </select>`:''}
+    ${useDates?`<label>Datum</label>${dateWheels(md)}`:''}
+    ${isKO&&!useDates?`
+      <div style="margin-top:${useDates?'12px':'0'};background:rgba(167,139,250,.08);
+        border:1px solid rgba(167,139,250,.3);border-radius:12px;padding:12px">
+        ${md.deadline?`
+          <p class="hint" style="margin:0 0 8px;color:#A78BFA">Ohne Frist können Teilnehmer
+            tippen, während das Spiel schon läuft.</p>
+          ${deadlineWheels(md.id,md.deadline)}
+          <button class="btn ghost" data-clrdl="${md.id}"
+            style="margin-top:10px;padding:9px;font-size:12.5px">Frist entfernen</button>`
+        :`<p class="hint" style="margin:0 0 8px;color:#A78BFA">Empfehlung: Frist setzen —
+            sonst können Teilnehmer tippen, während das Spiel schon läuft.</p>
+          <button class="btn ghost" data-setdl="${md.id}" style="padding:9px;font-size:12.5px">
+            + Frist für diesen Spieltag</button>`}
+      </div>`:''}
+    ${md.pairings.map(p=>`
+      <div style="display:flex;align-items:center;gap:8px;margin-top:12px">
+        <select data-home="${p.id}" style="flex:1">${teamOpts(p.home)}</select>
+        <span class="hint" style="margin:0">–</span>
+        <select data-away="${p.id}" style="flex:1">${teamOpts(p.away)}</select>
+        <button data-rmp="${p.id}" style="width:30px">×</button>
+      </div>`).join('')}
+    <button class="btn ghost" data-addp="${md.id}" style="margin-top:12px;padding:11px;font-size:13.5px">
+      + Paarung</button>
+  </div>`;
 }
 /* Drei einzelne <select> statt <input type="date"> — auf dem iPhone öffnet jedes für sich
    ein Scroll-Rad (Tag 1–31, Monat, Jahr), kein Kalenderblatt. */

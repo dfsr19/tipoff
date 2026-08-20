@@ -253,7 +253,7 @@ textarea{min-height:88px;resize:vertical;line-height:1.55}
 
 /* ═══════ SPIELTAGE ═══════ */
 .days{display:flex;gap:6px;overflow-x:auto;padding:11px 12px;background:var(--bg);
-  border-bottom:1px solid var(--line);position:sticky;top:53px;z-index:19;scrollbar-width:none}
+  border-bottom:1px solid var(--line);scrollbar-width:none}
 .days::-webkit-scrollbar{display:none}
 .days button{flex:0 0 auto;min-width:40px;background:var(--raise);border:1px solid var(--line);
   border-radius:10px;color:var(--muted);font-weight:600;font-size:13px;padding:8px 10px}
@@ -262,7 +262,7 @@ textarea{min-height:88px;resize:vertical;line-height:1.55}
 
 /* ═══════ BUDGET ═══════ */
 .budget{display:flex;align-items:center;gap:11px;background:var(--card);border:1px solid var(--line);
-  border-radius:13px;padding:12px 14px;margin-bottom:14px;position:sticky;top:107px;z-index:18}
+  border-radius:13px;padding:12px 14px;margin-bottom:14px;position:sticky;top:53px;z-index:19}
 .budget .lb{font-size:10px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
 .bar{flex:1;height:6px;background:var(--raise);border-radius:4px;overflow:hidden}
 .bar i{display:block;height:100%;background:var(--blue);border-radius:4px;transition:width .3s}
@@ -2314,10 +2314,6 @@ function tabTip(){
     <span class="bar"><i style="width:${st?100:l/CFG.budget*100}%"></i></span>
     <span class="nm" style="${st?'color:var(--win)':''}">${
       st?'+'+fmt(r.settled[dayKey()].me)+' P':l+' / '+CFG.budget}</span></div>`;
-  /* Klebeposition der Budget-Leiste live an die tatsächliche Höhe von Reitern + Spieltag-
-     Auswahl anpassen, statt einen festen Wert zu raten — der stimmt sonst nicht überall. */
-  const daysEl=document.getElementById('days'),budgetEl=b.querySelector('.budget');
-  if(daysEl&&budgetEl) budgetEl.style.top=(daysEl.offsetTop+daysEl.offsetHeight)+'px';
   orderEvents(evs).forEach((ev,i)=>b.appendChild(matchCard(ev,ev.sport==='mma'&&i===0)));
   drawDock();
 }

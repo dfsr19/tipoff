@@ -105,8 +105,12 @@ header::after{content:'';position:absolute;left:0;right:0;bottom:-1px;height:1px
   color:#04121F;padding:2px 7px;border-radius:20px}
 .ditem.red{color:var(--bad)}
 
-/* ═══════ REITER ═══════ */
-nav{display:flex;gap:5px;padding:9px 12px;background:var(--bg);position:sticky;top:0;z-index:20;
+/* ═══════ REITER ═══════
+   Reiter, Spieltag-Auswahl und Budget-Leiste stecken zusammen in .topbar, die als
+   Ganzes klebt. So stapeln sie sich einfach im normalen Fluss — kein Pixel-Raten
+   für die Klebeposition jedes einzelnen Teils mehr nötig. */
+.topbar{position:sticky;top:0;z-index:20;background:var(--bg)}
+nav{display:flex;gap:5px;padding:9px 12px;background:var(--bg);
   border-bottom:1px solid var(--line)}
 nav button{flex:1;border-radius:10px;color:var(--muted);font-size:12px;font-weight:600;
   padding:9px 2px;transition:all .15s}
@@ -262,7 +266,7 @@ textarea{min-height:88px;resize:vertical;line-height:1.55}
 
 /* ═══════ BUDGET ═══════ */
 .budget{display:flex;align-items:center;gap:11px;background:var(--card);border:1px solid var(--line);
-  border-radius:13px;padding:12px 14px;margin-bottom:14px;position:sticky;top:53px;z-index:19}
+  border-radius:13px;padding:12px 14px;margin:11px 12px}
 .budget .lb{font-size:10px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
 .bar{flex:1;height:6px;background:var(--raise);border-radius:4px;overflow:hidden}
 .bar i{display:block;height:100%;background:var(--blue);border-radius:4px;transition:width .3s}
@@ -2256,10 +2260,13 @@ function vRound(){
     </div>
     <button class="ico" id="menu" aria-label="Menü"><span class="burger"><i></i><i></i><i></i></span></button>
   </div></header>
+  <div class="topbar">
   <nav>${tabs.map(t=>`<button data-t="${t}" aria-selected="${S.tab===t}">${
     {tippen:'Tippen',ergebnis:'Ergebnis',tabelle:'Tabelle',chat:'Chat',info:'Runde'}[t]
     }</button>`).join('')}</nav>
   ${(S.tab==='tippen'||S.tab==='ergebnis')&&fb?'<div class="days" id="days"></div>':''}
+  ${S.tab==='tippen'&&!r.custom?'<div id="budgetbar"></div>':''}
+  </div>
   <main id="body"></main><div id="foot"></div>`;
   bindBack();
   app.querySelector('#menu').onclick=()=>{S.menu=true;drawMenu();};
@@ -2298,8 +2305,8 @@ function tabTip(){
   const st=settled(),l=left();
   const dl=r.custom&&!r.useDates&&evs[0]&&evs[0].lockAt?evs[0].lockAt:null;
   const stage=r.custom&&evs[0]&&evs[0].stage;
-  b.innerHTML=r.custom
-    ?(`${stage?`<div class="sec" style="margin:0 0 10px">${esc(stage)}<span class="ln"></span></div>`:''}
+  if(r.custom){
+    b.innerHTML=`${stage?`<div class="sec" style="margin:0 0 10px">${esc(stage)}<span class="ln"></span></div>`:''}
       <p class="hint" style="margin:0 0 14px;text-align:center">Jeder richtige Tipp bringt
         <b style="color:var(--win)">${CFG.amateurPts} Punkte</b></p>
       ${r.useDates?`<p class="hint" style="margin:0 0 14px;text-align:center">
@@ -2308,12 +2315,18 @@ function tabTip(){
           border-radius:12px;padding:12px 14px;margin:0 0 14px;text-align:center;
           color:var(--bad);font-weight:700;font-size:13.5px">
           ${dl<=new Date()?'⏱ Tippen ist beendet — Frist war':'⏱ Tipp-Annahmeschluss'}: ${when(dl)} Uhr</div>`
-      :''}`)
-    :`<div class="budget">
-    <span class="lb">${st?'Ergebnis':'Budget'}</span>
-    <span class="bar"><i style="width:${st?100:l/CFG.budget*100}%"></i></span>
-    <span class="nm" style="${st?'color:var(--win)':''}">${
-      st?'+'+fmt(r.settled[dayKey()].me)+' P':l+' / '+CFG.budget}</span></div>`;
+      :''}`;
+  }else{
+    b.innerHTML='';
+    /* Budget lebt in .topbar (fest oben, außerhalb von #body) statt im scrollenden
+       Inhalt — dadurch klebt es sauber zusammen mit Reitern und Spieltag-Auswahl. */
+    const bar=app.querySelector('#budgetbar');
+    if(bar) bar.innerHTML=`<div class="budget">
+      <span class="lb">${st?'Ergebnis':'Budget'}</span>
+      <span class="bar"><i style="width:${st?100:l/CFG.budget*100}%"></i></span>
+      <span class="nm" style="${st?'color:var(--win)':''}">${
+        st?'+'+fmt(r.settled[dayKey()].me)+' P':l+' / '+CFG.budget}</span></div>`;
+  }
   orderEvents(evs).forEach((ev,i)=>b.appendChild(matchCard(ev,ev.sport==='mma'&&i===0)));
   drawDock();
 }

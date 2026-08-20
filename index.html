@@ -2530,13 +2530,19 @@ function tabEntry(){
   const svBtn=app.querySelector('#sv');
   if(svBtn) svBtn.onclick=async()=>{
     if(fehlt()) return toast(`Noch ${fehlt()} Ergebnis${fehlt()>1?'se':''} offen`);
-    /* Erst jetzt, beim tatsächlichen Speichern, wird der Entwurf zum echten Ergebnis. */
-    evs.forEach(ev=>{
+    /* Erst jetzt, beim tatsächlichen Speichern, wird der Entwurf zum echten Ergebnis —
+       und zwar für die GANZE Runde, nicht nur den gerade sichtbaren Spieltag. Sonst
+       gehen Ergebnisse verloren, die man sich für andere Spieltage schon zurechtgelegt,
+       aber noch nicht gespeichert hatte, bevor man den Spieltag gewechselt hat. */
+    (r.events||[]).forEach(ev=>{
       if(r._draftResults[ev.id]) r.results[ev.id]=r._draftResults[ev.id];
       else delete r.results[ev.id];
     });
     await fsSyncResults(r);
-    r._savedSnap[k]=snapshot();
+    /* Alle Baselines verwerfen, nicht nur die des sichtbaren Spieltags — sonst zeigt ein
+       anderer Spieltag, den man vorher schon fertig ausgefüllt hatte, fälschlich weiter
+       "Ergebnisse speichern" an, obwohl seine Daten längst korrekt gespeichert sind. */
+    r._savedSnap={};
     r._draftResults=null;
     const n=autoSettle();
     toast(n?'Gewertet — Punkte verteilt':'Gespeichert');

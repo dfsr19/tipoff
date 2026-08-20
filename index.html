@@ -262,7 +262,7 @@ textarea{min-height:88px;resize:vertical;line-height:1.55}
 
 /* ═══════ BUDGET ═══════ */
 .budget{display:flex;align-items:center;gap:11px;background:var(--card);border:1px solid var(--line);
-  border-radius:13px;padding:12px 14px;margin-bottom:14px}
+  border-radius:13px;padding:12px 14px;margin-bottom:14px;position:sticky;top:107px;z-index:18}
 .budget .lb{font-size:10px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
 .bar{flex:1;height:6px;background:var(--raise);border-radius:4px;overflow:hidden}
 .bar i{display:block;height:100%;background:var(--blue);border-radius:4px;transition:width .3s}
@@ -2384,11 +2384,18 @@ function matchCard(ev,isMain){
 
   if(p&&!zu&&!ev.noOdds){
     const s=document.createElement('div');s.className='stake';
-    const mx=Math.min(CFG.budget,p.stake+left());
-    s.innerHTML=`<input type="range" min="5" max="${mx}" step="5" value="${p.stake}" aria-label="Einsatz">
+    /* Skala bleibt fix bei CFG.budget — sonst rutscht der Punkt auf der Leiste optisch,
+       sobald bei einem ANDEREN Tipp mehr Budget verbraucht wird, auch wenn der eigene
+       Einsatz sich gar nicht geändert hat. Die Obergrenze wird stattdessen erst beim
+       Ziehen selbst geprüft und der Wert bei Bedarf dort zurückgehalten. */
+    s.innerHTML=`<input type="range" min="5" max="${CFG.budget}" step="5" value="${p.stake}" aria-label="Einsatz">
       <span class="v"><b>${p.stake} P</b> → ${fmt(p.stake*p.q)} P</span>`;
     const i=s.querySelector('input');
-    i.oninput=e=>{p.stake=+e.target.value;
+    i.oninput=e=>{
+      const maxErlaubt=p.stake+left();
+      let v=+e.target.value;
+      if(v>maxErlaubt){ v=maxErlaubt; e.target.value=v; }
+      p.stake=v;
       s.querySelector('.v').innerHTML=`<b>${p.stake} P</b> → ${fmt(p.stake*p.q)} P`;};
     i.onchange=()=>{r.pendingSync=r.pendingSync||{};r.pendingSync[ev.id]=true;render();};
     el.appendChild(s);

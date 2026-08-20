@@ -1728,7 +1728,7 @@ function vCreate(){
     if(!d.matchdays||!d.matchdays.length){
       d.matchdays=autoSchedule(d.teams);
     }
-    if(d.useDates===undefined) d.useDates=true;
+    if(d.useDates===undefined) d.useDates=false;
     const teamOpts=sel=>d.teams.map(t=>`<option ${t===sel?'selected':''}>${esc(t)}</option>`).join('');
     const groupMd=d.matchdays.filter(m=>!m.stage), koMd=d.matchdays.filter(m=>m.stage);
     app.innerHTML=head('Spielplan','Schritt 2 von 2')+`
@@ -1767,6 +1767,14 @@ function vCreate(){
     app.querySelectorAll('[data-year]').forEach(s=>s.onchange=()=>{
       const md=d.matchdays.find(m=>m.id===s.dataset.year);const [,m,dd]=(md.date||isoToday()).split('-');
       setDate(md.id,s.value,m,dd);});
+    const setTime=(id,h,mi)=>{const md=d.matchdays.find(x=>x.id===id);
+      if(md) md.time=`${String(h).padStart(2,'0')}:${String(mi).padStart(2,'0')}`;};
+    app.querySelectorAll('[data-timeh]').forEach(s=>s.onchange=()=>{
+      const md=d.matchdays.find(m=>m.id===s.dataset.timeh);const [,mi]=(md.time||'19:00').split(':');
+      setTime(md.id,s.value,mi);});
+    app.querySelectorAll('[data-timem]').forEach(s=>s.onchange=()=>{
+      const md=d.matchdays.find(m=>m.id===s.dataset.timem);const [h]=(md.time||'19:00').split(':');
+      setTime(md.id,h,s.value);});
     app.querySelectorAll('[data-home]').forEach(s=>s.onchange=()=>{
       d.matchdays.forEach(m=>{const p=m.pairings.find(x=>x.id===s.dataset.home);if(p)p.home=s.value;});});
     app.querySelectorAll('[data-away]').forEach(s=>s.onchange=()=>{
@@ -1878,7 +1886,8 @@ function matchdaysToEvents(matchdays,useDates,idPrefix){
   const events=[];
   matchdays.forEach((md,mi)=>{
     const day=mi+1;
-    const start=useDates?(parseISODate(md.date,19)||new Date()):null;
+    const [hh,mi_]=(md.time||'19:00').split(':').map(Number);
+    const start=useDates?(parseISODate(md.date,hh,mi_)||new Date()):null;
     const lockAt=useDates?(parseISODate(md.date,0)||new Date()):parseISODateTime(md.deadline);
     md.pairings.filter(p=>p.home&&p.away&&p.home!==p.away).forEach((p,pi)=>{
       events.push({id:`${idPrefix}-${day}-${pi}`,day,home:p.home,away:p.away,
@@ -1895,8 +1904,9 @@ function eventsToMatchdays(events,r){
   const byDay={};
   (events||[]).forEach(e=>{(byDay[e.day||1]=byDay[e.day||1]||[]).push(e);});
   return Object.keys(byDay).map(Number).sort((a,b)=>a-b).map(day=>{
-    const evs=byDay[day], t=evs[0]&&(evs[0].lockAt||evs[0].start);
+    const evs=byDay[day], t=evs[0]&&(evs[0].lockAt||evs[0].start), disp=evs[0]&&evs[0].start;
     return {id:'md'+(++SEQ), date:t?isoDate(t):isoToday(),
+      time:disp?String(disp.getHours()).padStart(2,'0')+':'+String(disp.getMinutes()).padStart(2,'0'):'19:00',
       deadline:evs[0]&&evs[0].lockAt?isoDateTime(evs[0].lockAt):null,
       stage:evs[0]&&evs[0].stage||'',
       played:r?evs.every(e=>eventResult(e,r)):false,
@@ -1966,6 +1976,14 @@ function vEditSchedule(){
   app.querySelectorAll('[data-year]').forEach(s=>s.onchange=()=>{
     const md=d.matchdays.find(m=>m.id===s.dataset.year);const [,m,dd]=(md.date||isoToday()).split('-');
     setDate(md.id,s.value,m,dd);});
+  const setTime=(id,h,mi)=>{const md=d.matchdays.find(x=>x.id===id);
+    if(md) md.time=`${String(h).padStart(2,'0')}:${String(mi).padStart(2,'0')}`;};
+  app.querySelectorAll('[data-timeh]').forEach(s=>s.onchange=()=>{
+    const md=d.matchdays.find(m=>m.id===s.dataset.timeh);const [,mi]=(md.time||'19:00').split(':');
+    setTime(md.id,s.value,mi);});
+  app.querySelectorAll('[data-timem]').forEach(s=>s.onchange=()=>{
+    const md=d.matchdays.find(m=>m.id===s.dataset.timem);const [h]=(md.time||'19:00').split(':');
+    setTime(md.id,h,s.value);});
   app.querySelectorAll('[data-home]').forEach(s=>s.onchange=()=>{
     d.matchdays.forEach(m=>{const p=m.pairings.find(x=>x.id===s.dataset.home);if(p)p.home=s.value;});});
   app.querySelectorAll('[data-away]').forEach(s=>s.onchange=()=>{
@@ -2020,9 +2038,9 @@ function parseDay(s){
 }
 /* Datum im Format JJJJ-MM-TT. hour steuert die Uhrzeit — 19 für die Anzeige,
    0 (Mitternacht) für den Sperrzeitpunkt, damit der Spieltag selbst schon zu ist. */
-function parseISODate(s,hour=19){
+function parseISODate(s,hour=19,minute=0){
   const m=String(s||'').match(/^(\d{4})-(\d{2})-(\d{2})$/); if(!m) return null;
-  const d=new Date(+m[1],+m[2]-1,+m[3],hour,0);
+  const d=new Date(+m[1],+m[2]-1,+m[3],hour,minute);
   return isNaN(d)?null:d;
 }
 const isoDate=(dt=new Date())=>dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');
@@ -2038,24 +2056,35 @@ const MONTHE=['Januar','Februar','März','April','Mai','Juni','Juli','August','S
    der normalen Spieltage — nicht als Option innerhalb jeder einzelnen Spieltag-Karte. */
 const STAGES=['Achtelfinale','Viertelfinale','Halbfinale','Finale'];
 /* Mit/Ohne Datum: die farbigen Erklär-Boxen SIND der Schalter, nebeneinander, antippbar. */
+/* Eigene, schlichte Symbole statt iOS-Emoji. */
+const CAL_SVG=`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+  stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18"/><path d="M8 3v4"/><path d="M16 3v4"/>
+</svg>`;
+const FLAG_SVG=`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+  stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M5 21V4"/><path d="M5 4h13l-3 4 3 4H5"/>
+</svg>`;
 function dateModeSelector(d){
   return `<label>Mit Termin oder ohne?</label>
     <div style="display:flex;gap:8px;margin:0 0 14px">
-      <button data-ud="1" aria-pressed="${d.useDates}" style="flex:1;text-align:left;
-        background:rgba(80,170,240,.10);border:1px solid rgba(80,170,240,${d.useDates?'.8':'.28'});
-        border-radius:12px;padding:12px 13px">
-        <span style="display:block;font-size:13px;font-weight:700;color:var(--blue)">📅 Mit Datum</span>
-        <span style="display:block;font-size:11.5px;color:var(--muted);margin-top:4px;line-height:1.4">
-          Für eine ganze Saison über mehrere Wochen — z. B. eine Hobby-Liga mit einem
-          Spieltag pro Woche.</span>
-      </button>
       <button data-ud="0" aria-pressed="${!d.useDates}" style="flex:1;text-align:left;
-        background:rgba(251,191,36,.10);border:1px solid rgba(251,191,36,${!d.useDates?'.8':'.28'});
-        border-radius:12px;padding:12px 13px">
-        <span style="display:block;font-size:13px;font-weight:700;color:var(--warn)">⚡ Ohne Datum</span>
+        background:rgba(167,139,250,.10);border:${!d.useDates?'2px solid #A78BFA':'1px solid rgba(167,139,250,.15)'};
+        border-radius:12px;padding:${!d.useDates?'11px 12px':'12px 13px'};opacity:${!d.useDates?'1':'.5'}">
+        <span style="display:flex;align-items:center;gap:6px;color:#A78BFA">${FLAG_SVG}
+          <span style="font-size:13px;font-weight:700">Ohne Datum</span></span>
         <span style="display:block;font-size:11.5px;color:var(--muted);margin-top:4px;line-height:1.4">
           Für ein Turnier an einem Tag — z. B. ein Kinderturnier oder ein Fußballturnier
           mit Freunden.</span>
+      </button>
+      <button data-ud="1" aria-pressed="${d.useDates}" style="flex:1;text-align:left;
+        background:rgba(80,170,240,.10);border:${d.useDates?'2px solid var(--blue)':'1px solid rgba(80,170,240,.15)'};
+        border-radius:12px;padding:${d.useDates?'11px 12px':'12px 13px'};opacity:${d.useDates?'1':'.5'}">
+        <span style="display:flex;align-items:center;gap:6px;color:var(--blue)">${CAL_SVG}
+          <span style="font-size:13px;font-weight:700">Mit Datum</span></span>
+        <span style="display:block;font-size:11.5px;color:var(--muted);margin-top:4px;line-height:1.4">
+          Für eine ganze Saison über mehrere Wochen — z. B. eine Hobby-Liga mit einem
+          Spieltag pro Woche.</span>
       </button>
     </div>
     <p class="hint" style="margin:0 0 16px">${d.useDates
@@ -2077,7 +2106,11 @@ function matchdayCardHtml(md,title,isKO,useDates,teamOpts,canRemove,stageOptions
     ${isKO?`<select data-stage="${md.id}" style="margin-bottom:12px">
       ${opts.map(s=>`<option ${md.stage===s?'selected':''}>${s}</option>`).join('')}
     </select>`:''}
-    ${useDates?`<label>Datum</label>${dateWheels(md)}`:''}
+    ${useDates?`<label>Datum</label>${dateWheels(md)}
+      <div style="display:flex;align-items:center;gap:6px;margin-top:8px">
+        <span class="hint" style="margin:0;font-size:11px">Uhrzeit (optional)</span>
+        ${timeWheels(md)}
+      </div>`:''}
     ${isKO&&!useDates?(md.played?`
       <div style="margin-top:0;background:rgba(52,211,153,.10);border:1px solid rgba(52,211,153,.35);
         border-radius:12px;padding:12px;display:flex;align-items:center;gap:8px">
@@ -2122,6 +2155,19 @@ function dateWheels(md){
     <select data-year="${md.id}" style="flex:.9">${years.map(x=>
       `<option ${x===y?'selected':''}>${x}</option>`).join('')}</select>
   </div>`;
+}
+/* Kompakte Uhrzeit-Räder — bewusst klein, keine ganze Zeile wie beim Datum. Rein informativ
+   fürs Anzeigen des Anstoßes; die Sperre bleibt bei "Mit Datum" immer der Vortag. */
+function timeWheels(md){
+  const [hh,mi]=(md.time||'19:00').split(':').map(Number);
+  const hours=Array.from({length:24},(_,i)=>i);
+  const mins=Array.from({length:60},(_,i)=>i);
+  return `<select data-timeh="${md.id}" style="width:60px;padding:8px 4px;font-size:12.5px">
+    ${hours.map(h=>`<option value="${h}" ${h===hh?'selected':''}>${String(h).padStart(2,'0')}</option>`).join('')}
+  </select><span class="hint" style="margin:0">:</span>
+  <select data-timem="${md.id}" style="width:60px;padding:8px 4px;font-size:12.5px">
+    ${mins.map(m=>`<option value="${m}" ${m===mi?'selected':''}>${String(m).padStart(2,'0')}</option>`).join('')}
+  </select> <span class="hint" style="margin:0">Uhr</span>`;
 }
 /* Frist je Spieltag für "Ohne Datum"-Runden — Datum + Uhrzeit, gleiche Rad-Optik wie
    das normale Datum. Eigene data-Attribute (data-dl*), pro Spieltag über die ID
@@ -2407,13 +2453,19 @@ function tabEntry(){
   const b=app.querySelector('#body');
   if(!evs.length) return b.innerHTML='<div class="empty">Für diesen Spieltag gibt es keine Spiele.</div>';
 
+  /* Eigener Entwurfsspeicher fürs Auswählen — getrennt von r.results, das überall sonst
+     (Tippen, Tabelle, Punktevergabe) als "wirklich feststehendes" Ergebnis gilt. Sonst
+     zeigt die Tippen-Ansicht sofort ein Ergebnis an, bevor überhaupt gespeichert wurde. */
+  r._draftResults=r._draftResults||{...r.results};
+  const draftResult=ev=>{const x=r._draftResults[ev.id]; return x&&x.side?x:null;};
+
   const nochOffen=evs.some(e=>!started(e));
   b.innerHTML=`
     ${r.owner==='me'&&nochOffen&&!r.settled[k]?`<button class="btn ghost" id="closeNow"
         style="margin:0 0 16px;padding:11px;font-size:13px">
         Tippen für diesen Spieltag jetzt schließen</button>`:''}
     ${evs.map(ev=>{
-      const x=r.results[ev.id]||{};
+      const x=r._draftResults[ev.id]||{};
       return `<div class="card" style="margin-bottom:10px">
         <div class="mtop">${ev.start?when(ev.start):''}</div>
         <div class="res3" style="display:flex;gap:8px;margin-top:8px">
@@ -2447,17 +2499,17 @@ function tabEntry(){
     go('editSchedule');
   };
 
-  const fehlt=()=>evs.filter(e=>!eventResult(e,r)).length;
+  const fehlt=()=>evs.filter(e=>!draftResult(e)).length;
   /* Zähler zeigt den Fortschritt über die ganze Runde, nicht nur den sichtbaren Spieltag —
      analog zur Tipp-Abgabe. Das Formular selbst bleibt pro Spieltag, nur die Zahl oben zählt alles. */
   const allEvs=r.custom?(r.events||[]):evs;
-  const fehltAlle=()=>allEvs.filter(e=>!eventResult(e,r)).length;
+  const fehltAlle=()=>allEvs.filter(e=>!draftResult(e)).length;
 
   /* Merkt sich pro Spieltag, was zuletzt gespeichert wurde — der Button verschwindet,
      solange sich seitdem nichts geändert hat, und heißt "Ergebnis ändern" statt
      "Ergebnisse speichern", sobald schon mal gespeichert wurde. */
   r._savedSnap=r._savedSnap||{};
-  const snapshot=()=>JSON.stringify(evs.map(e=>r.results[e.id]||null));
+  const snapshot=()=>JSON.stringify(evs.map(e=>r._draftResults[e.id]||null));
   if(!(k in r._savedSnap)) r._savedSnap[k]=evs.every(e=>eventResult(e,r))?snapshot():false;
   const wasSavedBefore=r._savedSnap[k]!==false;
   const isDirty=r._savedSnap[k]===false||r._savedSnap[k]!==snapshot();
@@ -2469,9 +2521,9 @@ function tabEntry(){
     :`<div class="dock"><div class="dockmsg">${allEvs.length-fehltAlle()} von ${allEvs.length} eingetragen · Gespeichert</div></div>`;
 
   b.querySelectorAll('[data-res]').forEach(btn=>btn.onclick=()=>{
-    const id=btn.dataset.res,side=btn.dataset.side,cur=r.results[id];
-    if(cur&&cur.side===side) delete r.results[id];
-    else r.results[id]={side};
+    const id=btn.dataset.res,side=btn.dataset.side,cur=r._draftResults[id];
+    if(cur&&cur.side===side) delete r._draftResults[id];
+    else r._draftResults[id]={side};
     render();
   });
   const closeBtn=app.querySelector('#closeNow');
@@ -2479,8 +2531,14 @@ function tabEntry(){
   const svBtn=app.querySelector('#sv');
   if(svBtn) svBtn.onclick=async()=>{
     if(fehlt()) return toast(`Noch ${fehlt()} Ergebnis${fehlt()>1?'se':''} offen`);
+    /* Erst jetzt, beim tatsächlichen Speichern, wird der Entwurf zum echten Ergebnis. */
+    evs.forEach(ev=>{
+      if(r._draftResults[ev.id]) r.results[ev.id]=r._draftResults[ev.id];
+      else delete r.results[ev.id];
+    });
     await fsSyncResults(r);
     r._savedSnap[k]=snapshot();
+    r._draftResults=null;
     const n=autoSettle();
     toast(n?'Gewertet — Punkte verteilt':'Gespeichert');
     S.tab=n?'tabelle':'tippen';render();

@@ -2066,8 +2066,7 @@ const FLAG_SVG=`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stro
   <path d="M5 21V4"/><path d="M5 4h13l-3 4 3 4H5"/>
 </svg>`;
 function dateModeSelector(d){
-  return `<label>Mit Termin oder ohne?</label>
-    <div style="display:flex;gap:8px;margin:0 0 14px">
+  return `<div style="display:flex;gap:8px;margin:0 0 14px">
       <button data-ud="0" aria-pressed="${!d.useDates}" style="flex:1;text-align:left;
         background:rgba(167,139,250,.10);border:${!d.useDates?'2px solid #A78BFA':'1px solid rgba(167,139,250,.15)'};
         border-radius:12px;padding:${!d.useDates?'11px 12px':'12px 13px'};opacity:${!d.useDates?'1':'.5'}">
@@ -2098,7 +2097,8 @@ function dateModeSelector(d){
    noch nicht verwendeten Phasen ein (plus die eigene, damit die aktuelle Wahl sichtbar bleibt). */
 function matchdayCardHtml(md,title,isKO,useDates,teamOpts,canRemove,stageOptions){
   const opts=stageOptions||STAGES;
-  return `<div class="card" style="margin-top:16px;margin-bottom:11px" data-md="${md.id}">
+  return `<div class="card" style="margin-top:16px;margin-bottom:${md.played?'22px':'11px'};position:relative;
+      ${md.played?'border:2px solid var(--win)':''}" data-md="${md.id}">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:11px">
       <b style="font-family:'Poppins';flex:1;${isKO?'color:#A78BFA':''}">${esc(title)}</b>
       ${canRemove?`<button class="mini no" data-rmmd="${md.id}">Entfernen</button>`:''}
@@ -2111,11 +2111,7 @@ function matchdayCardHtml(md,title,isKO,useDates,teamOpts,canRemove,stageOptions
         <span class="hint" style="margin:0;font-size:11px">Uhrzeit (optional)</span>
         ${timeWheels(md)}
       </div>`:''}
-    ${isKO&&!useDates?(md.played?`
-      <div style="margin-top:0;background:rgba(52,211,153,.10);border:1px solid rgba(52,211,153,.35);
-        border-radius:12px;padding:12px;display:flex;align-items:center;gap:8px">
-        <span style="color:var(--win);font-weight:700;font-size:13.5px">✓ Bereits gespielt</span>
-      </div>`:`
+    ${isKO&&!useDates&&!md.played?`
       <div style="margin-top:${useDates?'12px':'0'};background:rgba(167,139,250,.08);
         border:1px solid rgba(167,139,250,.3);border-radius:12px;padding:12px">
         ${md.deadline?`
@@ -2128,7 +2124,7 @@ function matchdayCardHtml(md,title,isKO,useDates,teamOpts,canRemove,stageOptions
             sonst können Teilnehmer tippen, während das Spiel schon läuft.</p>
           <button class="btn ghost" data-setdl="${md.id}" style="padding:9px;font-size:12.5px">
             + Frist für diesen Spieltag</button>`}
-      </div>`):''}
+      </div>`:''}
     ${md.pairings.map(p=>`
       <div style="display:flex;align-items:center;gap:8px;margin-top:12px">
         <select data-home="${p.id}" style="flex:1">${teamOpts(p.home)}</select>
@@ -2138,6 +2134,9 @@ function matchdayCardHtml(md,title,isKO,useDates,teamOpts,canRemove,stageOptions
       </div>`).join('')}
     <button class="btn ghost" data-addp="${md.id}" style="margin-top:12px;padding:11px;font-size:13.5px">
       + Paarung</button>
+    ${md.played?`<span style="position:absolute;left:50%;bottom:-11px;transform:translateX(-50%);
+      background:var(--card);padding:2px 12px;color:var(--win);font-weight:700;font-size:12px;
+      border-radius:20px;white-space:nowrap">✓ Bereits gespielt</span>`:''}
   </div>`;
 }
 /* Drei einzelne <select> statt <input type="date"> — auf dem iPhone öffnet jedes für sich

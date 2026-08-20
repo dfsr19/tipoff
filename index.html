@@ -2314,6 +2314,10 @@ function tabTip(){
     <span class="bar"><i style="width:${st?100:l/CFG.budget*100}%"></i></span>
     <span class="nm" style="${st?'color:var(--win)':''}">${
       st?'+'+fmt(r.settled[dayKey()].me)+' P':l+' / '+CFG.budget}</span></div>`;
+  /* Klebeposition der Budget-Leiste live an die tatsächliche Höhe von Reitern + Spieltag-
+     Auswahl anpassen, statt einen festen Wert zu raten — der stimmt sonst nicht überall. */
+  const daysEl=document.getElementById('days'),budgetEl=b.querySelector('.budget');
+  if(daysEl&&budgetEl) budgetEl.style.top=(daysEl.offsetTop+daysEl.offsetHeight)+'px';
   orderEvents(evs).forEach((ev,i)=>b.appendChild(matchCard(ev,ev.sport==='mma'&&i===0)));
   drawDock();
 }

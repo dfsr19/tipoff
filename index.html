@@ -2409,7 +2409,15 @@ function matchCard(ev,isMain){
       let v=+e.target.value;
       if(v>maxErlaubt){ v=maxErlaubt; e.target.value=v; }
       p.stake=v;
-      s.querySelector('.v').innerHTML=`<b>${p.stake} P</b> → ${fmt(p.stake*p.q)} P`;};
+      s.querySelector('.v').innerHTML=`<b>${p.stake} P</b> → ${fmt(p.stake*p.q)} P`;
+      /* Budget-Leiste oben direkt beim Ziehen mitziehen, nicht erst nach dem Loslassen
+         über einen kompletten Neu-Aufbau — das hakte nach einem Tab-Wechsel. */
+      const bar=document.getElementById('budgetbar');
+      if(bar){
+        const l2=left(), bi=bar.querySelector('.bar i'), nm=bar.querySelector('.nm');
+        if(bi) bi.style.width=(l2/CFG.budget*100)+'%';
+        if(nm) nm.textContent=l2+' / '+CFG.budget;
+      }};
     i.onchange=()=>{r.pendingSync=r.pendingSync||{};r.pendingSync[ev.id]=true;render();};
     el.appendChild(s);
   }

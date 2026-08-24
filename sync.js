@@ -377,10 +377,16 @@ function buildUFC(oddsEvents, results){
     /* Einmal entschiedene Kämpfe dauerhaft behalten — auch wenn die zugehörige
        Fight Card das rollierende ESPN-Fenster längst verlassen hat. Sonst
        verschwindet eine ganze Card nach ein paar Tagen komplett aus der Tabelle,
-       obwohl die Punkte dafür ja schon vergeben wurden. */
+       obwohl die Punkte dafür ja schon vergeben wurden. Die ID wird dabei immer
+       neu aus den Namen berechnet, nicht 1:1 übernommen — so heilen auch Kämpfe,
+       deren gespeicherte ID noch aus einer älteren Version des Skripts stammt. */
     const bekannt = new Set(fights.map(f=>f.id));
     for(const f of loadPreviousUFCFights()){
-      if(f.finished && !bekannt.has(f.id)){ fights.push(f); bekannt.add(f.id); }
+      if(!f.finished) continue;
+      const id = mmaId(f.home,f.away);
+      if(bekannt.has(id)) continue;
+      fights.push({...f, id});
+      bekannt.add(id);
     }
     if(fights.length) competitions.push({id:'ufc', name:'UFC', sport:'mma', matches:fights});
     bericht.push(`UFC: ${fights.length} Kämpfe, ${fights.filter(f=>f.finished).length} entschieden`);

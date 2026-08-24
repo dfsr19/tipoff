@@ -2592,8 +2592,8 @@ function tabTable(){
     const vergangen=all.filter(e=>eventResult(e,r));
     const aktuell=all.filter(e=>!eventResult(e,r));
     days=[];
-    if(vergangen.length) days.push({evs:vergangen,stage:'Vergangene Kämpfe',past:true});
     if(aktuell.length) days.push({evs:aktuell,stage:'Aktuelle Karte',past:false});
+    if(vergangen.length) days.push({evs:vergangen,stage:'Vergangene Kämpfe',past:true});
   }else{
     const mx=maxDay(r);
     days=[]; for(let d=1;d<=mx;d++){ const de=orderEvents(eventsOf(r,d)); if(de.length) days.push({d,evs:de,stage:de[0]&&de[0].stage}); }
@@ -2616,9 +2616,12 @@ function tabTable(){
     const tend=p.type==='exact'?scoreTend(p.side):p.side;
     return `<span style="color:${tend===res.side?'var(--win)':'var(--bad)'}">${label}</span>`;
   };
-  /* Alle Spieltage (bzw. bei UFC: vergangene Kämpfe + aktuelle Karte) nebeneinander,
-     mit einer farblich getrennten Kopfzeile. */
+  /* Alle Spieltage (bzw. bei UFC: aktuelle Karte + vergangene Kämpfe) nebeneinander,
+     mit einer farblich getrennten Kopfzeile. Die Färbung zieht sich bei vergangenen
+     Kämpfen durch die ganze Spalte durch, nicht nur durch die Kopfzeile. */
   const dayStart=new Set(days.slice(1).map(x=>x.evs[0]&&x.evs[0].id).filter(Boolean));
+  const pastIds=new Set(days.filter(x=>x.past).flatMap(x=>x.evs.map(e=>e.id)));
+  const pastBg='background:rgba(138,147,158,.10);';
   const div='border-left:1px solid rgba(80,170,240,.35);';
   const matchTable=evs.length?`
     <div style="overflow-x:auto;margin-bottom:20px;-webkit-overflow-scrolling:touch">
@@ -2629,19 +2632,19 @@ function tabTable(){
             ${days.map((x,i)=>`<th colspan="${x.evs.length}" style="padding:4px 10px;
               font-weight:700;color:${x.past?'var(--muted)':'var(--blue)'};font-size:10.5px;text-transform:uppercase;
               letter-spacing:.06em;text-align:left;${i>0?div:''};
-              ${x.past?'background:rgba(138,147,158,.10)':''}">${esc(x.stage||('Spieltag '+x.d))}</th>`).join('')}
+              ${x.past?pastBg:''}">${esc(x.stage||('Spieltag '+x.d))}</th>`).join('')}
           </tr>`:''}
           <tr>
           <th style="position:sticky;left:0;background:var(--surface);padding:0 12px 8px 0"></th>
           ${evs.map(ev=>`<th style="padding:0 10px 8px;font-weight:600;color:var(--muted);
-            ${dayStart.has(ev.id)?div:''}">
+            ${dayStart.has(ev.id)?div:''}${pastIds.has(ev.id)?pastBg:''}">
             ${esc(teamAbbr(ev.home,ev))}–${esc(teamAbbr(ev.away,ev))}</th>`).join('')}
         </tr></thead>
         <tbody>${rows.map(m=>`<tr>
           <td style="position:sticky;left:0;background:var(--surface);padding:7px 12px 7px 0;
             font-weight:600">${esc(m.name)}</td>
           ${evs.map(ev=>`<td style="text-align:center;padding:7px 10px;color:var(--muted);
-            ${dayStart.has(ev.id)?div:''}">
+            ${dayStart.has(ev.id)?div:''}${pastIds.has(ev.id)?pastBg:''}">
             ${cellFor(m,ev)}</td>`).join('')}
         </tr>`).join('')}</tbody>
       </table>

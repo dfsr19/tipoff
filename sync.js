@@ -260,6 +260,23 @@ function buildFootball(match, oddsEvents, table){
    außerdem aus den Live-Quoten, sobald er vorbei ist — deshalb wird zusätzlich
    alles aus den ESPN-Ergebnissen nachgetragen, was da schon rausgefallen ist. */
 const isWeekend = ts => { const d = new Date(ts).getUTCDay(); return d===0 || d===6; };
+/* Stabile, namensbasierte Kennung statt der Odds-API-eigenen ID — die ändert
+   sich sonst, sobald ein Kampf aus den Live-Quoten fällt und über ESPN
+   nachgetragen wird. Reihenfolge-unabhängig (sortiert), damit "Sieger zuerst"
+   (Nachtrag) und "Heim zuerst" (Live-Quote) dieselbe ID ergeben — sonst
+   verwaisen abgegebene Tipps genau in dem Moment, in dem ein Kampf endet. */
+const mmaId = (a,b) => 'mma-'+[normName(a),normName(b)].sort().join('-');
+/* Liest die noch bestehende data.json (vor dem Überschreiben), um bereits
+   entschiedene Kämpfe aus früheren Läufen zu übernehmen, die jetzt außerhalb
+   des ESPN-Nachtrag-Fensters liegen. Fehlt die Datei (allererster Lauf),
+   einfach leer weitermachen — kein Grund, den Sync abzubrechen. */
+function loadPreviousUFCFights(){
+  try{
+    const prev = JSON.parse(require('fs').readFileSync('data.json','utf8'));
+    const comp = (prev.competitions||[]).find(c => c.id==='ufc');
+    return (comp && comp.matches) || prev.fights || [];
+  }catch(e){ return []; }
+}
 function buildUFC(oddsEvents, results){
   const built = oddsEvents.map(ev => {
     const best = bestPrices(ev);
@@ -275,7 +292,7 @@ function buildUFC(oddsEvents, results){
     return {
       /* Kennung von der API — bleibt über Wochen gleich, damit
          abgegebene Tipps beim nächsten Abruf nicht ins Leere laufen. */
-      id:'mma-'+ev.id, day:1, sport:'mma', source:'mkt',
+      id:mmaId(ev.home_team,ev.away_team), day:1, sport:'mma', source:'mkt',
       start:ev.commence_time, home:ev.home_team, away:ev.away_team, finished,
       ...(winner ? {winner} : {}),
       sides:[
@@ -294,7 +311,7 @@ function buildUFC(oddsEvents, results){
       (sameFighter(f.winnerName,b.away) && sameFighter(f.loserName,b.home)));
     if(already) continue;
     built.push({
-      id:'mma-'+normName(f.winnerName)+'-'+normName(f.loserName), day:1, sport:'mma', source:'mkt',
+      id:mmaId(f.winnerName,f.loserName), day:1, sport:'mma', source:'mkt',
       start:f.date||null, home:f.winnerName, away:f.loserName, finished:true, winner:'A',
       sides:[
         {key:'A', label:f.winnerName.split(' ').pop(), q:1.01},
@@ -357,6 +374,14 @@ function buildUFC(oddsEvents, results){
     const results = await loadEspnResults(dateSet);
     console.log(`  ESPN: ${results.length} Ergebnisse für ${dateSet.size} Tage geladen`);
     fights = buildUFC(odds, results);
+    /* Einmal entschiedene Kämpfe dauerhaft behalten — auch wenn die zugehörige
+       Fight Card das rollierende ESPN-Fenster längst verlassen hat. Sonst
+       verschwindet eine ganze Card nach ein paar Tagen komplett aus der Tabelle,
+       obwohl die Punkte dafür ja schon vergeben wurden. */
+    const bekannt = new Set(fights.map(f=>f.id));
+    for(const f of loadPreviousUFCFights()){
+      if(f.finished && !bekannt.has(f.id)){ fights.push(f); bekannt.add(f.id); }
+    }
     if(fights.length) competitions.push({id:'ufc', name:'UFC', sport:'mma', matches:fights});
     bericht.push(`UFC: ${fights.length} Kämpfe, ${fights.filter(f=>f.finished).length} entschieden`);
     console.log(`  OK — ${fights.length} Kämpfe, ${fights.filter(f=>f.finished).length} entschieden`);

@@ -291,7 +291,9 @@ textarea{min-height:88px;resize:vertical;line-height:1.55}
 .odds .q{font-family:'Poppins';font-size:16px;font-weight:700;letter-spacing:-.02em}
 .odds button[aria-pressed="true"]{background:var(--blue);border-color:var(--blue);color:#04121F}
 .odds button[aria-pressed="true"] .sd{color:rgba(4,18,31,.7)}
-.odds button.win{border-color:var(--win)}
+.odds button.win{border:2px solid var(--win);background:rgba(52,211,153,.10)}
+.odds .siegtag{display:block;font-size:9.5px;font-weight:800;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--win);margin-top:3px}
 
 /* ═══════ ERGEBNIS ═══════ */
 .exact{margin-top:12px;border-top:1px solid var(--line);padding-top:12px}
@@ -2350,12 +2352,14 @@ function matchCard(ev,isMain){
   ev.sides.forEach(s=>{
     const b=document.createElement('button');
     b.setAttribute('aria-pressed',!!(p&&p.type!=='exact'&&p.side===s.key));
-    b.innerHTML=ev.noOdds
+    const gewonnen=res&&res.side===s.key;
+    b.innerHTML=(ev.noOdds
       ?`<span class="q" style="font-size:13.5px;line-height:1.25">${esc(s.label)}</span>`
-      :`<span class="sd">${esc(s.label)}</span><span class="q">${fq(s.q)}</span>`;
+      :`<span class="sd">${esc(s.label)}</span><span class="q">${fq(s.q)}</span>`)
+      +(gewonnen?'<span class="siegtag">Sieg</span>':'');
     if(!zu) b.onclick=()=>pick(ev,s,'tendency');
-    else b.style.opacity=p&&p.side===s.key?'1':'.55';
-    if(res&&res.side===s.key) b.classList.add('win');
+    else b.style.opacity=(p&&p.side===s.key)||gewonnen?'1':'.55';
+    if(gewonnen) b.classList.add('win');
     od.appendChild(b);
   });
 
@@ -2580,8 +2584,20 @@ function tabEntry(){
 
 function tabTable(){
   const r=R(),rows=[...r.members].sort((a,b)=>b.pts-a.pts);
-  const mx=maxDay(r);
-  const days=[]; for(let d=1;d<=mx;d++){ const de=orderEvents(eventsOf(r,d)); if(de.length) days.push({d,evs:de,stage:de[0]&&de[0].stage}); }
+  let days;
+  if(r.sport==='mma'){
+    /* Bei UFC gibt's kein "Spieltag N" — stattdessen: vergangene (bereits
+       entschiedene) Kämpfe zuerst, farblich abgesetzt, dann die aktuelle Karte. */
+    const all=orderEvents(eventsOf(r,1));
+    const vergangen=all.filter(e=>eventResult(e,r));
+    const aktuell=all.filter(e=>!eventResult(e,r));
+    days=[];
+    if(vergangen.length) days.push({evs:vergangen,stage:'Vergangene Kämpfe',past:true});
+    if(aktuell.length) days.push({evs:aktuell,stage:'Aktuelle Karte',past:false});
+  }else{
+    const mx=maxDay(r);
+    days=[]; for(let d=1;d<=mx;d++){ const de=orderEvents(eventsOf(r,d)); if(de.length) days.push({d,evs:de,stage:de[0]&&de[0].stage}); }
+  }
   const evs=days.flatMap(x=>x.evs);
 
   /* Tipps eines Mitglieds — bei mir die eigenen (live), sonst die gespeicherten. */
@@ -2600,19 +2616,20 @@ function tabTable(){
     const tend=p.type==='exact'?scoreTend(p.side):p.side;
     return `<span style="color:${tend===res.side?'var(--win)':'var(--bad)'}">${label}</span>`;
   };
-  /* Alle Spieltage nebeneinander, mit einer Kopfzeile "Spieltag N" (oder Turnierphase) über
-     den jeweiligen Spielen, getrennt durch eine dünne hellblaue Linie. */
+  /* Alle Spieltage (bzw. bei UFC: vergangene Kämpfe + aktuelle Karte) nebeneinander,
+     mit einer farblich getrennten Kopfzeile. */
   const dayStart=new Set(days.slice(1).map(x=>x.evs[0]&&x.evs[0].id).filter(Boolean));
   const div='border-left:1px solid rgba(80,170,240,.35);';
   const matchTable=evs.length?`
     <div style="overflow-x:auto;margin-bottom:20px;-webkit-overflow-scrolling:touch">
       <table style="border-collapse:collapse;font-size:12px;white-space:nowrap">
         <thead>
-          ${mx>1?`<tr>
+          ${days.length>1?`<tr>
             <th style="position:sticky;left:0;background:var(--surface)"></th>
-            ${days.map((x,i)=>`<th colspan="${x.evs.length}" style="padding:0 10px 4px;
-              font-weight:700;color:var(--muted);font-size:10.5px;text-transform:uppercase;
-              letter-spacing:.06em;text-align:left;${i>0?div:''}">${esc(x.stage||('Spieltag '+x.d))}</th>`).join('')}
+            ${days.map((x,i)=>`<th colspan="${x.evs.length}" style="padding:4px 10px;
+              font-weight:700;color:${x.past?'var(--muted)':'var(--blue)'};font-size:10.5px;text-transform:uppercase;
+              letter-spacing:.06em;text-align:left;${i>0?div:''};
+              ${x.past?'background:rgba(138,147,158,.10)':''}">${esc(x.stage||('Spieltag '+x.d))}</th>`).join('')}
           </tr>`:''}
           <tr>
           <th style="position:sticky;left:0;background:var(--surface);padding:0 12px 8px 0"></th>

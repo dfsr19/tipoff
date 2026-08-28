@@ -169,8 +169,13 @@ function sameFighter(a,b){
   if(!x || !y) return false;
   return x===y || x.includes(y) || y.includes(x);
 }
-async function loadEspnResults(dateStrs){
-  const out=[];
+/* Liefert zwei Dinge: entschiedene Kämpfe (für Ergebnisse) und ALLE Paarungen,
+   entschieden oder nicht (als Abgleichsliste — die Odds API hat keinen UFC-
+   spezifischen Schlüssel, sondern nur einen allgemeinen "MMA"-Schlüssel, der
+   auch fachfremde Events wie Bare-Knuckle-Boxen mit reinmischt. ESPNs eigene
+   UFC-Datenbank dient hier als Filter: nur was da auftaucht, ist wirklich UFC). */
+async function loadEspnData(dateStrs){
+  const finished=[], allePaarungen=[];
   for(const ds of dateStrs){
     try{
       const r = await fetch(`https://site.api.espn.com/apis/site/v2/sports/mma/ufc/scoreboard?dates=${ds}`);
@@ -178,15 +183,17 @@ async function loadEspnResults(dateStrs){
       const data = await r.json();
       for(const ev of data.events||[])
         for(const comp of ev.competitions||[]){
-          if(!comp.status?.type?.completed) continue;
           const cs = comp.competitors||[];
+          if(cs.length<2||!cs[0].athlete?.fullName||!cs[1].athlete?.fullName) continue;
+          allePaarungen.push({a:cs[0].athlete.fullName, b:cs[1].athlete.fullName});
+          if(!comp.status?.type?.completed) continue;
           const winner = cs.find(c=>c.winner===true), loser = cs.find(c=>c.winner===false);
           if(!winner?.athlete?.fullName || !loser?.athlete?.fullName) continue;
-          out.push({winnerName:winner.athlete.fullName, loserName:loser.athlete.fullName, date:comp.date});
+          finished.push({winnerName:winner.athlete.fullName, loserName:loser.athlete.fullName, date:comp.date});
         }
     }catch(e){ console.log(`  ESPN ${ds}: ${e.message}`); }
   }
-  return out;
+  return {finished, allePaarungen};
 }
 function bestPrices(ev){
   const best={};
@@ -371,9 +378,18 @@ function buildUFC(oddsEvents, results){
     const dateSet = new Set();
     odds.forEach(ev => dateSet.add(espnDate(ev.commence_time)));
     for(let i=0;i<3;i++) dateSet.add(espnDate(Date.now()-i*864e5));
-    const results = await loadEspnResults(dateSet);
-    console.log(`  ESPN: ${results.length} Ergebnisse für ${dateSet.size} Tage geladen`);
-    fights = buildUFC(odds, results);
+    const {finished:results, allePaarungen} = await loadEspnData(dateSet);
+    console.log(`  ESPN: ${results.length} Ergebnisse, ${allePaarungen.length} Paarungen für ${dateSet.size} Tage geladen`);
+    /* Nur Paarungen behalten, die ESPN auch wirklich als UFC-Kampf kennt — die
+       Odds API mischt unter ihrem allgemeinen "MMA"-Schlüssel sonst auch
+       fachfremde Events wie Bare-Knuckle-Boxen mit rein. */
+    const istEchtesUFC = ev => allePaarungen.some(p =>
+      (sameFighter(p.a,ev.home_team)&&sameFighter(p.b,ev.away_team)) ||
+      (sameFighter(p.a,ev.away_team)&&sameFighter(p.b,ev.home_team)));
+    const oddsGefiltert = odds.filter(istEchtesUFC);
+    if(oddsGefiltert.length<odds.length)
+      console.log(`  ${odds.length-oddsGefiltert.length} Nicht-UFC-Paarung(en) aus der Odds API rausgefiltert`);
+    fights = buildUFC(oddsGefiltert, results);
     /* Einmal entschiedene Kämpfe dauerhaft behalten — auch wenn die zugehörige
        Fight Card das rollierende ESPN-Fenster längst verlassen hat. Sonst
        verschwindet eine ganze Card nach ein paar Tagen komplett aus der Tabelle,

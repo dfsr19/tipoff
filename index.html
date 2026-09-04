@@ -644,7 +644,7 @@ const code=()=>'TIP-'+Math.random().toString(36).slice(2,7).toUpperCase();
 const mkRound=(o)=>({id:o.id||'r'+(++SEQ),compId:o.compId||null,
   sport:o.sport||(o.compId?COMPS[o.compId].sport:'fb'),name:o.name,
   comp:o.comp||(o.compId?COMPS[o.compId].name:'Eigene Runde'),
-  rules:o.rules||'',members:o.members||[],picks:{},settled:{},chat:o.chat||[],
+  rules:o.rules||'',members:o.members||[],picks:{},settled:{},settledEvents:{},chat:o.chat||[],
   custom:!!o.custom,useDates:o.useDates!==false,teams:o.teams||[],events:o.events||[],results:o.results||{},
   visibility:o.visibility||'private',code:o.code||code(),owner:o.owner||'me',
   requests:o.requests||[],joined:o.joined!==false,pendingSync:{}});
@@ -705,6 +705,7 @@ function fireToLocal(id,d,uid){
   r.results=d.results||{};
   r.picks=(d.picks&&d.picks[uid])||{};
   r.settled=d.settled||{};
+  r.settledEvents=d.settledEvents||{};
   r.memberPicks=d.picks||{};
   r.fsId=id;r.ownerUid=d.ownerUid;r.memberUids=d.memberUids||[];
   return r;
@@ -775,10 +776,11 @@ async function fsSyncResults(r){
   try{ await FB.updateDoc(FB.doc(FB.db,'rounds',r.fsId),{results:r.results}); }
   catch(e){ console.warn('Ergebnisse speichern:',e); }
 }
-async function fsSyncSettle(r,k){
+/* Persistiert Punktestand und die Liste bereits abgerechneter Einzelspiele. */
+async function fsSyncSettle(r){
   if(!r.fsId||!FB) return;
   try{
-    const updates={[`settled.${k}`]:r.settled[k]};
+    const updates={settledEvents:r.settledEvents||{}};
     r.members.forEach(m=>{ const uid=m.id==='me'?myUid():m.id;
       if(uid) updates[`members.${uid}.pts`]=m.pts; });
     await FB.updateDoc(FB.doc(FB.db,'rounds',r.fsId),updates);
@@ -869,6 +871,30 @@ function eventResult(ev,r){
   const h=ev.score.h,a=ev.score.a;
   return{side:h>a?'1':h<a?'2':'X',exact:`${h}:${a}`,text:`Endstand ${h}:${a}`,real:true};
 }
+/* Gruppiert UFC-Events zeitlich zu "Cards" (Events, die zeitlich nah beieinander
+   liegen — dieselbe Fight Night). Eine Card zählt noch als "aktuell", solange sie
+   entweder noch offene Kämpfe hat ODER ihr letzter Kampf erst vor Kurzem war —
+   damit eine gerade erst beendete Card nicht sofort von der nächsten verdrängt wird. */
+const KARENZ_MS=2.5*864e5;
+function ufcCards(evs){
+  const mitDatum=evs.filter(e=>e.start).sort((a,b)=>a.start-b.start);
+  const ohneDatum=evs.filter(e=>!e.start);
+  const cards=[];
+  const FENSTER=2*864e5;
+  mitDatum.forEach(e=>{
+    const t=e.start.getTime(), last=cards[cards.length-1];
+    if(last&&t-last.lastStart<=FENSTER){ last.evs.push(e); last.lastStart=Math.max(last.lastStart,t); }
+    else cards.push({evs:[e], lastStart:t});
+  });
+  if(ohneDatum.length){
+    if(cards.length) cards[cards.length-1].evs.push(...ohneDatum);
+    else cards.push({evs:ohneDatum, lastStart:0});
+  }
+  return cards;
+}
+function cardIstAktuell(card,r){
+  return card.evs.some(e=>!eventResult(e,r)) || (Date.now()-card.lastStart)<KARENZ_MS;
+}
 /* Nur wenn für JEDES Spiel ein Ergebnis vorliegt, wird gewertet. */
 function allResults(evs,r){
   const out={};
@@ -901,7 +927,15 @@ const dayPicks=()=>{const ids=new Set(pool().map(e=>e.id));
   return Object.entries(R().picks).filter(([k])=>ids.has(k));};
 const used=()=>dayPicks().reduce((s,[,p])=>s+p.stake,0);
 const left=()=>CFG.budget-used();
-const settled=()=>!!R().settled[dayKey()];
+/* "Gewertet" heißt jetzt: alles, worauf im sichtbaren Bereich getippt wurde, hat
+   sein Ergebnis schon bekommen — nicht mehr "der ganze Spieltag ist als Ganzes
+   abgehakt". Einzelne Spiele können unabhängig voneinander schon gewertet sein. */
+const settled=()=>{
+  const r=R(); if(!r) return false;
+  r.settledEvents=r.settledEvents||{};
+  const evs=dayPicks().map(([id])=>id);
+  return !!evs.length && evs.every(id=>r.settledEvents[id]);
+};
 function maxDay(r){
   const list=r.custom?r.events:evOf(r.compId);
   if(!list.length) return 1;
@@ -2292,7 +2326,7 @@ function drawDays(){
     if(stage==='Finale') b.innerHTML=TROPHY_SVG;
     else b.textContent=stage?STAGE_ABBR[stage]||stage:d;
     b.setAttribute('aria-current',d===S.day);
-    if(r.settled[d]||anyResult(eventsOf(r,d),r)) b.classList.add('done');
+    if(anyResult(eventsOf(r,d),r)) b.classList.add('done');
     b.onclick=()=>{S.day=d;render();};
     el.appendChild(b);
   }
@@ -2305,6 +2339,9 @@ function tabTip(){
   if(!S.ready&&!r.custom) return b.innerHTML='<div class="empty">Spielplan wird geladen …</div>';
   if(!evs.length) return b.innerHTML='<div class="empty">Für diesen Spieltag liegen noch keine Ansetzungen vor.</div>';
   const st=settled(),l=left();
+  const meGain=st?dayPicks().reduce((s,[id,p])=>{
+    const ev=evs.find(e=>e.id===id),res=ev&&eventResult(ev,r);
+    return s+(res?ptsFor(p,res,ev):0);},0):0;
   const dl=r.custom&&!r.useDates&&evs[0]&&evs[0].lockAt?evs[0].lockAt:null;
   const stage=r.custom&&evs[0]&&evs[0].stage;
   if(r.custom){
@@ -2327,16 +2364,36 @@ function tabTip(){
       <span class="lb">${st?'Ergebnis':'Budget'}</span>
       <span class="bar"><i style="width:${st?100:l/CFG.budget*100}%"></i></span>
       <span class="nm" style="${st?'color:var(--win)':''}">${
-        st?'+'+fmt(r.settled[dayKey()].me)+' P':l+' / '+CFG.budget}</span></div>`;
+        st?'+'+fmt(meGain)+' P':l+' / '+CFG.budget}</span></div>`;
   }
-  orderEvents(evs).forEach((ev,i)=>b.appendChild(matchCard(ev,ev.sport==='mma'&&i===0)));
+  /* Bei UFC: vergangenes Event und aktuelle Karte klar mit eigener Überschrift trennen,
+     statt sie einfach nur chronologisch durchlaufen zu lassen. Eine Card bleibt noch
+     eine Karenzzeit lang "aktuell", auch wenn sie schon komplett entschieden ist. */
+  const mmaKarten=r.sport==='mma'?ufcCards(evs):[];
+  const aktuelleIds=new Set(mmaKarten.filter(c=>cardIstAktuell(c,r)).flatMap(c=>c.evs.map(e=>e.id)));
+  const orderedEvs=orderEvents(evs);
+  const firstCurrentIdx=orderedEvs.findIndex(e=>!(e.sport==='mma'&&!aktuelleIds.has(e.id)));
+  let letzteGruppe=null;
+  orderedEvs.forEach((ev,i)=>{
+    if(ev.sport==='mma'){
+      const istVergangen=!aktuelleIds.has(ev.id);
+      const gruppe=istVergangen?'past':'current';
+      if(gruppe!==letzteGruppe){
+        b.insertAdjacentHTML('beforeend',`<div class="sec" style="margin:${letzteGruppe?'18px':'0'} 0 10px;
+          color:${istVergangen?'var(--muted)':'var(--blue)'}">${istVergangen?'Vergangenes Event':'Aktuelle Karte'}<span class="ln"></span></div>`);
+        letzteGruppe=gruppe;
+      }
+    }
+    b.appendChild(matchCard(ev,i===firstCurrentIdx));
+  });
   drawDock();
 }
 
 function matchCard(ev,isMain){
   const r=R(),p=r.picks[ev.id],st=settled();
-  /* Ergebnis anzeigen, sobald es feststeht — auch ohne Auswertung. */
-  const res=st?r.settled[dayKey()].results[ev.id]:eventResult(ev,r);
+  /* Ergebnis anzeigen, sobald es feststeht — eventResult() ist unabhängig von der
+     Auswertung selbst immer aktuell, kein Rückgriff mehr auf eine alte Momentaufnahme. */
+  const res=ev._simRes||eventResult(ev,r);
   /* Nach Anpfiff ist Schluss mit Tippen. */
   const zu=st||started(ev);
   const el=document.createElement('article');el.className='match'+(isMain?' headline':'');
@@ -2489,10 +2546,12 @@ function tabEntry(){
      zeigt die Tippen-Ansicht sofort ein Ergebnis an, bevor überhaupt gespeichert wurde. */
   r._draftResults=r._draftResults||{...r.results};
   const draftResult=ev=>{const x=r._draftResults[ev.id]; return x&&x.side?x:null;};
+  r.settledEvents=r.settledEvents||{};
+  const tagIstGewertet=evs.every(e=>r.settledEvents[e.id]);
 
   const nochOffen=evs.some(e=>!started(e));
   b.innerHTML=`
-    ${r.owner==='me'&&nochOffen&&!r.settled[k]?`<button class="btn ghost" id="closeNow"
+    ${r.owner==='me'&&nochOffen&&!tagIstGewertet?`<button class="btn ghost" id="closeNow"
         style="margin:0 0 16px;padding:11px;font-size:13px">
         Tippen für diesen Spieltag jetzt schließen</button>`:''}
     ${evs.map(ev=>{
@@ -2510,7 +2569,7 @@ function tabEntry(){
     <p class="hint" style="margin:16px 3px 0">
       Für eigene Ligen gibt es keine Datenquelle — du legst den Sieger selbst fest.
       Sobald alle Spiele eines Spieltags feststehen, werden die Punkte
-      automatisch verteilt.${r.settled[k]?'<br><br><b>Dieser Spieltag ist bereits gewertet.</b> Änderungen wirken sich nicht mehr aus.':''}</p>`;
+      automatisch verteilt.${tagIstGewertet?'<br><br><b>Dieser Spieltag ist bereits gewertet.</b> Änderungen wirken sich nicht mehr aus.':''}</p>`;
 
   /* Admin auf dem letzten Spieltag direkt anbieten, die nächste K.-o.-Phase anzulegen —
      antippbar, springt in den Bearbeiten-Screen und legt die Runde gleich mit der
@@ -2586,17 +2645,20 @@ function tabTable(){
   const r=R(),rows=[...r.members].sort((a,b)=>b.pts-a.pts);
   let days;
   if(r.sport==='mma'){
-    /* Bei UFC gibt's kein "Spieltag N" — stattdessen: vergangene (bereits
-       entschiedene) Kämpfe zuerst, farblich abgesetzt, dann die aktuelle Karte. */
+    /* Bei UFC gibt's kein "Spieltag N" — stattdessen: vergangene Kämpfe zuerst,
+       farblich abgesetzt, dann die aktuelle Karte (bleibt noch eine Karenzzeit
+       lang "aktuell", auch wenn sie schon komplett entschieden ist). */
     const all=orderEvents(eventsOf(r,1));
-    const vergangen=all.filter(e=>eventResult(e,r));
-    const aktuell=all.filter(e=>!eventResult(e,r));
+    const karten=ufcCards(all);
+    const aktuelleIds=new Set(karten.filter(c=>cardIstAktuell(c,r)).flatMap(c=>c.evs.map(e=>e.id)));
+    const aktuell=all.filter(e=>aktuelleIds.has(e.id));
+    const vergangen=all.filter(e=>!aktuelleIds.has(e.id));
     days=[];
     if(aktuell.length) days.push({evs:aktuell,stage:'Aktuelle Karte',past:false});
     if(vergangen.length) days.push({evs:vergangen,stage:'Vergangene Kämpfe',past:true});
   }else{
-    const mx=maxDay(r);
-    days=[]; for(let d=1;d<=mx;d++){ const de=orderEvents(eventsOf(r,d)); if(de.length) days.push({d,evs:de,stage:de[0]&&de[0].stage}); }
+    const mx=maxDay(r),aktuellerTag=nextDayOf(r);
+    days=[]; for(let d=1;d<=mx;d++){ const de=orderEvents(eventsOf(r,d)); if(de.length) days.push({d,evs:de,stage:de[0]&&de[0].stage,past:d<aktuellerTag}); }
   }
   const evs=days.flatMap(x=>x.evs);
 
@@ -2618,25 +2680,29 @@ function tabTable(){
   };
   /* Alle Spieltage (bzw. bei UFC: aktuelle Karte + vergangene Kämpfe) nebeneinander,
      mit einer farblich getrennten Kopfzeile. Die Färbung zieht sich bei vergangenen
-     Kämpfen durch die ganze Spalte durch, nicht nur durch die Kopfzeile. */
+     Kämpfen durch die ganze Spalte durch, nicht nur durch die Kopfzeile. Der aktuelle
+     Spieltag rastet beim Scrollen leicht ein und ist der erste, den man beim Öffnen sieht. */
   const dayStart=new Set(days.slice(1).map(x=>x.evs[0]&&x.evs[0].id).filter(Boolean));
   const pastIds=new Set(days.filter(x=>x.past).flatMap(x=>x.evs.map(e=>e.id)));
   const pastBg='background:rgba(138,147,158,.10);';
   const div='border-left:1px solid rgba(80,170,240,.35);';
+  const snap='scroll-snap-align:start;';
+  const curFirstId=(days.find(x=>!x.past)||{}).evs?.[0]?.id;
   const matchTable=evs.length?`
-    <div style="overflow-x:auto;margin-bottom:20px;-webkit-overflow-scrolling:touch">
+    <div id="mtScroll" style="overflow-x:auto;margin-bottom:20px;-webkit-overflow-scrolling:touch;
+        scroll-snap-type:x proximity">
       <table style="border-collapse:collapse;font-size:12px;white-space:nowrap">
         <thead>
           ${days.length>1?`<tr>
             <th style="position:sticky;left:0;background:var(--surface)"></th>
             ${days.map((x,i)=>`<th colspan="${x.evs.length}" style="padding:4px 10px;
               font-weight:700;color:${x.past?'var(--muted)':'var(--blue)'};font-size:10.5px;text-transform:uppercase;
-              letter-spacing:.06em;text-align:left;${i>0?div:''};
+              letter-spacing:.06em;text-align:left;${i>0?div:''}${snap};
               ${x.past?pastBg:''}">${esc(x.stage||('Spieltag '+x.d))}</th>`).join('')}
           </tr>`:''}
           <tr>
           <th style="position:sticky;left:0;background:var(--surface);padding:0 12px 8px 0"></th>
-          ${evs.map(ev=>`<th style="padding:0 10px 8px;font-weight:600;color:var(--muted);
+          ${evs.map(ev=>`<th data-evid="${ev.id}" style="padding:0 10px 8px;font-weight:600;color:var(--muted);
             ${dayStart.has(ev.id)?div:''}${pastIds.has(ev.id)?pastBg:''}">
             ${esc(teamAbbr(ev.home,ev))}–${esc(teamAbbr(ev.away,ev))}</th>`).join('')}
         </tr></thead>
@@ -2659,6 +2725,12 @@ function tabTable(){
     `<p class="hint" style="text-align:center;margin-top:16px">
       Jede Runde wird getrennt gewertet.</p>`;
   app.querySelector('#foot').innerHTML='';
+  /* Beim Öffnen direkt zum aktuellen Spieltag scrollen, statt immer bei Spieltag 1
+     zu starten — die vergangenen Spieltage liegen dann links davon. */
+  if(curFirstId) requestAnimationFrame(()=>{
+    const scroller=app.querySelector('#mtScroll'), th=app.querySelector(`[data-evid="${curFirstId}"]`);
+    if(scroller&&th) scroller.scrollLeft=th.offsetLeft-scroller.offsetLeft-1;
+  });
 }
 /* Tendenz-Kürzel für die Tipp-Tabelle: erste Seite, zweite Seite oder X.
    Bei Fußball sind die Seiten '1'/'X'/'2', bei UFC 'A'/'B' — deshalb nicht
@@ -2884,16 +2956,23 @@ function drawDock(){
   const scopeEvs=r.custom?(r.events||[]):evs;
   const scopePicks=()=>Object.entries(r.picks).filter(([id])=>scopeEvs.some(e=>e.id===id));
 
-  /* Bereits gewertet */
-  if(r.settled[k]){
-    const real=r.settled[k].real;
+  /* Bereits gewertet — jetzt pro Spiel/Kampf statt pro Spieltag als Ganzes.
+     "Ausgewertet" gilt für den sichtbaren Bereich, sobald alles darin, wofür
+     überhaupt getippt wurde, sein Ergebnis bekommen hat. */
+  r.settledEvents=r.settledEvents||{};
+  const getippt=e=>r.picks[e.id];
+  const relevantScope=scopeEvs.filter(getippt);
+  const alleGewertet=relevantScope.length&&relevantScope.every(e=>r.settledEvents[e.id]);
+  if(alleGewertet){
+    const probelauf=relevantScope.some(e=>r._probelauf&&r._probelauf[e.id]);
+    const meGain=relevantScope.reduce((s,e)=>{
+      const p=r.picks[e.id],res=e._simRes||eventResult(e,r);
+      return s+(p&&res?ptsFor(p,res,e):0);},0);
     f.innerHTML=`<div class="dock">
-      <div class="dockmsg">${real?'Ausgewertet':'Probelauf'} · +${fmtPts(r.settled[k].me,r.custom)} Punkte für dich</div>
-      ${real?'':'<button class="btn ghost" id="rs">Probelauf zurücksetzen</button>'}</div>`;
+      <div class="dockmsg">${probelauf?'Probelauf':'Ausgewertet'} · +${fmtPts(meGain,r.custom)} Punkte für dich</div>
+      ${probelauf?'<button class="btn ghost" id="rs">Probelauf zurücksetzen</button>':''}</div>`;
     const rs=f.querySelector('#rs');
-    if(rs) rs.onclick=()=>{
-      const x=r.settled[k];r.members.forEach(m=>m.pts-=x.gain[m.id]||0);
-      delete r.settled[k];evs.forEach(e=>delete r.picks[e.id]);render();};
+    if(rs) rs.onclick=probelaufZuruecksetzen;
     return;
   }
 
@@ -2948,57 +3027,78 @@ function drawDock(){
 }
 /* Punkte gutschreiben — einmal je Spieltag.
    Bei echten (Firestore-)Runden zählen die wirklich abgegebenen Tipps aller Mitglieder.
-   Bei den fest im Code stehenden Demo-Runden (ohne fsId) simulieren Bot-Tipps die anderen. */
-function applySettle(r,k,evs,res,picks,real){
+   Bei den fest im Code stehenden Demo-Runden (ohne fsId) simulieren Bot-Tipps die anderen.
+   Abgerechnet wird pro EINZELNEM Spiel/Kampf (r.settledEvents), nicht mehr pro Spieltag
+   oder ganzer Fight Card — sonst blockiert ein einziges noch offenes Spiel irgendwo alles. */
+function applySettle(r,evsToSettle,real){
+  r.settledEvents=r.settledEvents||{};
   const gain={};
   r.members.forEach(m=>{
+    let theirs;
     if(r.fsId){
       const uid=m.id==='me'?myUid():m.id;
-      const theirs=m.id==='me'?picks:((r.memberPicks&&r.memberPicks[uid])||{});
-      gain[m.id]=scoreAll(theirs,res,evs);
+      theirs=m.id==='me'?r.picks:((r.memberPicks&&r.memberPicks[uid])||{});
     }else{
-      gain[m.id]=m.id==='me'?scoreAll(picks,res,evs):scoreAll(botPicks(evs),res,evs);
+      theirs=m.id==='me'?r.picks:botPicks(evsToSettle);
     }
+    let sum=0;
+    evsToSettle.forEach(ev=>{
+      const p=theirs[ev.id]; if(!p) return;
+      const res=ev._simRes||eventResult(ev,r);
+      if(res) sum+=ptsFor(p,res,ev);
+    });
+    gain[m.id]=sum;
   });
   r.members.forEach(m=>m.pts+=gain[m.id]||0);
-  r.settled[k]={results:res,gain,me:gain.me,real:!!real};
-  fsSyncSettle(r,k);
+  evsToSettle.forEach(ev=>r.settledEvents[ev.id]=true);
+  fsSyncSettle(r);
   return gain;
 }
 
-/* Auswertung von Hand — nur als Probelauf, solange keine echten Ergebnisse da sind. */
+/* Auswertung von Hand — nur als Probelauf für Spiele, die noch kein echtes Ergebnis
+   haben (die werden simuliert, klar erkennbar über r._probelauf). */
 function settleDay(){
-  const r=R(),evs=pool(),k=dayKey();
-  const real=allResults(evs,r);
-  const res=real||simulate(evs);
-  const gain=applySettle(r,k,evs,res,Object.fromEntries(dayPicks()),!!real);
+  const r=R(),evs=pool();
+  r.settledEvents=r.settledEvents||{};
+  const offen=evs.filter(e=>!r.settledEvents[e.id]);
+  if(!offen.length) return;
+  const sim=simulate(offen.filter(e=>!eventResult(e,r)));
+  offen.forEach(ev=>{ if(!eventResult(ev,r)){ ev._simRes=sim[ev.id]; r._probelauf=r._probelauf||{}; r._probelauf[ev.id]=true; } });
+  const gain=applySettle(r,offen,offen.every(e=>eventResult(e,r)));
   S.tab='tabelle';render();rollUp(gain);
+}
+/* Probelauf-Punkte für den aktuellen Spieltag zurücknehmen. */
+function probelaufZuruecksetzen(){
+  const r=R(),evs=pool();
+  const betroffene=evs.filter(e=>r._probelauf&&r._probelauf[e.id]);
+  if(!betroffene.length) return;
+  r.members.forEach(m=>{
+    let theirs=m.id==='me'?r.picks:((r.memberPicks&&r.memberPicks[m.id])||{});
+    betroffene.forEach(ev=>{ const p=theirs[ev.id]; if(p&&ev._simRes) m.pts-=ptsFor(p,ev._simRes,ev); });
+  });
+  betroffene.forEach(ev=>{ delete r.settledEvents[ev.id]; delete r._probelauf[ev.id]; delete ev._simRes; });
+  fsSyncSettle(r);
+  render();
 }
 
 /* ══════════ AUTOMATISCHE AUSWERTUNG ══════════
-   Läuft nach jedem Datenabruf: Sobald für einen Spieltag alle Ergebnisse
-   vorliegen und irgendwer getippt hat, werden die Punkte von selbst gutgeschrieben. */
+   Läuft nach jedem Datenabruf: Sobald für ein einzelnes Spiel/einen Kampf ein
+   echtes Ergebnis vorliegt und irgendwer darauf getippt hat, werden die Punkte
+   sofort gutgeschrieben — unabhängig davon, ob andere Spiele desselben Spieltags
+   oder derselben Fight Card noch offen sind. */
 function autoSettle(){
   let n=0;
   Object.values(ROUNDS).forEach(r=>{
     if(!r.joined) return;
-    const days = r.custom ? [...new Set(r.events.map(e=>e.day))]
-               : r.sport==='mma' ? [1]
-               : [...new Set(evOf(r.compId).map(m=>m.day||1))];
-    days.forEach(d=>{
-      if(r.settled[d]) return;
-      const evs=eventsOf(r,d); if(!evs.length) return;
-      const res=allResults(evs,r); if(!res) return;
-      const picks=Object.fromEntries(
-        Object.entries(r.picks).filter(([id])=>evs.some(e=>e.id===id)));
-      /* Nicht nur die eigenen Tipps zählen — auch andere Mitglieder könnten
-         schon getippt haben, auch wenn man selbst diesen Spieltag ausgelassen hat. */
-      const irgendwerHatGetippt=Object.keys(picks).length ||
-        (r.memberPicks&&Object.values(r.memberPicks).some(mp=>
-          mp&&evs.some(e=>Object.prototype.hasOwnProperty.call(mp,e.id))));
-      if(!irgendwerHatGetippt) return;      // niemand getippt, nichts zu werten
-      applySettle(r,d,evs,res,picks,true); n++;
-    });
+    r.settledEvents=r.settledEvents||{};
+    const list=r.custom?(r.events||[]):evOf(r.compId);
+    const getippteIds=new Set([
+      ...Object.keys(r.picks||{}),
+      ...(r.memberPicks?Object.values(r.memberPicks).flatMap(mp=>mp?Object.keys(mp):[]):[])
+    ]);
+    const neu=list.filter(e=>getippteIds.has(e.id)&&!r.settledEvents[e.id]&&eventResult(e,r));
+    if(!neu.length) return;
+    applySettle(r,neu,true); n++;
   });
   return n;
 }

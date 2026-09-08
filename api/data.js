@@ -29,11 +29,16 @@ const LEAGUES = [
   {id:'bl1', name:'Bundesliga',       ol:'bl1', odds:'soccer_germany_bundesliga'},
   {id:'bl2', name:'2. Bundesliga',    ol:'bl2', odds:'soccer_germany_bundesliga2'},
   {id:'bl3', name:'3. Liga',          ol:'bl3', odds:'soccer_germany_liga3'},
-  /* Anders als bl1/bl2/bl3 hat die Champions League bei OpenLigaDB keinen
-     festen, saisonunabhängigen Kürzel — das Jahr steckt im Kürzel selbst
-     (z.B. "ucl2026" für 2026/27), nicht als separater Saison-Parameter.
-     Ein Aufruf mit dem Kürzel "ucl" allein träfe die falsche (alte) Saison. */
+  /* ACHTUNG — Champions League vorübergehend deaktiviert (08.09.2026):
+     Der Kürzel "ucl2026" existiert bei OpenLigaDB zwar, ist aber noch mit
+     einem Platzhalter-Spielplan befüllt statt der echten Ligaphasen-Auslosung
+     — alle Spiele mit identischem Anstoß, identischen Quoten und falschen
+     Paarungen (z.B. RB Leipzig gegen Real Madrid UND Manchester City am
+     selben Tag). Das ist kein Fehler in dieser Datei, sondern unfertige Daten
+     bei der Quelle selbst. Sobald die Community den echten Spielplan
+     einträgt, hier die Zeile wieder einkommentieren:
   {id:'ucl', name:'Champions League', ol:`ucl${SEASON}`, odds:'soccer_uefa_champs_league'}
+  */
 ];
 const UFC = {id:'ufc', name:'UFC', odds:'mma_mixed_martial_arts'};
 

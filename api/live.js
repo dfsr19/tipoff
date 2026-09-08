@@ -22,7 +22,12 @@ const SEASON = process.env.SEASON || '2026';
    festen, saisonunabhängigen Kürzel — das Jahr steckt im Kürzel selbst
    (z.B. "ucl2026" für 2026/27), nicht als separater Saison-Parameter.
    Ein Aufruf mit dem Kürzel "ucl" allein träfe die falsche (alte) Saison. */
-const LEAGUES = ['bl1', 'bl2', 'bl3', `ucl${SEASON}`];
+/* ACHTUNG — Champions League vorübergehend deaktiviert (08.09.2026): der
+   Kürzel "ucl2026" existiert bei OpenLigaDB, ist aber noch mit einem
+   Platzhalter-Spielplan befüllt statt der echten Auslosung (identischer
+   Anstoß für alle Spiele, falsche Paarungen). Sobald die echten Daten da
+   sind, `, `ucl${SEASON}`` wieder ans Ende der Liste anhängen. */
+const LEAGUES = ['bl1', 'bl2', 'bl3'];
 
 /* Endstand — nur wenn das Spiel wirklich abgeschlossen ist. */
 function endResult(m){

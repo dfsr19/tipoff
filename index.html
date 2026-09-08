@@ -292,6 +292,7 @@ textarea{min-height:88px;resize:vertical;line-height:1.55}
 .odds button[aria-pressed="true"]{background:var(--blue);border-color:var(--blue);color:#04121F}
 .odds button[aria-pressed="true"] .sd{color:rgba(4,18,31,.7)}
 .odds button.win{border:2px solid var(--win);background:rgba(52,211,153,.10)}
+.odds button.lose{border:2px solid var(--bad);background:rgba(248,113,113,.08)}
 .odds .siegtag{display:block;font-size:9.5px;font-weight:800;letter-spacing:.06em;
   text-transform:uppercase;color:var(--win);margin-top:3px}
 
@@ -2409,14 +2410,21 @@ function matchCard(ev,isMain){
   ev.sides.forEach(s=>{
     const b=document.createElement('button');
     b.setAttribute('aria-pressed',!!(p&&p.type!=='exact'&&p.side===s.key));
-    const gewonnen=res&&res.side===s.key;
+    const istSieger=res&&res.side===s.key;
+    const warMeinTipp=p&&p.side===s.key;
+    const verloren=warMeinTipp&&res&&!istSieger;
+    /* Die Quote des tatsächlichen Siegers bleibt immer grün lesbar — auch wenn's
+       nicht der eigene Tipp war. Der auffällige Rahmen (grün/rot) ist aber dem
+       eigenen Tipp vorbehalten: grün bei Treffer, rot bei Fehltipp. Alles, worauf
+       nicht getippt wurde, tritt optisch zurück, damit es nicht unnötig heraussticht. */
     b.innerHTML=(ev.noOdds
-      ?`<span class="q" style="font-size:13.5px;line-height:1.25">${esc(s.label)}</span>`
-      :`<span class="sd">${esc(s.label)}</span><span class="q">${fq(s.q)}</span>`)
-      +(gewonnen?'<span class="siegtag">Sieg</span>':'');
+      ?`<span class="q" style="font-size:13.5px;line-height:1.25${istSieger?';color:var(--win)':''}">${esc(s.label)}</span>`
+      :`<span class="sd">${esc(s.label)}</span><span class="q"${istSieger?' style="color:var(--win)"':''}>${fq(s.q)}</span>`)
+      +(istSieger?'<span class="siegtag">Sieg</span>':'');
     if(!zu) b.onclick=()=>pick(ev,s,'tendency');
-    else b.style.opacity=(p&&p.side===s.key)||gewonnen?'1':'.55';
-    if(gewonnen) b.classList.add('win');
+    else b.style.opacity=warMeinTipp?'1':'.5';
+    if(warMeinTipp&&istSieger) b.classList.add('win');
+    if(verloren) b.classList.add('lose');
     od.appendChild(b);
   });
 

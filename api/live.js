@@ -18,7 +18,11 @@
  */
 
 const SEASON = process.env.SEASON || '2026';
-const LEAGUES = ['bl1', 'bl2', 'bl3', 'ucl'];
+/* Anders als bl1/bl2/bl3 hat die Champions League bei OpenLigaDB keinen
+   festen, saisonunabhängigen Kürzel — das Jahr steckt im Kürzel selbst
+   (z.B. "ucl2026" für 2026/27), nicht als separater Saison-Parameter.
+   Ein Aufruf mit dem Kürzel "ucl" allein träfe die falsche (alte) Saison. */
+const LEAGUES = ['bl1', 'bl2', 'bl3', `ucl${SEASON}`];
 
 /* Endstand — nur wenn das Spiel wirklich abgeschlossen ist. */
 function endResult(m){

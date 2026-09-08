@@ -29,7 +29,11 @@ const LEAGUES = [
   {id:'bl1', name:'Bundesliga',       ol:'bl1', odds:'soccer_germany_bundesliga'},
   {id:'bl2', name:'2. Bundesliga',    ol:'bl2', odds:'soccer_germany_bundesliga2'},
   {id:'bl3', name:'3. Liga',          ol:'bl3', odds:'soccer_germany_liga3'},
-  {id:'ucl', name:'Champions League', ol:'ucl', odds:'soccer_uefa_champs_league'}
+  /* Anders als bl1/bl2/bl3 hat die Champions League bei OpenLigaDB keinen
+     festen, saisonunabhängigen Kürzel — das Jahr steckt im Kürzel selbst
+     (z.B. "ucl2026" für 2026/27), nicht als separater Saison-Parameter.
+     Ein Aufruf mit dem Kürzel "ucl" allein träfe die falsche (alte) Saison. */
+  {id:'ucl', name:'Champions League', ol:`ucl${SEASON}`, odds:'soccer_uefa_champs_league'}
 ];
 const UFC = {id:'ufc', name:'UFC', odds:'mma_mixed_martial_arts'};
 
@@ -106,6 +110,36 @@ function endResult(m){
   if(!Number.isFinite(h) || !Number.isFinite(a)) return null;
   return {h, a};
 }
+/* Zwischenstand eines gerade laufenden Spiels.
+   OpenLigaDB trägt Tore während des Spiels einzeln ein — der aktuelle Stand ist
+   also der Stand nach dem zuletzt gefallenen Tor. Steht noch kein Tor drin, das
+   Spiel ist aber angepfiffen, heißt das schlicht 0:0.
+   Das Zeitfenster (angepfiffen, aber höchstens 3,5 Std. her) verhindert, dass ein
+   Spiel ewig als "läuft gerade" gilt, falls jemand vergisst, es abzuschließen. */
+function liveInfo(m){
+  if(m.matchIsFinished) return null;
+  const start = new Date(m.matchDateTime).getTime();
+  const now = Date.now();
+  if(!Number.isFinite(start)) return null;
+  if(start > now || now - start > 3.5*3600e3) return null;
+  const goals = Array.isArray(m.goals) ? m.goals : [];
+  let h = 0, a = 0, minute = null;
+  if(goals.length){
+    /* Nicht auf die Reihenfolge im Array verlassen — das Tor mit der höchsten
+       Gesamt-Torzahl ist das zuletzt gefallene. */
+    let best = null, bestSum = -1;
+    for(const g of goals){
+      const gh = Number(g.scoreTeam1), ga = Number(g.scoreTeam2);
+      if(!Number.isFinite(gh) || !Number.isFinite(ga)) continue;
+      if(gh + ga > bestSum){ bestSum = gh + ga; best = g; }
+    }
+    if(best){
+      h = Number(best.scoreTeam1); a = Number(best.scoreTeam2);
+      minute = Number(best.matchMinute) || null;
+    }
+  }
+  return {score:{h, a}, minute};
+}
 async function loadSchedule(league){
   const r = await fetch(`https://api.openligadb.de/getmatchdata/${league}/${SEASON}`);
   if(!r.ok) throw new Error(`OpenLigaDB ${league}: HTTP ${r.status}`);
@@ -113,10 +147,12 @@ async function loadSchedule(league){
   if(!Array.isArray(rows) || !rows.length) throw new Error(`OpenLigaDB ${league}: keine Spiele`);
   return rows.map(m => {
     const score = endResult(m);
+    const live  = score ? null : liveInfo(m);
     return {
       id:'ol'+m.matchID, day: m.group?.groupOrderID || 1, start: m.matchDateTime,
       home: m.team1.teamName, away: m.team2.teamName, finished: !!score,
-      ...(score ? {score} : {})
+      ...(score ? {score} : {}),
+      ...(live ? {live:true, liveScore:live.score, minute:live.minute} : {})
     };
   });
 }

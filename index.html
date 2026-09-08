@@ -24,6 +24,7 @@
   --blue-gl:rgba(80,170,240,.14);
   --win:#34D399;
   --warn:#FBBF24;
+  --live:#FBBF24;       /* laufende Spiele: Zwischenstand und vorläufige Punkte */
   --bad:#F87171;
   --r:16px;
 }
@@ -435,7 +436,8 @@ textarea{min-height:88px;resize:vertical;line-height:1.55}
    ══════════════════════════════════════════════════════════════════════════════ */
 
 const CFG = {
-  dataUrl:'https://raw.githubusercontent.com/dfsr19/tipoff/main/data.json',
+  dataUrl:'https://tipoff-tau.vercel.app/api/data',
+  liveUrl:'https://tipoff-tau.vercel.app/api/live',
   shareUrl:'https://dfsr19.github.io/tipoff',
   intro:'intro.mp4',
   budget:100,          // Tipp-Punkte je Spieltag
@@ -603,6 +605,69 @@ async function loadData(){
     return{bl1:genPlan('bl1').map(fallbackMatch), bl2:genPlan('bl2').map(fallbackMatch),
            ufc:demoFights()};
   }
+}
+/* ══════════ LIVE-TICKER ══════════
+   Eigener, sehr schlanker Abruf: api/live fragt nur OpenLigaDB ab (kostenlos)
+   und liefert ausschließlich Zwischenstände. Das Quoten-Guthaben der Odds API
+   bleibt dabei unangetastet — sonst wäre das Monatskontingent nach zwei
+   Spielen leer, weil jeder Aufruf von api/data Guthaben kostet.
+   Die Zwischenstände werden in die schon geladenen Spiele hineingemischt.   */
+async function loadLive(){
+  try{
+    const r=await fetch(CFG.liveUrl+'?t='+Date.now(),{cache:'no-store'});
+    if(!r.ok) return false;
+    const d=await r.json();
+    const live=d&&d.live; if(!live) return false;
+    let neu=false;
+    Object.values(S.ev||{}).forEach(list=>{
+      if(!Array.isArray(list)) return;
+      list.forEach(ev=>{
+        const x=live[ev.id];
+        if(!x){
+          /* Nicht mehr in der Live-Liste: Spiel ist aus dem Zeitfenster raus. */
+          if(ev.live){ delete ev.live; delete ev.liveScore; delete ev.minute; neu=true; }
+          return;
+        }
+        if(x.finished){
+          /* Abpfiff: aus dem vorläufigen wird ein echtes Ergebnis. */
+          if(!ev.finished){ ev.finished=true; ev.score=x.score; neu=true; }
+          delete ev.live; delete ev.liveScore; delete ev.minute;
+        }else{
+          const alt=ev.liveScore;
+          if(!alt||alt.h!==x.score.h||alt.a!==x.score.a||ev.minute!==x.minute) neu=true;
+          ev.live=true; ev.liveScore=x.score; ev.minute=x.minute;
+        }
+      });
+    });
+    return neu;
+  }catch(e){ return false; }
+}
+/* Läuft (oder startet gleich) irgendwo ein Spiel, auf das es sich zu schauen
+   lohnt? Geprüft wird über die Anstoßzeit, nicht über das live-Kennzeichen —
+   sonst würde der erste Anpfiff nie bemerkt. */
+function livePhase(){
+  const now=Date.now();
+  return Object.values(ROUNDS).some(r=>r.joined&&!r.custom&&
+    evOf(r.compId).some(e=>{
+      if(!e.start) return false;
+      const t=e.start.getTime();
+      return t-5*60e3<=now && now-t<=3.5*3600e3;
+    }));
+}
+/* Aktualisiert im Minutentakt — aber nur, wenn gerade die Tabelle offen ist.
+   Beim Tippen würde ein Neuaufbau der Seite die Eingabe stören. */
+let liveTimer=null;
+function startLiveTicker(){
+  if(liveTimer) return;
+  liveTimer=setInterval(async()=>{
+    if(!S.ready) return;
+    if(S.screen!=='round'||S.tab!=='tabelle') return;
+    if(!livePhase()) return;
+    const neu=await loadLive();
+    if(!neu) return;
+    autoSettle();          // gerade abgepfiffene Spiele sofort endgültig verbuchen
+    if(S.screen==='round'&&S.tab==='tabelle') render();
+  },60000);
 }
 function genPlan(comp='bl1'){
   const t=CLUBS[comp]||CLUBS.bl1,n=t.length,out=[],
@@ -871,6 +936,46 @@ function eventResult(ev,r){
   if(!ev.score) return null;
   const h=ev.score.h,a=ev.score.a;
   return{side:h>a?'1':h<a?'2':'X',exact:`${h}:${a}`,text:`Endstand ${h}:${a}`,real:true};
+}
+/* ══════════ LIVE-ZWISCHENSTAND ══════════
+   Läuft ein Spiel gerade, liefert die Datenquelle einen Zwischenstand. Daraus
+   entsteht ein VORLÄUFIGES Ergebnis. Es wird bewusst NICHT über eventResult()
+   ausgeliefert: autoSettle() würde es sonst dauerhaft verbuchen, obwohl sich
+   der Spielstand jederzeit wieder ändern kann. Erst der Abpfiff macht aus dem
+   vorläufigen ein echtes Ergebnis.                                          */
+function liveResult(ev,r){
+  if(r&&r.custom) return null;                 // eigene Ligen haben keine Datenquelle
+  if(ev.sport==='mma') return null;            // ein Kampf ist entschieden oder nicht
+  if(!ev.live||!ev.liveScore) return null;
+  const h=ev.liveScore.h,a=ev.liveScore.a;
+  if(!isFinite(h)||!isFinite(a)) return null;
+  return{side:h>a?'1':h<a?'2':'X',exact:`${h}:${a}`,text:`Live ${h}:${a}`,live:true};
+}
+/* Zwischenstand für die Kopfzeile: bei laufenden Spielen der Live-Stand,
+   bei abgepfiffenen der Endstand. Sonst nichts. */
+function headScore(ev,r){
+  const res=eventResult(ev,r);
+  if(res&&res.exact) return{txt:res.exact,live:false};
+  const lv=liveResult(ev,r);
+  return lv?{txt:lv.exact,live:true,minute:ev.minute}:null;
+}
+/* Vorläufige Punkte eines Mitglieds aus allen gerade laufenden Spielen.
+   Nur was noch nicht endgültig verbucht ist (settledEvents) zählt hier mit,
+   sonst würden Punkte doppelt erscheinen. */
+function livePtsOf(r,m){
+  if(!r||r.custom) return 0;
+  const list=evOf(r.compId);
+  if(!list.length) return 0;
+  r.settledEvents=r.settledEvents||{};
+  const theirs=m.id==='me'?r.picks:((r.memberPicks&&r.memberPicks[m.id])||{});
+  let sum=0;
+  list.forEach(ev=>{
+    if(r.settledEvents[ev.id]) return;
+    const p=theirs[ev.id]; if(!p) return;
+    const res=liveResult(ev,r); if(!res) return;
+    sum+=ptsFor(p,res,ev);
+  });
+  return sum;
 }
 /* Gruppiert UFC-Events zeitlich zu "Cards" (Events, die zeitlich nah beieinander
    liegen — dieselbe Fight Night). Eine Card zählt noch als "aktuell", solange sie
@@ -2650,7 +2755,14 @@ function tabEntry(){
 }
 
 function tabTable(){
-  const r=R(),rows=[...r.members].sort((a,b)=>b.pts-a.pts);
+  const r=R();
+  /* Vorläufige Punkte aus laufenden Spielen fließen direkt in den Punktestand
+     ein — sie entscheiden also auch über die Reihenfolge der Tabelle. Damit man
+     sieht, dass sich das noch ändern kann, wird ein Stand mit Live-Anteil in
+     der Live-Farbe dargestellt statt in der normalen. */
+  const liveOf={}; r.members.forEach(m=>liveOf[m.id]=livePtsOf(r,m));
+  const totalOf=m=>m.pts+(liveOf[m.id]||0);
+  const rows=[...r.members].sort((a,b)=>totalOf(b)-totalOf(a));
   let days;
   if(r.sport==='mma'){
     /* Bei UFC gibt's kein "Spieltag N" — stattdessen: vergangene Kämpfe zuerst,
@@ -2682,8 +2794,16 @@ function tabTable(){
     const res=eventResult(ev,r);
     if(!started(ev)&&!res) return '–';
     const label=p.type==='exact'&&S.premium?esc(p.side):tendAbbr(p,ev);
-    if(!res) return label;                 // läuft noch, Ergebnis noch nicht da
     const tend=p.type==='exact'?scoreTend(p.side):p.side;
+    if(!res){
+      /* Spiel läuft: der Tipp wird schon mitgefärbt, aber in der Live-Farbe —
+         das signalisiert "steht so, kann sich aber noch drehen". */
+      const lv=liveResult(ev,r);
+      if(!lv) return label;                 // angepfiffen, aber noch kein Stand da
+      return tend===lv.side
+        ? `<span style="color:var(--live);font-weight:700">${label}</span>`
+        : `<span style="opacity:.45">${label}</span>`;
+    }
     return `<span style="color:${tend===res.side?'var(--win)':'var(--bad)'}">${label}</span>`;
   };
   /* Alle Spieltage (bzw. bei UFC: aktuelle Karte + vergangene Kämpfe) nebeneinander,
@@ -2710,9 +2830,16 @@ function tabTable(){
           </tr>`:''}
           <tr>
           <th style="position:sticky;left:0;background:var(--surface);padding:0 12px 8px 0"></th>
-          ${evs.map(ev=>`<th data-evid="${ev.id}" style="padding:0 10px 8px;font-weight:600;color:var(--muted);
+          ${evs.map(ev=>{
+            const hs=headScore(ev,r);
+            return `<th data-evid="${ev.id}" style="padding:0 10px 8px;font-weight:600;color:var(--muted);
             ${dayStart.has(ev.id)?div:''}${pastIds.has(ev.id)?pastBg:''}">
-            ${esc(teamAbbr(ev.home,ev))}–${esc(teamAbbr(ev.away,ev))}</th>`).join('')}
+            ${esc(teamAbbr(ev.home,ev))}–${esc(teamAbbr(ev.away,ev))}
+            ${hs?`<div style="margin-top:3px;font-weight:700;font-size:12.5px;
+              color:${hs.live?'var(--live)':'var(--text)'}">${esc(hs.txt)}${
+              hs.live?`<span style="font-weight:600;font-size:9.5px;display:block;
+                letter-spacing:.06em">LIVE${hs.minute?" "+hs.minute+"'":''}</span>`:''}</div>`:''}
+            </th>`;}).join('')}
         </tr></thead>
         <tbody>${rows.map(m=>`<tr>
           <td style="position:sticky;left:0;background:var(--surface);padding:7px 12px 7px 0;
@@ -2729,10 +2856,16 @@ function tabTable(){
       <span class="ps">${i+1}</span>
       <span class="nm">${esc(m.name)}</span>
       <span class="dl" data-d="${m.id}"></span>
-      <span class="pts" data-p="${m.id}">${fmtPts(m.pts,r.custom)}</span></div>`).join('')+
+      <span class="pts" data-p="${m.id}"${liveOf[m.id]?' style="color:var(--live)"':''}
+        >${fmtPts(totalOf(m),r.custom)}</span></div>`).join('')+
+    (Object.values(liveOf).some(v=>v)
+      ?`<p class="hint" style="text-align:center;margin-top:14px;color:var(--live)">
+         Ein Spiel läuft gerade — gelbe Punkte sind vorläufig und können sich noch ändern.</p>`
+      :'')+
     `<p class="hint" style="text-align:center;margin-top:16px">
       Jede Runde wird getrennt gewertet.</p>`;
   app.querySelector('#foot').innerHTML='';
+  startLiveTicker();
   /* Beim Öffnen direkt zum aktuellen Spieltag scrollen, statt immer bei Spieltag 1
      zu starten — die vergangenen Spieltage liegen dann links davon. */
   if(curFirstId) requestAnimationFrame(()=>{

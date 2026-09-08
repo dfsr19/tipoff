@@ -22,23 +22,23 @@
  * dieser Zustand jemals veraltet oder falsch wird.
  */
 
+import { loadEspnSoccer, fensterTage } from './_espn.js';
+
 const KEY = process.env.ODDS_API_KEY;
 const SEASON = process.env.SEASON || '2026';
 
+/* Wettbewerbe aus OpenLigaDB — dort seit Jahren zuverlässig gepflegt. */
 const LEAGUES = [
-  {id:'bl1', name:'Bundesliga',       ol:'bl1', odds:'soccer_germany_bundesliga'},
-  {id:'bl2', name:'2. Bundesliga',    ol:'bl2', odds:'soccer_germany_bundesliga2'},
-  {id:'bl3', name:'3. Liga',          ol:'bl3', odds:'soccer_germany_liga3'},
-  /* ACHTUNG — Champions League vorübergehend deaktiviert (08.09.2026):
-     Der Kürzel "ucl2026" existiert bei OpenLigaDB zwar, ist aber noch mit
-     einem Platzhalter-Spielplan befüllt statt der echten Ligaphasen-Auslosung
-     — alle Spiele mit identischem Anstoß, identischen Quoten und falschen
-     Paarungen (z.B. RB Leipzig gegen Real Madrid UND Manchester City am
-     selben Tag). Das ist kein Fehler in dieser Datei, sondern unfertige Daten
-     bei der Quelle selbst. Sobald die Community den echten Spielplan
-     einträgt, hier die Zeile wieder einkommentieren:
-  {id:'ucl', name:'Champions League', ol:`ucl${SEASON}`, odds:'soccer_uefa_champs_league'}
-  */
+  {id:'bl1', name:'Bundesliga',    ol:'bl1', odds:'soccer_germany_bundesliga'},
+  {id:'bl2', name:'2. Bundesliga', ol:'bl2', odds:'soccer_germany_bundesliga2'},
+  {id:'bl3', name:'3. Liga',       ol:'bl3', odds:'soccer_germany_liga3'}
+];
+/* Die Champions League kommt NICHT aus OpenLigaDB: der dortige Eintrag für
+   2026/27 ist nur ein Platzhalter-Gerüst (identische Anstoßzeiten, identische
+   Quoten, falsche Paarungen). ESPN liefert die echte Auslosung samt
+   Live-Ständen und Quoten — kostenlos und ohne Odds-API-Guthaben. */
+const ESPN_LEAGUES = [
+  {id:'ucl', name:'Champions League', slug:'uefa.champions'}
 ];
 const UFC = {id:'ufc', name:'UFC', odds:'mma_mixed_martial_arts'};
 
@@ -257,6 +257,40 @@ function buildFootball(match, oddsEvents, table){
   return {...match, sport:'fb', source, sides, exact};
 }
 
+/* Ein ESPN-Spiel in ein fertiges Tipp-Spiel verwandeln.
+   Anders als bei OpenLigaDB stecken die Quoten schon im Spiel selbst — es
+   muss also nichts über Team-Namen zusammengesucht werden, was bei
+   internationalen Namen ("Internazionale" vs. "Inter Mailand") ohnehin die
+   fehleranfälligste Stelle wäre.
+   Alle CL-Spiele bekommen day:1 — die Ligaphase kennt keine "Spieltage" im
+   Bundesliga-Sinn, und die App zeigt dann schlicht den laufenden Spieltag. */
+function buildEspnFootball(m){
+  const {marktQuoten, ...rest} = m;
+  let lh, la, sides, source;
+  if(marktQuoten){
+    const {q1, qx, q2} = marktQuoten;
+    sides = [{key:'1',label:'1',q:q1},{key:'X',label:'X',q:qx},{key:'2',label:'2',q:q2}];
+    [lh,la] = fitLambdas(...devig([q1,qx,q2]));
+    source = 'mkt';
+  }else{
+    /* Ohne Quoten: neutrales Modell mit leichtem Heimvorteil. Für die
+       Champions League gibt es keine Liga-Tabelle als Stärke-Maß. */
+    [lh,la] = [1.45, 1.15];
+    const p = probs1X2(scoreMatrix(lh,la,6));
+    sides = [
+      {key:'1',label:'1',q:price(p.h,VIG_1X2)},
+      {key:'X',label:'X',q:price(p.d,VIG_1X2)},
+      {key:'2',label:'2',q:price(p.a,VIG_1X2)}
+    ];
+    source = 'mdl';
+  }
+  const mtx = scoreMatrix(lh,la,6), exact=[];
+  for(let i=0;i<=3;i++)
+    for(let j=0;j<=3;j++)
+      exact.push({key:`${i}:${j}`, label:`${i}:${j}`, q:price(mtx[i][j],VIG_EXACT)});
+  return {...rest, day:1, sport:'fb', source, sides, exact};
+}
+
 const isWeekend = ts => { const d = new Date(ts).getUTCDay(); return d===0 || d===6; };
 const mmaId = (a,b) => 'mma-'+[normName(a),normName(b)].sort().join('-');
 
@@ -316,6 +350,18 @@ export default async function handler(req, res) {
       const matches = schedule.map(m => buildFootball(m, odds, table));
       competitions.push({id:L.id, name:L.name, sport:'fb', matches});
     }catch(e){ /* ein ausgefallener Wettbewerb reißt die anderen nicht mit */ }
+  }
+
+  /* Wettbewerbe aus ESPN (aktuell: Champions League). ESPN liefert Ansetzung,
+     Zwischenstand UND Quoten in einem Rutsch — es braucht also weder
+     OpenLigaDB noch Odds-API-Guthaben. */
+  for(const L of ESPN_LEAGUES){
+    try{
+      const spiele = await loadEspnSoccer(L.slug, fensterTage());
+      if(!spiele.length) continue;
+      const matches = spiele.map(m => buildEspnFootball(m));
+      competitions.push({id:L.id, name:L.name, sport:'fb', matches});
+    }catch(e){ /* Champions League fehlt in diesem Aufruf, Rest bleibt nutzbar */ }
   }
 
   let fights = [];

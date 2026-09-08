@@ -17,16 +17,13 @@
  *   { updated: "...", live: { "ol12345": {score:{h,a}, minute, finished}, ... } }
  */
 
+import { loadEspnSoccer, espnDay } from './_espn.js';
+
 const SEASON = process.env.SEASON || '2026';
-/* Anders als bl1/bl2/bl3 hat die Champions League bei OpenLigaDB keinen
-   festen, saisonunabhängigen Kürzel — das Jahr steckt im Kürzel selbst
-   (z.B. "ucl2026" für 2026/27), nicht als separater Saison-Parameter.
-   Ein Aufruf mit dem Kürzel "ucl" allein träfe die falsche (alte) Saison. */
-/* ACHTUNG — Champions League vorübergehend deaktiviert (08.09.2026): der
-   Kürzel "ucl2026" existiert bei OpenLigaDB, ist aber noch mit einem
-   Platzhalter-Spielplan befüllt statt der echten Auslosung (identischer
-   Anstoß für alle Spiele, falsche Paarungen). Sobald die echten Daten da
-   sind, `, `ucl${SEASON}`` wieder ans Ende der Liste anhängen. */
+/* Nur die Bundesligen kommen aus OpenLigaDB. Die Champions League wird weiter
+   unten über ESPN geholt — der OpenLigaDB-Eintrag für 2026/27 enthält nur
+   Platzhalter-Daten (identische Anstoßzeiten, falsche Paarungen) und wäre für
+   einen Live-Ticker unbrauchbar. */
 const LEAGUES = ['bl1', 'bl2', 'bl3'];
 
 /* Endstand — nur wenn das Spiel wirklich abgeschlossen ist. */
@@ -75,6 +72,19 @@ export default async function handler(req, res) {
 
   const live = {};
   const jetzt = Date.now();
+
+  /* Champions League über ESPN — dieselbe Quelle wie in api/data.js, damit
+     die Spiel-Ids zusammenpassen. Nur der heutige und der gestrige Tag: mehr
+     braucht ein Live-Ticker nicht, und es hält die Antwort schnell. */
+  try{
+    const clSpiele = await loadEspnSoccer('uefa.champions',
+      [espnDay(jetzt - 864e5), espnDay(jetzt)]);
+    for(const m of clSpiele){
+      if(m.finished && m.score) live[m.id] = {score:m.score, finished:true};
+      else if(m.live && m.liveScore)
+        live[m.id] = {score:m.liveScore, minute:m.minute ?? null, finished:false};
+    }
+  }catch(e){ /* CL fehlt in diesem Aufruf, Bundesligen laufen weiter */ }
 
   for(const L of LEAGUES){
     try{

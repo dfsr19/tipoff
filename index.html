@@ -296,6 +296,7 @@ textarea{min-height:88px;resize:vertical;line-height:1.55}
 .odds{display:flex;gap:7px}
 .odds button{flex:1;background:var(--raise);border:1px solid var(--line-2);border-radius:12px;
   padding:10px 3px;display:flex;flex-direction:column;align-items:center;gap:3px;transition:all .13s}
+.odds button.big{padding:18px 4px}
 .odds .sd{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
 .odds .q{font-family:'Poppins';font-size:16px;font-weight:700;letter-spacing:-.02em}
 .odds button[aria-pressed="true"]{background:var(--blue);border-color:var(--blue);color:#04121F}
@@ -1440,7 +1441,7 @@ function vHome(){
         /* Jedes Motiv hat seinen "Blickfang" (Ball, Logo, Actionmoment) an einer anderen
            Stelle im hochformatigen Bild — eine einzige Position für alle Karten hätte bei
            den meisten nur eine zufällige, unkenntliche Stelle gezeigt. */
-        const posY={bl1:'48%',bl2:'24%',bl3:'44%',ucl:'30%',ufc:'38%'}[id]||'center';
+        const posY={bl1:'48%',bl2:'79%',bl3:'44%',ucl:'30%',ufc:'38%'}[id]||'center';
         return `<button class="compbar ${id}${locked?' locked':''}" data-comp="${id}"
           style="background-image:linear-gradient(100deg,rgba(8,9,11,.88) 28%,rgba(8,9,11,.32) 78%),url('${COMPBG[id]}');
           background-position:center ${posY}">
@@ -2563,7 +2564,7 @@ function vRound(){
      bleiben durch ihre eigenen deckenden Hintergründe lesbar. */
   const bg=COMPS[r.compId]?ROUNDBG[r.compId]:ROUNDBG.custom;
   const rbg=document.getElementById('roundbg');
-  rbg.style.backgroundImage=`linear-gradient(rgba(8,9,11,.8),rgba(8,9,11,.92)),url('${bg}')`;
+  rbg.style.backgroundImage=`linear-gradient(rgba(4,7,16,.92),rgba(3,5,12,.97)),url('${bg}')`;
   app.style.background='transparent';
   app.innerHTML=`
   <header><div class="hrow">
@@ -2580,6 +2581,7 @@ function vRound(){
     }</button>`).join('')}</nav>
   ${(S.tab==='tippen'||S.tab==='ergebnis')&&fb?'<div class="days" id="days"></div>':''}
   ${S.tab==='tippen'&&!r.custom&&r.modus==='regler'?'<div id="budgetbar"></div>':''}
+  ${S.tab==='tippen'&&(r.custom||r.modus!=='regler')?'<div id="modushint"></div>':''}
   </div>
   <main id="body"></main><div id="foot"></div>`;
   bindBack();
@@ -2623,9 +2625,10 @@ function tabTip(){
   const dl=r.custom&&!r.useDates&&evs[0]&&evs[0].lockAt?evs[0].lockAt:null;
   const stage=r.custom&&evs[0]&&evs[0].stage;
   if(r.custom||r.modus==='einzel'){
+    const hint=app.querySelector('#modushint');
+    if(hint) hint.innerHTML=`<p class="hint" style="margin:11px 12px 0;text-align:center">Jeder richtige Tipp bringt
+      <b style="color:var(--win)">${CFG.amateurPts} Punkte</b></p>`;
     b.innerHTML=`${stage?`<div class="sec" style="margin:0 0 10px">${esc(stage)}<span class="ln"></span></div>`:''}
-      <p class="hint" style="margin:0 0 14px;text-align:center">Jeder richtige Tipp bringt
-        <b style="color:var(--win)">${CFG.amateurPts} Punkte</b></p>
       ${r.custom?(r.useDates?`<p class="hint" style="margin:0 0 14px;text-align:center">
         ⏱ Tipp-Annahmeschluss: der Tag vor dem Spieltag.</p>`
       :dl?`<div style="background:rgba(248,113,113,.14);border:1px solid rgba(248,113,113,.4);
@@ -2634,8 +2637,10 @@ function tabTip(){
           ${dl<=new Date()?'⏱ Tippen ist beendet — Frist war':'⏱ Tipp-Annahmeschluss'}: ${when(dl)} Uhr</div>`
       :''):''}`;
   }else if(r.modus==='quotenfix'){
-    b.innerHTML=`<p class="hint" style="margin:0 0 14px;text-align:center">Jeder Tipp zählt mit festem Einsatz von
+    const hint=app.querySelector('#modushint');
+    if(hint) hint.innerHTML=`<p class="hint" style="margin:11px 12px 0;text-align:center">Jeder Tipp zählt mit festem Einsatz von
       <b style="color:var(--win)">${CFG.fixEinsatz} Punkten</b> — ein Treffer bringt Einsatz × Quote</p>`;
+    b.innerHTML='';
   }else{
     b.innerHTML='';
     /* Budget lebt in .topbar (fest oben, außerhalb von #body) statt im scrollenden
@@ -2665,7 +2670,7 @@ function tabTip(){
         letzteGruppe=gruppe;
       }
     }
-    b.appendChild(matchCard(ev,i===firstCurrentIdx));
+    b.appendChild(matchCard(ev,ev.sport==='mma'&&i===firstCurrentIdx));
   });
   drawDock();
 }
@@ -2693,12 +2698,17 @@ function matchCard(ev,isMain){
     const istSieger=res&&res.side===s.key;
     const warMeinTipp=p&&p.side===s.key;
     const verloren=warMeinTipp&&res&&!istSieger;
+    /* Ohne Quoten sind "1"/"2" als Beschriftung zu abstrakt — dort steht stattdessen
+       der Mannschaftsname (bei MMA ist s.label schon der Kämpfername, bleibt also
+       unverändert). "X" für Unentschieden bleibt in jedem Fall stehen. */
+    const bez=ev.noOdds?(s.key==='1'?short(ev.home):s.key==='2'?short(ev.away):s.label):s.label;
     /* Die Quote des tatsächlichen Siegers bleibt immer grün lesbar — auch wenn's
        nicht der eigene Tipp war. Der auffällige Rahmen (grün/rot) ist aber dem
        eigenen Tipp vorbehalten: grün bei Treffer, rot bei Fehltipp. Alles, worauf
        nicht getippt wurde, tritt optisch zurück, damit es nicht unnötig heraussticht. */
+    if(ev.noOdds) b.classList.add('big');
     b.innerHTML=(ev.noOdds
-      ?`<span class="q" style="font-size:13.5px;line-height:1.25${istSieger?';color:var(--win)':''}">${esc(s.label)}</span>`
+      ?`<span class="q" style="font-size:13.5px;line-height:1.25${istSieger?';color:var(--win)':''}">${esc(bez)}</span>`
       :`<span class="sd">${esc(s.label)}</span><span class="q"${istSieger?' style="color:var(--win)"':''}>${fq(s.q)}</span>`)
       +(istSieger?'<span class="siegtag">Sieg</span>':'');
     if(!zu) b.onclick=()=>pick(ev,s,'tendency');
@@ -3336,7 +3346,7 @@ function drawDock(){
   if(n&&pend){
     f.innerHTML=`<div class="dock">
       <button class="btn" id="submitPicks">${frei?`${n} von ${scopeEvs.length} Tipps abgeben`:`${n} Tipp${n>1?'s':''} abgeben`}</button>
-      ${!frei&&left()>0?`<p class="hint" style="text-align:center;margin-top:9px;font-size:11.5px">
+      ${!frei&&r.modus==='regler'&&left()>0?`<p class="hint" style="text-align:center;margin-top:9px;font-size:11.5px">
         noch ${left()} P übrig</p>`:''}</div>`;
     f.querySelector('#submitPicks').onclick=submitPicks;
     return;
@@ -3344,7 +3354,7 @@ function drawDock(){
   f.innerHTML=`<div class="dock">
     <div class="dockmsg">${n
       ?(frei?`${n} von ${scopeEvs.length} Tipps abgegeben`
-             :`${n} Tipp${n>1?'s':''} abgegeben${left()>0?` · noch ${left()} P übrig`:''}`)
+             :`${n} Tipp${n>1?'s':''} abgegeben${r.modus==='regler'&&left()>0?` · noch ${left()} P übrig`:''}`)
       :offen?'Tipp auf eine Quote, dann Einsatz mit dem Regler wählen'
              :(frei?'Die Tippfrist ist vorbei':'Für diesen Spieltag ist die Tippfrist vorbei')}</div></div>`;
 }

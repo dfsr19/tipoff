@@ -324,7 +324,7 @@ textarea{min-height:88px;resize:vertical;line-height:1.55}
 .stake .v{font-size:12px;font-weight:600;white-space:nowrap;color:var(--muted)}
 .stake .v b{color:var(--blue);font-weight:700}
 .match.hit{border-color:rgba(52,211,153,.45)}
-.match.miss{opacity:.5}
+.match.miss{border-color:rgba(248,113,113,.4);opacity:.72}
 .res{display:flex;justify-content:space-between;align-items:center;gap:9px;margin-top:12px;
   padding-top:11px;border-top:1px solid var(--line);font-size:12px;font-weight:500}
 .res .pt{font-family:'Poppins';font-size:15px;font-weight:700}
@@ -521,7 +521,9 @@ const COMPBG={
 function compTag(r,kurz){
   if(r.custom||!COMPS[r.compId]) return '🏟 Eigene Liga';
   const c=COMPS[r.compId];
-  return c.em+' '+(kurz?c.kurz:c.name);
+  const icon=ICONS[r.compId==='ufc'?'glove':r.compId==='ucl'?'trophy':'ball'];
+  return `<span style="display:inline-flex;align-items:center;gap:5px;color:currentColor">
+    <span style="display:inline-flex;width:14px;height:14px">${icon}</span>${esc(kurz?c.kurz:c.name)}</span>`;
 }
 
 /* ══════════ VEREINE (nur als Notfallplan ohne Netz) ══════════ */
@@ -711,7 +713,7 @@ const mkRound=(o)=>({id:o.id||'r'+(++SEQ),compId:o.compId||null,
   sport:o.sport||(o.compId?COMPS[o.compId].sport:'fb'),name:o.name,
   comp:o.comp||(o.compId?COMPS[o.compId].name:'Eigene Runde'),
   rules:o.rules||'',members:o.members||[],picks:{},settled:{},settledEvents:{},chat:o.chat||[],
-  custom:!!o.custom,useDates:o.useDates!==false,teams:o.teams||[],events:o.events||[],results:o.results||{},
+  custom:!!o.custom,einzelModus:!!o.einzelModus,useDates:o.useDates!==false,teams:o.teams||[],events:o.events||[],results:o.results||{},
   visibility:o.visibility||'private',code:o.code||code(),owner:o.owner||'me',
   requests:o.requests||[],joined:o.joined!==false,pendingSync:{}});
 
@@ -766,7 +768,7 @@ function fireToLocal(id,d,uid){
     ({id:mid===uid?'me':mid,name:m.name,pts:m.pts||0}));
   const events=(d.events||[]).map(e=>({...e,start:toJSDate(e.start),lockAt:toJSDate(e.lockAt)}));
   const r=mkRound({id,compId:d.compId,sport:d.sport,name:d.name,comp:d.comp,rules:d.rules,
-    custom:d.custom,useDates:d.useDates,teams:d.teams,events,visibility:d.visibility,code:d.code,
+    custom:d.custom,einzelModus:d.einzelModus,useDates:d.useDates,teams:d.teams,events,visibility:d.visibility,code:d.code,
     owner:d.ownerUid===uid?'me':(d.ownerName||d.ownerUid),members:membersArr,requests:[],chat:[]});
   r.results=d.results||{};
   r.picks=(d.picks&&d.picks[uid])||{};
@@ -789,7 +791,7 @@ async function fsCreateRound(data,id){
   const uid=myUid(); if(!uid) return null;
   const ref=id?FB.doc(FB.db,'rounds',id):FB.doc(FB.collection(FB.db,'rounds'));
   const payload={compId:data.compId||null,sport:data.sport||'fb',name:data.name,comp:data.comp||'',
-    rules:data.rules||'',custom:!!data.custom,useDates:data.useDates!==false,
+    rules:data.rules||'',custom:!!data.custom,einzelModus:!!data.einzelModus,useDates:data.useDates!==false,
     teams:data.teams||[],events:data.events||[],
     results:{},visibility:data.visibility||'private',code:code(),
     ownerUid:uid,ownerName:S.user?.displayName||'Du',
@@ -905,10 +907,15 @@ async function fsSyncSchedule(r,events,useDates){
 }
 
 const R=()=>ROUNDS[S.roundId];
-const eventsOf=(r,d)=> r.custom ? r.events.filter(e=>e.day===d)
+/* Runden im Einzeltipp-Modus werten wie eigene Ligen aus — fester Punktwert pro
+   Treffer statt Einsatz × Quote. Damit das nicht die geteilten Original-Events
+   verändert (die auch andere Runden desselben Wettbewerbs nutzen), gibt es hier
+   nur frische Kopien mit noOdds:true zurück, nie eine Mutation der Quelle. */
+const withModus=(r,list)=> r.einzelModus&&!r.custom ? list.map(e=>({...e,noOdds:true})) : list;
+const eventsOf=(r,d)=> withModus(r, r.custom ? r.events.filter(e=>e.day===d)
   : !COMPS[r.compId] ? []
   : r.sport==='mma' ? evOf(r.compId)
-  : evOf(r.compId).filter(m=>m.day===d);
+  : evOf(r.compId).filter(m=>m.day===d));
 
 /* ══════════ ECHTE ERGEBNISSE ══════════
    Bundesliga und UFC kommen aus data.json. Eigene Ligen haben keine Datenquelle —
@@ -964,7 +971,7 @@ function headScore(ev,r){
    sonst würden Punkte doppelt erscheinen. */
 function livePtsOf(r,m){
   if(!r||r.custom) return 0;
-  const list=evOf(r.compId);
+  const list=withModus(r, evOf(r.compId));
   if(!list.length) return 0;
   r.settledEvents=r.settledEvents||{};
   const theirs=m.id==='me'?r.picks:((r.memberPicks&&r.memberPicks[m.id])||{});
@@ -1382,7 +1389,7 @@ function vHome(){
       const req=r.owner==='me'&&r.requests.length;
       return `<button class="round" data-r="${r.id}">
         <div class="top">
-          <span class="pill b">${esc(compTag(r))}</span>
+          <span class="pill b">${compTag(r)}</span>
           ${r.visibility==='public'?'<span class="pill g">Öffentlich</span>':''}
           ${req?`<span class="pill solid">${req} Anfrage${req>1?'n':''}</span>`:''}
           <span class="arw">›</span>
@@ -1390,7 +1397,7 @@ function vHome(){
         <div class="nm" style="margin-bottom:12px">${esc(r.name)}</div>
         <div class="row">
           <div>Platz<b>${rank(r)}<span style="font-size:12px;color:var(--muted)">/${r.members.length}</span></b></div>
-          <div>Punkte<b>${fmtPts(r.members.find(m=>m.id==='me').pts,r.custom)}</b></div>
+          <div>Punkte<b>${fmtPts(r.members.find(m=>m.id==='me').pts,r.custom||r.einzelModus)}</b></div>
           <div>${r.sport==='mma'?'Kämpfe':'Als nächstes'}
             <b class="hot">${r.sport==='mma'?eventsOf(r,1).length:'ST '+nextDayOf(r)}</b></div>
         </div>
@@ -1772,15 +1779,26 @@ function vCreate(){
           <span class="t">🌍 Öffentlich</span><span class="d">Jeder kann beitreten</span></button>
       </div>
 
+      <label>Spielmodus</label>
+      <div class="toggle">
+        <button data-m="regler" aria-pressed="${!d.einzelModus}">
+          <span class="t">Mit Regler</span><span class="d">Punkte selbst verteilen</span></button>
+        <button data-m="einzel" aria-pressed="${!!d.einzelModus}">
+          <span class="t">Einzeltipp</span><span class="d">Nur Tendenz, feste Punkte</span></button>
+      </div>
+      <p class="hint" style="margin-top:-4px">${d.einzelModus
+        ? `Kein Verteilen nötig: du tippst pro Spiel einfach Sieg, Niederlage oder Unentschieden — jeder Treffer bringt ${CFG.amateurPts} Punkte, unabhängig von der Quote.`
+        : `Der Regler: du bekommst pro Spieltag ${CFG.budget} Punkte zum Verteilen und legst pro Tipp selbst fest, wie viel du setzt. Ein Treffer bringt Einsatz × Quote — bei einer höheren Quote also mehr Punkte fürs gleiche Risiko.`}</p>
+
       <label for="rg">Regeln (frei formulierbar)</label>
       <textarea id="rg" placeholder="Was gilt in deiner Runde?">${esc(d.rules||'')}</textarea>
-      <p class="hint">Jeder Spieltag bringt ${CFG.budget} Punkte zum Verteilen.
-        Treffer zählen Einsatz × Quote.</p>
     </main>
     <div class="dock"><button class="btn" id="mk">Runde erstellen</button></div>`;
     const keep=()=>{d.name=app.querySelector('#ln').value;d.rules=app.querySelector('#rg').value;};
     app.querySelectorAll('[data-v]').forEach(b=>b.onclick=()=>{keep();
       d.visibility=b.dataset.v;render();});
+    app.querySelectorAll('[data-m]').forEach(b=>b.onclick=()=>{keep();
+      d.einzelModus=b.dataset.m==='einzel';render();});
     app.querySelector('#back').onclick=()=>{keep();go('create',{flow:'comp'});};
     app.querySelector('#mk').onclick=async()=>{keep();
       const btn=app.querySelector('#mk');btn.disabled=true;btn.textContent='Einen Moment …';
@@ -2002,16 +2020,19 @@ function vCreate(){
 async function buildOfficial(d){
   const c=COMPS[d.compId];
   const name=(d.name||'').trim()||('Meine '+c.kurz+'-Runde');
-  const rules=(d.rules||'').trim()||`Getippt wird auf ${c.name}. ${CFG.budget} Punkte je Spieltag, `+
-      `Treffer zählen Einsatz mal Quote. Ergebnisse kommen automatisch.`;
+  const rules=(d.rules||'').trim()||(d.einzelModus
+    ? `Getippt wird auf ${c.name}. Ohne Punkte-Regler — jeder richtige Tipp zählt `+
+      `${CFG.amateurPts} Punkte, gleich viel für alle. Ergebnisse kommen automatisch.`
+    : `Getippt wird auf ${c.name}. ${CFG.budget} Punkte je Spieltag, `+
+      `Treffer zählen Einsatz mal Quote. Ergebnisse kommen automatisch.`);
   if(FB_ON&&FB){
     const id=await fsCreateRound({compId:d.compId,sport:c.sport,name,comp:c.name,
-      rules,visibility:d.visibility});
+      rules,visibility:d.visibility,einzelModus:d.einzelModus});
     if(!id) return toast('Da ist etwas schiefgelaufen. Versuch es nochmal.');
     toast('Runde erstellt');openRound(id);return;
   }
   const id='o'+(++SEQ);
-  ROUNDS[id]=mkRound({id,compId:d.compId,name,visibility:d.visibility,rules,
+  ROUNDS[id]=mkRound({id,compId:d.compId,name,visibility:d.visibility,rules,einzelModus:d.einzelModus,
     members:[{id:'me',name:S.user?.displayName||'Du',pts:0}]});
   toast('Runde erstellt');
   openRound(id);
@@ -2393,7 +2414,10 @@ function vRound(){
   if(S.premium) tabs.push('chat');   // ohne Premium gibt es keinen Chat
   tabs.push('info');
   if(!tabs.includes(S.tab)) S.tab='tippen';
+  const bg=COMPS[r.compId]?COMPBG[r.compId]:null;
   app.innerHTML=`
+  <div ${bg?`style="background-image:linear-gradient(rgba(8,9,11,.94),rgba(8,9,11,.94)),url('${bg}');
+    background-size:cover;background-position:center;background-attachment:fixed;min-height:100vh"`:''}>
   <header><div class="hrow">
     <button class="ico" id="back" aria-label="Zurück">‹</button>
     <div style="flex:1;min-width:0">
@@ -2407,9 +2431,10 @@ function vRound(){
     {tippen:'Tippen',ergebnis:'Ergebnis',tabelle:'Tabelle',chat:'Chat',info:'Runde'}[t]
     }</button>`).join('')}</nav>
   ${(S.tab==='tippen'||S.tab==='ergebnis')&&fb?'<div class="days" id="days"></div>':''}
-  ${S.tab==='tippen'&&!r.custom?'<div id="budgetbar"></div>':''}
+  ${S.tab==='tippen'&&!r.custom&&!r.einzelModus?'<div id="budgetbar"></div>':''}
   </div>
-  <main id="body"></main><div id="foot"></div>`;
+  <main id="body"></main><div id="foot"></div>
+  </div>`;
   bindBack();
   app.querySelector('#menu').onclick=()=>{S.menu=true;drawMenu();};
   app.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{S.tab=b.dataset.t;S.picker=false;render();});
@@ -2450,17 +2475,17 @@ function tabTip(){
     return s+(res?ptsFor(p,res,ev):0);},0):0;
   const dl=r.custom&&!r.useDates&&evs[0]&&evs[0].lockAt?evs[0].lockAt:null;
   const stage=r.custom&&evs[0]&&evs[0].stage;
-  if(r.custom){
+  if(r.custom||r.einzelModus){
     b.innerHTML=`${stage?`<div class="sec" style="margin:0 0 10px">${esc(stage)}<span class="ln"></span></div>`:''}
       <p class="hint" style="margin:0 0 14px;text-align:center">Jeder richtige Tipp bringt
         <b style="color:var(--win)">${CFG.amateurPts} Punkte</b></p>
-      ${r.useDates?`<p class="hint" style="margin:0 0 14px;text-align:center">
+      ${r.custom?(r.useDates?`<p class="hint" style="margin:0 0 14px;text-align:center">
         ⏱ Tipp-Annahmeschluss: der Tag vor dem Spieltag.</p>`
       :dl?`<div style="background:rgba(248,113,113,.14);border:1px solid rgba(248,113,113,.4);
           border-radius:12px;padding:12px 14px;margin:0 0 14px;text-align:center;
           color:var(--bad);font-weight:700;font-size:13.5px">
           ${dl<=new Date()?'⏱ Tippen ist beendet — Frist war':'⏱ Tipp-Annahmeschluss'}: ${when(dl)} Uhr</div>`
-      :''}`;
+      :''):''}`;
   }else{
     b.innerHTML='';
     /* Budget lebt in .topbar (fest oben, außerhalb von #body) statt im scrollenden
@@ -2505,7 +2530,7 @@ function matchCard(ev,isMain){
   const el=document.createElement('article');el.className='match'+(isMain?' headline':'');
   const nm=ev.sport==='mma'?[ev.home,ev.away]:[short(ev.home),short(ev.away)];
   el.innerHTML=`<div class="mtop">${ev.sport==='mma'?(isMain?'<span class="src headtag">Hauptkampf</span>':''):(ev.start?when(ev.start):'')}
-    ${ev.noOdds?'':`<span class="src ${ev.source==='mkt'?'mkt':''}">${ev.source==='mkt'?'Marktquote':'Modell'}</span>`}</div>
+    ${ev.noOdds||ev.source==='mkt'?'':'<span class="src">Modell</span>'}</div>
     <div class="who">${esc(nm[0])} <em>${ev.sport==='mma'?'vs':'—'}</em> ${esc(nm[1])}</div>
     <div class="odds"></div>`;
   if(zu&&!st) el.querySelector('.mtop').insertAdjacentHTML('beforeend',
@@ -2857,7 +2882,7 @@ function tabTable(){
       <span class="nm">${esc(m.name)}</span>
       <span class="dl" data-d="${m.id}"></span>
       <span class="pts" data-p="${m.id}"${liveOf[m.id]?' style="color:var(--live)"':''}
-        >${fmtPts(totalOf(m),r.custom)}</span></div>`).join('')+
+        >${fmtPts(totalOf(m),r.custom||r.einzelModus)}</span></div>`).join('')+
     (Object.values(liveOf).some(v=>v)
       ?`<p class="hint" style="text-align:center;margin-top:14px;color:var(--live)">
          Ein Spiel läuft gerade — gelbe Punkte sind vorläufig und können sich noch ändern.</p>`
@@ -2932,7 +2957,7 @@ function tabInfo(){
   app.querySelector('#body').innerHTML=`
     <div class="card" style="margin-bottom:11px">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:11px;flex-wrap:wrap">
-        <span class="pill b">${esc(compTag(r))}</span>
+        <span class="pill b">${compTag(r)}</span>
         <span class="pill ${r.visibility==='public'?'g':''}">${
           r.visibility==='public'?'🌍 Öffentlich':'🔒 Privat'}</span>
         ${own?'<span class="pill b">Du bist Ersteller</span>':''}
@@ -3110,7 +3135,7 @@ function drawDock(){
       const p=r.picks[e.id],res=e._simRes||eventResult(e,r);
       return s+(p&&res?ptsFor(p,res,e):0);},0);
     f.innerHTML=`<div class="dock">
-      <div class="dockmsg">${probelauf?'Probelauf':'Ausgewertet'} · +${fmtPts(meGain,r.custom)} Punkte für dich</div>
+      <div class="dockmsg">${probelauf?'Probelauf':'Ausgewertet'} · +${fmtPts(meGain,r.custom||r.einzelModus)} Punkte für dich</div>
       ${probelauf?'<button class="btn ghost" id="rs">Probelauf zurücksetzen</button>':''}</div>`;
     const rs=f.querySelector('#rs');
     if(rs) rs.onclick=probelaufZuruecksetzen;
@@ -3232,7 +3257,7 @@ function autoSettle(){
   Object.values(ROUNDS).forEach(r=>{
     if(!r.joined) return;
     r.settledEvents=r.settledEvents||{};
-    const list=r.custom?(r.events||[]):evOf(r.compId);
+    const list=withModus(r, r.custom?(r.events||[]):evOf(r.compId));
     const getippteIds=new Set([
       ...Object.keys(r.picks||{}),
       ...(r.memberPicks?Object.values(r.memberPicks).flatMap(mp=>mp?Object.keys(mp):[]):[])
@@ -3244,7 +3269,7 @@ function autoSettle(){
   return n;
 }
 function rollUp(gain){
-  const custom=R().custom;
+  const custom=R().custom||R().einzelModus;
   app.querySelectorAll('[data-p]').forEach(el=>{
     const id=el.dataset.p,to=R().members.find(m=>m.id===id).pts,g=gain[id]||0,from=to-g;
     const dl=app.querySelector(`[data-d="${id}"]`),t0=performance.now();
@@ -3284,9 +3309,9 @@ function vProfile(){
 
     <div class="sec">Meine Runden<span class="ln"></span></div>
     ${mine.map(r=>`<button class="round" data-r="${r.id}">
-      <div class="top"><span class="pill b">${esc(compTag(r,true))}</span>
+      <div class="top"><span class="pill b">${compTag(r,true)}</span>
         <span class="nm">${esc(r.name)}</span><span class="arw">›</span></div>
-      <div class="row"><div>Punkte<b class="hot">${fmtPts(r.members.find(m=>m.id==='me').pts,r.custom)}</b></div>
+      <div class="row"><div>Punkte<b class="hot">${fmtPts(r.members.find(m=>m.id==='me').pts,r.custom||r.einzelModus)}</b></div>
         <div>Mitglieder<b>${r.members.length}</b></div></div>
     </button>`).join('')}
   </main>`;

@@ -1141,7 +1141,9 @@ function ptsFor(pick,res,ev){
   const einsatz=(ev&&ev.noStake)?CFG.fixEinsatz:pick.stake;
   if(pick.type==='exact'){
     if(res.exact===pick.side) return einsatz*pick.q;
-    const[h,a]=pick.side.split(':').map(Number);
+    const parts=String(pick.side||'').split(':').map(Number);
+    if(parts.length!==2||parts.some(n=>isNaN(n))) return 0;
+    const[h,a]=parts;
     const tend=h>a?'1':h<a?'2':'X';
     if(tend===res.side) return einsatz*(ev?.sides.find(s=>s.key===tend)?.q||1);
     return 0;
@@ -3472,15 +3474,21 @@ function autoSettle(){
   let n=0;
   Object.values(ROUNDS).forEach(r=>{
     if(!r.joined) return;
-    r.settledEvents=r.settledEvents||{};
-    const list=withModus(r, r.custom?(r.events||[]):evOf(r.compId));
-    const getippteIds=new Set([
-      ...Object.keys(r.picks||{}),
-      ...(r.memberPicks?Object.values(r.memberPicks).flatMap(mp=>mp?Object.keys(mp):[]):[])
-    ]);
-    const neu=list.filter(e=>getippteIds.has(e.id)&&!r.settledEvents[e.id]&&eventResult(e,r));
-    if(!neu.length) return;
-    applySettle(r,neu,true); n++;
+    /* Ein Fehler in EINER Runde (z.B. durch unerwartete Tipp-Daten) darf nicht dazu
+       führen, dass alle danach verarbeiteten Runden stillschweigend übersprungen
+       werden — genau das ist bisher offenbar passiert. Jede Runde bekommt ihren
+       eigenen Versuch; schlägt einer fehl, probiert es der nächste Aufruf erneut. */
+    try{
+      r.settledEvents=r.settledEvents||{};
+      const list=withModus(r, r.custom?(r.events||[]):evOf(r.compId));
+      const getippteIds=new Set([
+        ...Object.keys(r.picks||{}),
+        ...(r.memberPicks?Object.values(r.memberPicks).flatMap(mp=>mp?Object.keys(mp):[]):[])
+      ]);
+      const neu=list.filter(e=>getippteIds.has(e.id)&&!r.settledEvents[e.id]&&eventResult(e,r));
+      if(!neu.length) return;
+      applySettle(r,neu,true); n++;
+    }catch(e){ console.warn('Auswertung fehlgeschlagen für Runde',r.id,e); }
   });
   return n;
 }

@@ -1441,9 +1441,9 @@ function vHome(){
         /* Jedes Motiv hat seinen "Blickfang" (Ball, Logo, Actionmoment) an einer anderen
            Stelle im hochformatigen Bild — eine einzige Position für alle Karten hätte bei
            den meisten nur eine zufällige, unkenntliche Stelle gezeigt. */
-        const posY={bl1:'48%',bl2:'79%',bl3:'44%',ucl:'30%',ufc:'38%'}[id]||'center';
+        const posY={bl1:'48%',bl2:'62%',bl3:'44%',ucl:'30%',ufc:'38%'}[id]||'center';
         return `<button class="compbar ${id}${locked?' locked':''}" data-comp="${id}"
-          style="background-image:linear-gradient(100deg,rgba(8,9,11,.88) 28%,rgba(8,9,11,.32) 78%),url('${COMPBG[id]}');
+          style="background-image:linear-gradient(100deg,rgba(4,7,16,.93) 28%,rgba(4,7,16,.6) 78%),url('${COMPBG[id]}');
           background-position:center ${posY}">
           <span class="ctxt"><b>${esc(c.name)}</b></span>
           ${locked?`<span class="ctag">${ICONS.lock}Premium</span>`:'<span class="arw">›</span>'}
@@ -1837,6 +1837,12 @@ function vCreate(){
        einen Blick klar wird, statt es nur in Worten zu erklären. */
     const bspQuote=1.8, bspEinsatz=20;
     const modus=d.modus||'regler';
+    const isMma=c.sport==='mma';
+    const bspPaar=isMma?'Topuria – Holloway':'Bayern – Dortmund';
+    const bspSieger=isMma?'Topuria':'Bayern';
+    const wSpiel=isMma?'Kampf':'Spiel';
+    const wEinSpiel=isMma?'einen einzelnen Kampf':'ein einzelnes Spiel';
+    const wSpieltag=isMma?'Kampfkarte':'Spieltag';
     app.innerHTML=head('Runde anlegen','Schritt 2 von 2')+`
     <main>
       <div style="border-radius:var(--r);overflow:hidden;margin-bottom:14px;position:relative;
@@ -1867,7 +1873,7 @@ function vCreate(){
               ? `Aus — jeder Treffer bringt feste ${CFG.amateurPts} Punkte`
               : modus==='quotenfix'
                 ? `An — fester Einsatz von ${CFG.fixEinsatz} P je Tipp, Treffer bringt Einsatz × Quote`
-                : `An — du verteilst ${CFG.budget} Punkte pro Spieltag, Treffer bringt Einsatz × Quote`}</div>
+                : `An — du verteilst ${CFG.budget} Punkte pro ${wSpieltag}, Treffer bringt Einsatz × Quote`}</div>
           </div>
           <button class="sw" id="quoteSw" aria-pressed="${modus!=='einzel'}" aria-label="Mit Quoten tippen"><i></i></button>
         </div>
@@ -1885,11 +1891,11 @@ function vCreate(){
 
         ${modus==='regler'?`
         <div style="padding:14px;border-top:1px solid var(--line)">
-          <p class="hint" style="margin:0 0 12px">Du bekommst pro Spieltag ${CFG.budget} Punkte zum Verteilen und setzt frei,
-            wie viel wovon auf welchen Tipp geht — auch nur auf ein einzelnes Spiel, wenn du magst.
+          <p class="hint" style="margin:0 0 12px">Du bekommst pro ${wSpieltag} ${CFG.budget} Punkte zum Verteilen und setzt frei,
+            wie viel wovon auf welchen Tipp geht — auch nur auf ${wEinSpiel}, wenn du magst.
             Ein Treffer bringt Einsatz × Quote: mutigere Tipps können sich mehr auszahlen. Zieh mal am Regler:</p>
           <div style="background:var(--raise);border-radius:12px;padding:12px 14px">
-            <div style="font-size:12.5px;font-weight:600;margin-bottom:10px">Bayern – Dortmund, Sieg Bayern
+            <div style="font-size:12.5px;font-weight:600;margin-bottom:10px">${bspPaar}, Sieg ${bspSieger}
               <span style="color:var(--muted);font-weight:500">· Quote ${bspQuote.toFixed(2)}</span></div>
             <input type="range" id="demoStake" min="5" max="${CFG.budget}" step="5" value="${bspEinsatz}"
               aria-label="Beispiel-Einsatz" style="width:100%"
@@ -1908,7 +1914,7 @@ function vCreate(){
             mutigere Tipps zahlen sich also weiterhin mehr aus:</p>
           <div style="background:var(--raise);border-radius:12px;padding:12px 14px;
             display:flex;justify-content:space-between;align-items:center;font-size:13px">
-            <span>Bayern – Dortmund, Sieg Bayern <span style="color:var(--muted)">· Quote ${bspQuote.toFixed(2)}</span></span>
+            <span>${bspPaar}, Sieg ${bspSieger} <span style="color:var(--muted)">· Quote ${bspQuote.toFixed(2)}</span></span>
             <span style="color:var(--win);font-weight:700">Treffer → +${fmt(CFG.fixEinsatz*bspQuote)} P</span>
           </div>
         </div>`:`
@@ -1917,7 +1923,7 @@ function vCreate(){
             Bei derselben Partie bringt ein Treffer immer dasselbe, egal wie hoch die Quote steht:</p>
           <div style="background:var(--raise);border-radius:12px;padding:12px 14px;
             display:flex;justify-content:space-between;align-items:center;font-size:13px">
-            <span>Bayern – Dortmund, Sieg Bayern</span>
+            <span>${bspPaar}, Sieg ${bspSieger}</span>
             <span style="color:var(--win);font-weight:700">Treffer → +${CFG.amateurPts} P</span>
           </div>
         </div>`}
@@ -2556,16 +2562,23 @@ function vRound(){
   if(!tabs.includes(S.tab)) S.tab='tippen';
   /* Eigenes, größeres Illustrationsmotiv je Wettbewerb (ROUNDBG) — bewusst
      andere Bilder als die kompakten Kacheln auf der Startseite (COMPBG).
+     Nur im Tippen-Tab: bei Tabelle, Runde, Chat und Ergebnis bleibt es beim
+     ursprünglichen, deckenden Hintergrund — dort lenkt das Bild nur ab.
      Lebt auf #roundbg, einem eigenen fixierten Element neben #app (siehe
      dessen CSS für die Begründung) — nicht auf <body>, weil <body> auf
      breiten Bildschirmen (iPad) über die ganze Breite geht, während die
      App selbst nur eine 480px-Spalte in der Mitte ist. #app wird
      transparent geschaltet, damit das Bild durchscheint; Header/Kacheln
      bleiben durch ihre eigenen deckenden Hintergründe lesbar. */
-  const bg=COMPS[r.compId]?ROUNDBG[r.compId]:ROUNDBG.custom;
   const rbg=document.getElementById('roundbg');
-  rbg.style.backgroundImage=`linear-gradient(rgba(4,7,16,.92),rgba(3,5,12,.97)),url('${bg}')`;
-  app.style.background='transparent';
+  if(S.tab==='tippen'){
+    const bg=COMPS[r.compId]?ROUNDBG[r.compId]:ROUNDBG.custom;
+    rbg.style.backgroundImage=`linear-gradient(rgba(4,7,16,.92),rgba(3,5,12,.97)),url('${bg}')`;
+    app.style.background='transparent';
+  }else{
+    rbg.style.backgroundImage='';
+    app.style.background='';
+  }
   app.innerHTML=`
   <header><div class="hrow">
     <button class="ico" id="back" aria-label="Zurück">‹</button>
@@ -2778,13 +2791,6 @@ function matchCard(ev,isMain){
         if(nm) nm.textContent=l2+' / '+CFG.budget;
       }};
     i.onchange=()=>{r.pendingSync=r.pendingSync||{};r.pendingSync[ev.id]=true;render();};
-    el.appendChild(s);
-  }else if(p&&!zu&&ev.noStake&&!ev.noOdds){
-    /* Modus "quotenfix": kein Regler, aber der feste Einsatz × Quote soll trotzdem
-       schon beim Tippen sichtbar sein, nicht erst beim Ergebnis. */
-    const s=document.createElement('div');s.className='stake';
-    s.innerHTML=`<span class="v" style="width:100%;text-align:center">
-      Einsatz: <b>${CFG.fixEinsatz} P</b> (fest) → Treffer: <b style="color:var(--win)">${fmt(CFG.fixEinsatz*p.q)} P</b></span>`;
     el.appendChild(s);
   }
 

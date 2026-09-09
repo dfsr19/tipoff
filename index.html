@@ -43,6 +43,14 @@ input,textarea,select{font:inherit;color:inherit}
   width:100%;max-width:480px;min-height:100vh;background:var(--surface);
   display:flex;flex-direction:column;position:relative;overflow-x:hidden;
 }
+/* Eigenes Element für den Rundenhintergrund — exakt so breit und mittig wie .app
+   selbst (nicht der ganze Bildschirm, wichtig auf breiten Screens wie dem iPad).
+   position:fixed macht es unabhängig von der Scroll-Länge des Inhalts: die Größe
+   bezieht sich auf die tatsächliche Bildschirmhöhe, nicht auf die (viel längere)
+   Höhe der Spielliste — sonst würde "cover" das Bild riesig hochskalieren. */
+#roundbg{position:fixed;top:0;left:50%;transform:translateX(-50%);
+  width:100%;max-width:480px;height:100vh;z-index:-1;
+  background-size:cover;background-position:top center;pointer-events:none}
 
 /* ═══════ LADESCREEN ═══════ */
 #splash{position:fixed;inset:0;z-index:200;background:#000;display:grid;place-items:center;
@@ -213,7 +221,7 @@ textarea{min-height:88px;resize:vertical;line-height:1.55}
 /* ═══════ WETTBEWERBS-AUSWAHL ═══════ */
 .complist{display:flex;flex-direction:column;gap:9px;margin-bottom:18px}
 .compbar{width:100%;height:76px;display:flex;align-items:center;gap:13px;text-align:left;
-  background-color:var(--card);background-size:cover;background-position:center 22%;
+  background-color:var(--card);background-size:cover;background-position:center;
   border:1px solid var(--line);border-radius:var(--r);padding:0 16px;transition:all .15s;
   position:relative;overflow:hidden}
 .compbar:active{transform:scale(.99);border-color:var(--line-2)}
@@ -434,6 +442,7 @@ textarea{min-height:88px;resize:vertical;line-height:1.55}
   <img class="smark" id="smark" alt="Tipoff">
 </div>
 
+<div id="roundbg"></div>
 <div class="app" id="app"></div>
 
 <script>
@@ -453,8 +462,9 @@ const CFG = {
   liveUrl:'https://tipoff-tau.vercel.app/api/live',
   shareUrl:'https://dfsr19.github.io/tipoff',
   intro:'intro.mp4',
-  budget:100,          // Tipp-Punkte je Spieltag
-  amateurPts:10,       // eigene Ligen ohne Quoten: fester Wert je Treffer
+  budget:100,          // Tipp-Punkte je Spieltag (Modus "regler")
+  amateurPts:10,       // eigene Ligen & Modus "einzel": fester Wert je Treffer
+  fixEinsatz:10,       // Modus "quotenfix": fester Einsatz je Tipp (× echte Quote)
   freeRounds:5,        // wie viele Runden ohne Premium
   price:'4,99 €'
 };
@@ -745,7 +755,7 @@ const mkRound=(o)=>({id:o.id||'r'+(++SEQ),compId:o.compId||null,
   sport:o.sport||(o.compId?COMPS[o.compId].sport:'fb'),name:o.name,
   comp:o.comp||(o.compId?COMPS[o.compId].name:'Eigene Runde'),
   rules:o.rules||'',members:o.members||[],picks:{},settled:{},settledEvents:{},chat:o.chat||[],
-  custom:!!o.custom,einzelModus:!!o.einzelModus,useDates:o.useDates!==false,teams:o.teams||[],events:o.events||[],results:o.results||{},
+  custom:!!o.custom,modus:o.modus||'regler',useDates:o.useDates!==false,teams:o.teams||[],events:o.events||[],results:o.results||{},
   visibility:o.visibility||'private',code:o.code||code(),owner:o.owner||'me',
   requests:o.requests||[],joined:o.joined!==false,pendingSync:{}});
 
@@ -800,7 +810,7 @@ function fireToLocal(id,d,uid){
     ({id:mid===uid?'me':mid,name:m.name,pts:m.pts||0}));
   const events=(d.events||[]).map(e=>({...e,start:toJSDate(e.start),lockAt:toJSDate(e.lockAt)}));
   const r=mkRound({id,compId:d.compId,sport:d.sport,name:d.name,comp:d.comp,rules:d.rules,
-    custom:d.custom,einzelModus:d.einzelModus,useDates:d.useDates,teams:d.teams,events,visibility:d.visibility,code:d.code,
+    custom:d.custom,modus:d.modus,useDates:d.useDates,teams:d.teams,events,visibility:d.visibility,code:d.code,
     owner:d.ownerUid===uid?'me':(d.ownerName||d.ownerUid),members:membersArr,requests:[],chat:[]});
   r.results=d.results||{};
   r.picks=(d.picks&&d.picks[uid])||{};
@@ -823,7 +833,7 @@ async function fsCreateRound(data,id){
   const uid=myUid(); if(!uid) return null;
   const ref=id?FB.doc(FB.db,'rounds',id):FB.doc(FB.collection(FB.db,'rounds'));
   const payload={compId:data.compId||null,sport:data.sport||'fb',name:data.name,comp:data.comp||'',
-    rules:data.rules||'',custom:!!data.custom,einzelModus:!!data.einzelModus,useDates:data.useDates!==false,
+    rules:data.rules||'',custom:!!data.custom,modus:data.modus||'regler',useDates:data.useDates!==false,
     teams:data.teams||[],events:data.events||[],
     results:{},visibility:data.visibility||'private',code:code(),
     ownerUid:uid,ownerName:S.user?.displayName||'Du',
@@ -943,7 +953,19 @@ const R=()=>ROUNDS[S.roundId];
    Treffer statt Einsatz × Quote. Damit das nicht die geteilten Original-Events
    verändert (die auch andere Runden desselben Wettbewerbs nutzen), gibt es hier
    nur frische Kopien mit noOdds:true zurück, nie eine Mutation der Quelle. */
-const withModus=(r,list)=> r.einzelModus&&!r.custom ? list.map(e=>({...e,noOdds:true})) : list;
+/* Runden kennen jetzt drei Spielarten (r.modus):
+   'regler'    — Quoten sichtbar, Punkte-Regler aktiv (Einsatz × Quote, Einsatz frei wählbar)
+   'quotenfix' — Quoten sichtbar, aber kein Regler: fester Einsatz (CFG.fixEinsatz) × echte Quote
+   'einzel'    — keine Quoten, fester Punktwert je Treffer (CFG.amateurPts)
+   noOdds  = Quoten NICHT anzeigen (nur bei 'einzel')
+   noStake = KEIN Einsatz/Budget nötig (bei 'quotenfix' UND 'einzel')
+   Kopien statt Mutation, damit die geteilten Original-Events anderer Runden
+   auf demselben Wettbewerb unangetastet bleiben. */
+const withModus=(r,list)=>{
+  if(r.custom||r.modus==='regler'||!r.modus) return list;
+  const noOdds=r.modus==='einzel';
+  return list.map(e=>({...e,noStake:true,...(noOdds?{noOdds:true}:{})}));
+};
 const eventsOf=(r,d)=> withModus(r, r.custom ? r.events.filter(e=>e.day===d)
   : !COMPS[r.compId] ? []
   : r.sport==='mma' ? evOf(r.compId)
@@ -1105,18 +1127,21 @@ const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&g
    Tendenz richtig            → Einsatz × Quote
    Exaktes Ergebnis richtig   → Einsatz × Ergebnisquote (deutlich höher)
    Ergebnis falsch, Tendenz richtig → trotzdem Tendenzpunkte
-   Eigene Ligen ohne Quoten   → fester Wert je Treffer                     */
+   Modus "einzel" (keine Quoten)     → fester Wert je Treffer
+   Modus "quotenfix" (Quoten, kein Regler) → echte Quote, aber immer
+     derselbe feste Einsatz (CFG.fixEinsatz) statt selbst verteiltem Budget */
 function ptsFor(pick,res,ev){
   if(!res||!pick) return 0;
   if(ev&&ev.noOdds) return res.side===pick.side?CFG.amateurPts:0;
+  const einsatz=(ev&&ev.noStake)?CFG.fixEinsatz:pick.stake;
   if(pick.type==='exact'){
-    if(res.exact===pick.side) return pick.stake*pick.q;
+    if(res.exact===pick.side) return einsatz*pick.q;
     const[h,a]=pick.side.split(':').map(Number);
     const tend=h>a?'1':h<a?'2':'X';
-    if(tend===res.side) return pick.stake*(ev?.sides.find(s=>s.key===tend)?.q||1);
+    if(tend===res.side) return einsatz*(ev?.sides.find(s=>s.key===tend)?.q||1);
     return 0;
   }
-  return res.side===pick.side?pick.stake*pick.q:0;
+  return res.side===pick.side?einsatz*pick.q:0;
 }
 const scoreAll=(picks,res,evs)=>Object.entries(picks)
   .reduce((t,[id,p])=>t+ptsFor(p,res[id],evs.find(e=>e.id===id)),0);
@@ -1149,8 +1174,8 @@ function botPicks(evs){
     if(st>rest||st<=0)return;
     const ex=ev.exact&&Math.random()<.28;
     const o=ex?ev.exact:ev.sides,s=o[Math.floor(Math.random()*o.length)];
-    p[ev.id]={side:s.key,q:s.q,stake:ev.noOdds?0:st,type:ex?'exact':'tendency'};
-    rest-=ev.noOdds?0:st;
+    p[ev.id]={side:s.key,q:s.q,stake:ev.noStake?0:st,type:ex?'exact':'tendency'};
+    rest-=ev.noStake?0:st;
   });
   return p;
 }
@@ -1169,11 +1194,12 @@ const SCREENS={auth:vAuth,welcome:vWelcome,home:vHome,round:vRound,premium:vPrem
   create:vCreate,join:vJoin,profile:vProfile,settings:vSettings,legal:vLegal,resetpw:vResetPw,
   editSchedule:vEditSchedule};
 function render(){
-  /* Das Hintergrundbild einer Runde lebt auf <body> selbst (siehe vRound) —
-     bei jedem anderen Bildschirm muss es zurückgesetzt werden, sonst
-     bliebe es beim Wechsel z.B. zurück zur Startseite hängen. vRound()
-     setzt es gleich danach wieder, falls es der aktuelle Screen ist. */
-  document.body.style.backgroundImage='';
+  /* Das Hintergrundbild einer Runde lebt auf #roundbg (siehe vRound), einem
+     eigenen, spaltenbreiten Element neben #app — bei jedem anderen Bildschirm
+     muss es zurückgesetzt werden, sonst bliebe es beim Wechsel z.B. zurück zur
+     Startseite hängen. vRound() setzt es gleich danach wieder, falls es der
+     aktuelle Screen ist. */
+  document.getElementById('roundbg').style.backgroundImage='';
   app.style.background='';
   (SCREENS[S.screen]||vHome)(); if(S.menu) drawMenu();
 }
@@ -1411,8 +1437,13 @@ function vHome(){
     <div class="complist">
       ${['bl1','bl2','ufc','bl3','ucl'].map(id=>{
         const c=COMPS[id],locked=c.prem&&!S.premium;
+        /* Jedes Motiv hat seinen "Blickfang" (Ball, Logo, Actionmoment) an einer anderen
+           Stelle im hochformatigen Bild — eine einzige Position für alle Karten hätte bei
+           den meisten nur eine zufällige, unkenntliche Stelle gezeigt. */
+        const posY={bl1:'48%',bl2:'24%',bl3:'44%',ucl:'30%',ufc:'38%'}[id]||'center';
         return `<button class="compbar ${id}${locked?' locked':''}" data-comp="${id}"
-          style="background-image:linear-gradient(100deg,rgba(8,9,11,.88) 28%,rgba(8,9,11,.32) 78%),url('${COMPBG[id]}')">
+          style="background-image:linear-gradient(100deg,rgba(8,9,11,.88) 28%,rgba(8,9,11,.32) 78%),url('${COMPBG[id]}');
+          background-position:center ${posY}">
           <span class="ctxt"><b>${esc(c.name)}</b></span>
           ${locked?`<span class="ctag">${ICONS.lock}Premium</span>`:'<span class="arw">›</span>'}
         </button>`;}).join('')}
@@ -1437,7 +1468,7 @@ function vHome(){
         <div class="nm" style="margin-bottom:12px">${esc(r.name)}</div>
         <div class="row">
           <div>Platz<b>${rank(r)}<span style="font-size:12px;color:var(--muted)">/${r.members.length}</span></b></div>
-          <div>Punkte<b>${fmtPts(r.members.find(m=>m.id==='me').pts,r.custom||r.einzelModus)}</b></div>
+          <div>Punkte<b>${fmtPts(r.members.find(m=>m.id==='me').pts,r.custom||r.modus!=='regler')}</b></div>
           <div>${r.sport==='mma'?'Kämpfe':'Als nächstes'}
             <b class="hot">${r.sport==='mma'?eventsOf(r,1).length:'ST '+nextDayOf(r)}</b></div>
         </div>
@@ -1804,6 +1835,7 @@ function vCreate(){
     /* Ein Beispiel, mit dem der Punkte-Unterschied zwischen beiden Modi auf
        einen Blick klar wird, statt es nur in Worten zu erklären. */
     const bspQuote=1.8, bspEinsatz=20;
+    const modus=d.modus||'regler';
     app.innerHTML=head('Runde anlegen','Schritt 2 von 2')+`
     <main>
       <div style="border-radius:var(--r);overflow:hidden;margin-bottom:14px;position:relative;
@@ -1830,14 +1862,27 @@ function vCreate(){
         <div class="swrow" style="border:none;border-radius:0">
           <div>
             <div class="swtitle">Mit Quoten tippen</div>
-            <div class="swsub">${d.einzelModus
+            <div class="swsub">${modus==='einzel'
               ? `Aus — jeder Treffer bringt feste ${CFG.amateurPts} Punkte`
-              : `An — du verteilst ${CFG.budget} Punkte pro Spieltag, Treffer bringt Einsatz × Quote`}</div>
+              : modus==='quotenfix'
+                ? `An — fester Einsatz von ${CFG.fixEinsatz} P je Tipp, Treffer bringt Einsatz × Quote`
+                : `An — du verteilst ${CFG.budget} Punkte pro Spieltag, Treffer bringt Einsatz × Quote`}</div>
           </div>
-          <button class="sw" id="quoteSw" aria-pressed="${!d.einzelModus}" aria-label="Mit Quoten tippen"><i></i></button>
+          <button class="sw" id="quoteSw" aria-pressed="${modus!=='einzel'}" aria-label="Mit Quoten tippen"><i></i></button>
         </div>
 
-        ${!d.einzelModus?`
+        ${modus!=='einzel'?`
+        <div class="swrow" style="border:none;border-radius:0;border-top:1px solid var(--line)">
+          <div>
+            <div class="swtitle">Mit Regler</div>
+            <div class="swsub">${modus==='quotenfix'
+              ? `Aus — kein Verteilen, Einsatz ist immer ${CFG.fixEinsatz} P`
+              : `An — du entscheidest selbst, wie viel wovon auf welchen Tipp geht`}</div>
+          </div>
+          <button class="sw" id="reglerSw" aria-pressed="${modus==='regler'}" aria-label="Mit Regler"><i></i></button>
+        </div>`:''}
+
+        ${modus==='regler'?`
         <div style="padding:14px;border-top:1px solid var(--line)">
           <p class="hint" style="margin:0 0 12px">Du bekommst pro Spieltag ${CFG.budget} Punkte zum Verteilen und setzt frei,
             wie viel wovon auf welchen Tipp geht — auch nur auf ein einzelnes Spiel, wenn du magst.
@@ -1854,6 +1899,16 @@ function vCreate(){
               <span>Einsatz: <b id="demoStakeVal">${bspEinsatz}</b> von ${CFG.budget} P</span>
               <span style="color:var(--win);font-weight:700">Treffer → +<span id="demoPtsVal">${fmt(bspEinsatz*bspQuote)}</span> P</span>
             </div>
+          </div>
+        </div>`:modus==='quotenfix'?`
+        <div style="padding:14px;border-top:1px solid var(--line)">
+          <p class="hint" style="margin:0 0 12px">Kein Verteilen, keine Budget-Verwaltung — jeder Tipp zählt automatisch mit
+            einem festen Einsatz von ${CFG.fixEinsatz} Punkten. Ein Treffer bringt trotzdem Einsatz × Quote,
+            mutigere Tipps zahlen sich also weiterhin mehr aus:</p>
+          <div style="background:var(--raise);border-radius:12px;padding:12px 14px;
+            display:flex;justify-content:space-between;align-items:center;font-size:13px">
+            <span>Bayern – Dortmund, Sieg Bayern <span style="color:var(--muted)">· Quote ${bspQuote.toFixed(2)}</span></span>
+            <span style="color:var(--win);font-weight:700">Treffer → +${fmt(CFG.fixEinsatz*bspQuote)} P</span>
           </div>
         </div>`:`
         <div style="padding:14px;border-top:1px solid var(--line)">
@@ -1876,7 +1931,10 @@ function vCreate(){
     app.querySelectorAll('[data-v]').forEach(b=>b.onclick=()=>{keep();
       d.visibility=b.dataset.v;render();});
     app.querySelector('#quoteSw').onclick=()=>{keep();
-      d.einzelModus=!d.einzelModus;render();};
+      d.modus=modus==='einzel'?'regler':'einzel';render();};
+    const reglerSwEl=app.querySelector('#reglerSw');
+    if(reglerSwEl) reglerSwEl.onclick=()=>{keep();
+      d.modus=modus==='regler'?'quotenfix':'regler';render();};
     app.querySelector('#back').onclick=()=>{keep();go('create',{flow:'comp'});};
     app.querySelector('#mk').onclick=async()=>{keep();
       const btn=app.querySelector('#mk');btn.disabled=true;btn.textContent='Einen Moment …';
@@ -2098,19 +2156,22 @@ function vCreate(){
 async function buildOfficial(d){
   const c=COMPS[d.compId];
   const name=(d.name||'').trim()||('Meine '+c.kurz+'-Runde');
-  const rules=(d.rules||'').trim()||(d.einzelModus
-    ? `Getippt wird auf ${c.name}. Ohne Punkte-Regler — jeder richtige Tipp zählt `+
+  const modus=d.modus||'regler';
+  const rules=(d.rules||'').trim()||(
+    modus==='einzel'?`Getippt wird auf ${c.name}. Ohne Quoten — jeder richtige Tipp zählt `+
       `${CFG.amateurPts} Punkte, gleich viel für alle. Ergebnisse kommen automatisch.`
-    : `Getippt wird auf ${c.name}. ${CFG.budget} Punkte je Spieltag, `+
+    :modus==='quotenfix'?`Getippt wird auf ${c.name}. Fester Einsatz von ${CFG.fixEinsatz} Punkten je Tipp, `+
+      `Treffer zählen Einsatz mal Quote. Ergebnisse kommen automatisch.`
+    :`Getippt wird auf ${c.name}. ${CFG.budget} Punkte je Spieltag, `+
       `Treffer zählen Einsatz mal Quote. Ergebnisse kommen automatisch.`);
   if(FB_ON&&FB){
     const id=await fsCreateRound({compId:d.compId,sport:c.sport,name,comp:c.name,
-      rules,visibility:d.visibility,einzelModus:d.einzelModus});
+      rules,visibility:d.visibility,modus});
     if(!id) return toast('Da ist etwas schiefgelaufen. Versuch es nochmal.');
     toast('Runde erstellt');openRound(id);return;
   }
   const id='o'+(++SEQ);
-  ROUNDS[id]=mkRound({id,compId:d.compId,name,visibility:d.visibility,rules,einzelModus:d.einzelModus,
+  ROUNDS[id]=mkRound({id,compId:d.compId,name,visibility:d.visibility,rules,modus,
     members:[{id:'me',name:S.user?.displayName||'Du',pts:0}]});
   toast('Runde erstellt');
   openRound(id);
@@ -2136,7 +2197,7 @@ function matchdaysToEvents(matchdays,useDates,idPrefix){
     const lockAt=useDates?(parseISODate(md.date,0)||new Date()):parseISODateTime(md.deadline);
     md.pairings.filter(p=>p.home&&p.away&&p.home!==p.away).forEach((p,pi)=>{
       events.push({id:`${idPrefix}-${day}-${pi}`,day,home:p.home,away:p.away,
-        sport:'fb',noOdds:true,source:'mdl',start,lockAt,stage:md.stage||null,
+        sport:'fb',noOdds:true,noStake:true,source:'mdl',start,lockAt,stage:md.stage||null,
         sides:[{key:'1',label:p.home,q:1},{key:'X',label:'X',q:1},{key:'2',label:p.away,q:1}]});
     });
   });
@@ -2494,19 +2555,15 @@ function vRound(){
   if(!tabs.includes(S.tab)) S.tab='tippen';
   /* Eigenes, größeres Illustrationsmotiv je Wettbewerb (ROUNDBG) — bewusst
      andere Bilder als die kompakten Kacheln auf der Startseite (COMPBG).
-     Der Hintergrund lebt auf <body> selbst, nicht auf #app: nur beim
-     Wurzelelement berechnet der Browser background-attachment:fixed relativ
-     zum sichtbaren Bildschirm. Auf einem hohen, scrollenden Element (wie
-     #app mit einer langen Spieltag-Liste) bezieht sich "cover" stattdessen
-     auf die GESAMTE Höhe der Liste — das Bild wird dann riesig hochskaliert
-     und man sieht nur einen winzigen, stark gezoomten Ausschnitt davon.
-     #app selbst wird transparent geschaltet, damit das Bild durchscheint;
-     Header/Kacheln bleiben durch ihre eigenen deckenden Hintergründe lesbar. */
+     Lebt auf #roundbg, einem eigenen fixierten Element neben #app (siehe
+     dessen CSS für die Begründung) — nicht auf <body>, weil <body> auf
+     breiten Bildschirmen (iPad) über die ganze Breite geht, während die
+     App selbst nur eine 480px-Spalte in der Mitte ist. #app wird
+     transparent geschaltet, damit das Bild durchscheint; Header/Kacheln
+     bleiben durch ihre eigenen deckenden Hintergründe lesbar. */
   const bg=COMPS[r.compId]?ROUNDBG[r.compId]:ROUNDBG.custom;
-  document.body.style.backgroundImage=`linear-gradient(rgba(8,9,11,.72),rgba(8,9,11,.86)),url('${bg}')`;
-  document.body.style.backgroundSize='cover';
-  document.body.style.backgroundPosition='top center';
-  document.body.style.backgroundAttachment='fixed';
+  const rbg=document.getElementById('roundbg');
+  rbg.style.backgroundImage=`linear-gradient(rgba(8,9,11,.8),rgba(8,9,11,.92)),url('${bg}')`;
   app.style.background='transparent';
   app.innerHTML=`
   <header><div class="hrow">
@@ -2522,7 +2579,7 @@ function vRound(){
     {tippen:'Tippen',ergebnis:'Ergebnis',tabelle:'Tabelle',chat:'Chat',info:'Runde'}[t]
     }</button>`).join('')}</nav>
   ${(S.tab==='tippen'||S.tab==='ergebnis')&&fb?'<div class="days" id="days"></div>':''}
-  ${S.tab==='tippen'&&!r.custom&&!r.einzelModus?'<div id="budgetbar"></div>':''}
+  ${S.tab==='tippen'&&!r.custom&&r.modus==='regler'?'<div id="budgetbar"></div>':''}
   </div>
   <main id="body"></main><div id="foot"></div>`;
   bindBack();
@@ -2565,7 +2622,7 @@ function tabTip(){
     return s+(res?ptsFor(p,res,ev):0);},0):0;
   const dl=r.custom&&!r.useDates&&evs[0]&&evs[0].lockAt?evs[0].lockAt:null;
   const stage=r.custom&&evs[0]&&evs[0].stage;
-  if(r.custom||r.einzelModus){
+  if(r.custom||r.modus==='einzel'){
     b.innerHTML=`${stage?`<div class="sec" style="margin:0 0 10px">${esc(stage)}<span class="ln"></span></div>`:''}
       <p class="hint" style="margin:0 0 14px;text-align:center">Jeder richtige Tipp bringt
         <b style="color:var(--win)">${CFG.amateurPts} Punkte</b></p>
@@ -2576,6 +2633,9 @@ function tabTip(){
           color:var(--bad);font-weight:700;font-size:13.5px">
           ${dl<=new Date()?'⏱ Tippen ist beendet — Frist war':'⏱ Tipp-Annahmeschluss'}: ${when(dl)} Uhr</div>`
       :''):''}`;
+  }else if(r.modus==='quotenfix'){
+    b.innerHTML=`<p class="hint" style="margin:0 0 14px;text-align:center">Jeder Tipp zählt mit festem Einsatz von
+      <b style="color:var(--win)">${CFG.fixEinsatz} Punkten</b> — ein Treffer bringt Einsatz × Quote</p>`;
   }else{
     b.innerHTML='';
     /* Budget lebt in .topbar (fest oben, außerhalb von #body) statt im scrollenden
@@ -2648,7 +2708,7 @@ function matchCard(ev,isMain){
     od.appendChild(b);
   });
 
-  if(ev.exact&&ev.exact.length&&!zu){
+  if(ev.exact&&ev.exact.length&&!zu&&!ev.noStake){
     const w=document.createElement('div');w.className='exact';
     const best=fq(Math.max(...ev.exact.map(e=>e.q)));
     if(!S.premium){
@@ -2684,7 +2744,7 @@ function matchCard(ev,isMain){
     el.appendChild(w);
   }
 
-  if(p&&!zu&&!ev.noOdds){
+  if(p&&!zu&&!ev.noStake){
     const s=document.createElement('div');s.className='stake';
     /* Skala bleibt fix bei CFG.budget — sonst rutscht der Punkt auf der Leiste optisch,
        sobald bei einem ANDEREN Tipp mehr Budget verbraucht wird, auch wenn der eigene
@@ -2708,6 +2768,13 @@ function matchCard(ev,isMain){
         if(nm) nm.textContent=l2+' / '+CFG.budget;
       }};
     i.onchange=()=>{r.pendingSync=r.pendingSync||{};r.pendingSync[ev.id]=true;render();};
+    el.appendChild(s);
+  }else if(p&&!zu&&ev.noStake&&!ev.noOdds){
+    /* Modus "quotenfix": kein Regler, aber der feste Einsatz × Quote soll trotzdem
+       schon beim Tippen sichtbar sein, nicht erst beim Ergebnis. */
+    const s=document.createElement('div');s.className='stake';
+    s.innerHTML=`<span class="v" style="width:100%;text-align:center">
+      Einsatz: <b>${CFG.fixEinsatz} P</b> (fest) → Treffer: <b style="color:var(--win)">${fmt(CFG.fixEinsatz*p.q)} P</b></span>`;
     el.appendChild(s);
   }
 
@@ -2733,8 +2800,8 @@ function pick(ev,s,type){
   if(cur&&cur.type===type&&cur.side===s.key) delete r.picks[ev.id];
   else if(cur) Object.assign(cur,{side:s.key,q:s.q,type});
   else{
-    if(!ev.noOdds&&left()<5) return toast('Budget aufgebraucht');
-    r.picks[ev.id]={side:s.key,q:s.q,type,stake:ev.noOdds?0:Math.min(10,left())};
+    if(!ev.noStake&&left()<5) return toast('Budget aufgebraucht');
+    r.picks[ev.id]={side:s.key,q:s.q,type,stake:ev.noStake?0:Math.min(10,left())};
   }
   r.pendingSync=r.pendingSync||{};r.pendingSync[ev.id]=true;
   render();
@@ -2972,7 +3039,7 @@ function tabTable(){
       <span class="nm">${esc(m.name)}</span>
       <span class="dl" data-d="${m.id}"></span>
       <span class="pts" data-p="${m.id}"${liveOf[m.id]?' style="color:var(--live)"':''}
-        >${fmtPts(totalOf(m),r.custom||r.einzelModus)}</span></div>`).join('')+
+        >${fmtPts(totalOf(m),r.custom||r.modus!=='regler')}</span></div>`).join('')+
     (Object.values(liveOf).some(v=>v)
       ?`<p class="hint" style="text-align:center;margin-top:14px;color:var(--live)">
          Ein Spiel läuft gerade — gelbe Punkte sind vorläufig und können sich noch ändern.</p>`
@@ -3225,7 +3292,7 @@ function drawDock(){
       const p=r.picks[e.id],res=e._simRes||eventResult(e,r);
       return s+(p&&res?ptsFor(p,res,e):0);},0);
     f.innerHTML=`<div class="dock">
-      <div class="dockmsg">${probelauf?'Probelauf':'Ausgewertet'} · +${fmtPts(meGain,r.custom||r.einzelModus)} Punkte für dich</div>
+      <div class="dockmsg">${probelauf?'Probelauf':'Ausgewertet'} · +${fmtPts(meGain,r.custom||r.modus!=='regler')} Punkte für dich</div>
       ${probelauf?'<button class="btn ghost" id="rs">Probelauf zurücksetzen</button>':''}</div>`;
     const rs=f.querySelector('#rs');
     if(rs) rs.onclick=probelaufZuruecksetzen;
@@ -3359,7 +3426,7 @@ function autoSettle(){
   return n;
 }
 function rollUp(gain){
-  const custom=R().custom||R().einzelModus;
+  const custom=R().custom||R().modus!=='regler';
   app.querySelectorAll('[data-p]').forEach(el=>{
     const id=el.dataset.p,to=R().members.find(m=>m.id===id).pts,g=gain[id]||0,from=to-g;
     const dl=app.querySelector(`[data-d="${id}"]`),t0=performance.now();
@@ -3401,7 +3468,7 @@ function vProfile(){
     ${mine.map(r=>`<button class="round" data-r="${r.id}">
       <div class="top"><span class="pill b">${compTag(r,true)}</span>
         <span class="nm">${esc(r.name)}</span><span class="arw">›</span></div>
-      <div class="row"><div>Punkte<b class="hot">${fmtPts(r.members.find(m=>m.id==='me').pts,r.custom||r.einzelModus)}</b></div>
+      <div class="row"><div>Punkte<b class="hot">${fmtPts(r.members.find(m=>m.id==='me').pts,r.custom||r.modus!=='regler')}</b></div>
         <div>Mitglieder<b>${r.members.length}</b></div></div>
     </button>`).join('')}
   </main>`;

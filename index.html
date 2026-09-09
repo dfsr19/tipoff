@@ -702,6 +702,10 @@ function livePhase(){
 /* Aktualisiert im Minutentakt — aber nur, wenn gerade die Tabelle offen ist.
    Beim Tippen würde ein Neuaufbau der Seite die Eingabe stören. */
 let liveTimer=null;
+/* Live-Listener für den Chat einer Runde — bleibt nur so lange abonniert, wie der
+   Chat-Tab dieser einen Runde offen ist (siehe render() für die Abmeldung). */
+let chatUnsub=null,chatUnsubRoundId=null;
+function stopChatSync(){ if(chatUnsub){ chatUnsub(); chatUnsub=null; chatUnsubRoundId=null; } }
 function startLiveTicker(){
   if(liveTimer) return;
   liveTimer=setInterval(async()=>{
@@ -812,7 +816,7 @@ function fireToLocal(id,d,uid){
   const events=(d.events||[]).map(e=>({...e,start:toJSDate(e.start),lockAt:toJSDate(e.lockAt)}));
   const r=mkRound({id,compId:d.compId,sport:d.sport,name:d.name,comp:d.comp,rules:d.rules,
     custom:d.custom,modus:d.modus,useDates:d.useDates,teams:d.teams,events,visibility:d.visibility,code:d.code,
-    owner:d.ownerUid===uid?'me':(d.ownerName||d.ownerUid),members:membersArr,requests:[],chat:[]});
+    owner:d.ownerUid===uid?'me':(d.ownerName||d.ownerUid),members:membersArr,requests:[],chat:d.chat||[]});
   r.results=d.results||{};
   r.picks=(d.picks&&d.picks[uid])||{};
   r.settled=d.settled||{};
@@ -835,7 +839,7 @@ async function fsCreateRound(data,id){
   const ref=id?FB.doc(FB.db,'rounds',id):FB.doc(FB.collection(FB.db,'rounds'));
   const payload={compId:data.compId||null,sport:data.sport||'fb',name:data.name,comp:data.comp||'',
     rules:data.rules||'',custom:!!data.custom,modus:data.modus||'regler',useDates:data.useDates!==false,
-    teams:data.teams||[],events:data.events||[],
+    teams:data.teams||[],events:data.events||[],chat:[],
     results:{},visibility:data.visibility||'private',code:code(),
     ownerUid:uid,ownerName:S.user?.displayName||'Du',
     memberUids:[uid],members:{[uid]:{name:S.user?.displayName||'Du',pts:0}},
@@ -1202,6 +1206,9 @@ function render(){
      aktuelle Screen ist. */
   document.getElementById('roundbg').style.backgroundImage='';
   app.style.background='';
+  /* Chat-Live-Listener nur abgemeldet lassen, solange man wirklich im Chat-Tab
+     genau dieser Runde ist — sonst würde er unbemerkt weiterlaufen. */
+  if(chatUnsub&&!(S.screen==='round'&&S.tab==='chat'&&S.roundId===chatUnsubRoundId)) stopChatSync();
   (SCREENS[S.screen]||vHome)(); if(S.menu) drawMenu();
 }
 
@@ -2731,7 +2738,7 @@ function matchCard(ev,isMain){
     od.appendChild(b);
   });
 
-  if(ev.exact&&ev.exact.length&&!zu&&!ev.noStake){
+  if(ev.exact&&ev.exact.length&&!zu&&!ev.noOdds){
     const w=document.createElement('div');w.className='exact';
     const best=fq(Math.max(...ev.exact.map(e=>e.q)));
     if(!S.premium){
@@ -3039,10 +3046,11 @@ function tabTable(){
                 letter-spacing:.06em">LIVE${hs.minute?" "+hs.minute+"'":''}</span>`:''}</div>`:''}
             </th>`;}).join('')}
         </tr></thead>
-        <tbody>${rows.map(m=>`<tr>
-          <td style="position:sticky;left:0;background:var(--surface);padding:7px 12px 7px 0;
-            font-weight:600">${esc(m.name)}</td>
+        <tbody>${rows.map((m,i)=>`<tr style="${i%2===1?'background:rgba(255,255,255,.02)':''}">
+          <td style="position:sticky;left:0;background:${i%2===1?'#15181c':'var(--surface)'};padding:7px 12px 7px 0;
+            font-weight:600;border-bottom:1px solid var(--line)">${esc(m.name)}</td>
           ${evs.map(ev=>`<td style="text-align:center;padding:7px 10px;color:var(--muted);
+            border-bottom:1px solid var(--line);
             ${dayStart.has(ev.id)?div:''}${pastIds.has(ev.id)?pastBg:''}">
             ${cellFor(m,ev)}</td>`).join('')}
         </tr>`).join('')}</tbody>
@@ -3088,19 +3096,49 @@ function scoreTend(s){
   return h>a?'1':h<a?'2':'X';
 }
 
-function tabChat(){
-  const r=R(),b=app.querySelector('#body');
-  if(!S.premium){S.tab='tippen';return render();}
-  b.style.paddingBottom='160px';
-  b.innerHTML=`<div class="chat">${r.chat.map(m=>{
-    const mine=m.who==='me';
+/* Baut nur die Nachrichtenliste (nicht den ganzen Tab) — wird sowohl beim ersten
+   Rendern als auch bei jedem Live-Update über den Snapshot-Listener aufgerufen. */
+function chatHtml(r){
+  const my=myUid()||'me';
+  return `${r.chat.map(m=>{
+    const mine=m.who===my;
     return `<div class="msg${mine?' mine':''}">
       ${mine?'':`<span class="au">${esc(m.name)}</span>`}
       ${m.sticker?(stk(m.sticker).w
         ?`<span class="stk word">${stk(m.sticker).w}</span>`
         :`<span class="stk">${stk(m.sticker).e}</span>`)
         :`<div class="bub">${esc(m.text)}</div>`}</div>`;}).join('')
-    ||'<div class="empty">Noch keine Nachrichten. Fang an.</div>'}</div>`;
+    ||'<div class="empty">Noch keine Nachrichten. Fang an.</div>'}`;
+}
+/* Schreibt eine neue Nachricht ins Firestore-Dokument der Runde (arrayUnion statt
+   Überschreiben, damit gleichzeitige Nachrichten anderer nicht verloren gehen).
+   Bei lokalen Demo-Runden ohne fsId gibt es niemanden zum Synchronisieren mit. */
+async function syncChatMsg(r,msg){
+  if(!r.fsId||!FB) return;
+  try{ await FB.updateDoc(FB.doc(FB.db,'rounds',r.fsId),{chat:FB.arrayUnion(msg)}); }
+  catch(e){ console.warn('Chat senden:',e); }
+}
+function tabChat(){
+  const r=R(),b=app.querySelector('#body');
+  if(!S.premium){S.tab='tippen';return render();}
+  b.style.paddingBottom='160px';
+  b.innerHTML=`<div class="chat" id="chatList">${chatHtml(r)}</div>`;
+
+  /* Live-Listener nur einmal pro Runde aufsetzen, nicht bei jedem Tastenanschlag neu —
+     sonst würden sich mit der Zeit mehrere Listener stapeln. Er aktualisiert NUR die
+     Nachrichtenliste, nicht das Eingabefeld, damit man beim Tippen nicht unterbrochen wird. */
+  if(r.fsId&&FB&&chatUnsubRoundId!==r.id){
+    stopChatSync();
+    chatUnsubRoundId=r.id;
+    chatUnsub=FB.onSnapshot(FB.doc(FB.db,'rounds',r.fsId),snap=>{
+      const d=snap.data(); if(!d) return;
+      r.chat=d.chat||[];
+      if(S.screen==='round'&&S.tab==='chat'&&S.roundId===r.id){
+        const list=document.getElementById('chatList');
+        if(list){ list.innerHTML=chatHtml(r); window.scrollTo(0,1e6); }
+      }
+    },e=>console.warn('Chat-Live-Sync:',e));
+  }
 
   app.querySelector('#foot').innerHTML=`
     ${S.picker?`<div class="picker">${STICKERS.map(s=>
@@ -3111,15 +3149,18 @@ function tabChat(){
       <button id="cb" aria-label="Senden">➤</button>
     </div>`;
   const inp=app.querySelector('#ci'),down=()=>setTimeout(()=>window.scrollTo(0,1e6),40);
+  const refreshList=()=>{const list=document.getElementById('chatList');if(list)list.innerHTML=chatHtml(r);};
   const send=()=>{const v=inp.value.trim();if(!v)return;
-    r.chat.push({who:'me',name:S.user?.displayName||'Du',text:v,t:Date.now()});
-    inp.value='';S.picker=false;render();down();};
+    const msg={who:myUid()||'me',name:S.user?.displayName||'Du',text:v,t:Date.now()};
+    r.chat.push(msg);inp.value='';S.picker=false;
+    refreshList();down();syncChatMsg(r,msg);};
   app.querySelector('#cb').onclick=send;
   inp.onkeydown=e=>{if(e.key==='Enter')send();};
   app.querySelector('#cs').onclick=()=>{S.picker=!S.picker;render();};
   app.querySelectorAll('[data-s]').forEach(x=>x.onclick=()=>{
-    r.chat.push({who:'me',name:S.user?.displayName||'Du',sticker:x.dataset.s,t:Date.now()});
-    S.picker=false;render();down();});
+    const msg={who:myUid()||'me',name:S.user?.displayName||'Du',sticker:x.dataset.s,t:Date.now()};
+    r.chat.push(msg);S.picker=false;
+    refreshList();down();syncChatMsg(r,msg);});
   down();
 }
 
@@ -3361,7 +3402,9 @@ function drawDock(){
     <div class="dockmsg">${n
       ?(frei?`${n} von ${scopeEvs.length} Tipps abgegeben`
              :`${n} Tipp${n>1?'s':''} abgegeben${r.modus==='regler'&&left()>0?` · noch ${left()} P übrig`:''}`)
-      :offen?'Tipp auf eine Quote, dann Einsatz mit dem Regler wählen'
+      :offen?((r.custom||r.modus==='einzel')?'Tipp auf Sieg, Unentschieden oder Niederlage'
+             :r.modus==='quotenfix'?'Tipp auf eine Quote — der Einsatz ist automatisch fest'
+             :'Tipp auf eine Quote, dann Einsatz mit dem Regler wählen')
              :(frei?'Die Tippfrist ist vorbei':'Für diesen Spieltag ist die Tippfrist vorbei')}</div></div>`;
 }
 /* Punkte gutschreiben — einmal je Spieltag.

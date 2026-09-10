@@ -461,6 +461,8 @@ textarea{min-height:88px;resize:vertical;line-height:1.55}
 const CFG = {
   dataUrl:'https://tipoff-tau.vercel.app/api/data',
   liveUrl:'https://tipoff-tau.vercel.app/api/live',
+  checkoutUrl:'https://tipoff-tau.vercel.app/api/checkout',
+  portalUrl:'https://tipoff-tau.vercel.app/api/portal',
   shareUrl:'https://dfsr19.github.io/tipoff',
   intro:'intro.mp4',
   budget:100,          // Tipp-Punkte je Spieltag (Modus "regler")
@@ -750,6 +752,10 @@ const S={screen:'auth',authMode:'login',user:null,menu:false,
     S.screen='resetpw'; S.resetCode=qp.get('oobCode');
   }
   if(qp.get('code')) S.pendingCode=qp.get('code').trim().toUpperCase();
+  /* Rückkehr von der Stripe-Checkout-Seite (echtes Bezahlsystem, Testmodus siehe
+     Anleitung) — success_url/cancel_url enthalten ?premium=success bzw. cancel. */
+  if(qp.get('premium')){ S.premiumReturn=qp.get('premium');
+    history.replaceState(null,'',location.pathname); }
 }
 /* Alle Spiele eines Wettbewerbs */
 const evOf=id=>S.ev[id]||[];
@@ -760,7 +766,7 @@ const mkRound=(o)=>({id:o.id||'r'+(++SEQ),compId:o.compId||null,
   sport:o.sport||(o.compId?COMPS[o.compId].sport:'fb'),name:o.name,
   comp:o.comp||(o.compId?COMPS[o.compId].name:'Eigene Runde'),
   rules:o.rules||'',members:o.members||[],picks:{},settled:{},settledEvents:{},chat:o.chat||[],
-  custom:!!o.custom,modus:o.modus||'regler',useDates:o.useDates!==false,teams:o.teams||[],events:o.events||[],results:o.results||{},
+  custom:!!o.custom,modus:o.modus||'regler',exactOnly:!!o.exactOnly,useDates:o.useDates!==false,teams:o.teams||[],events:o.events||[],results:o.results||{},
   visibility:o.visibility||'private',code:o.code||code(),owner:o.owner||'me',
   requests:o.requests||[],joined:o.joined!==false,pendingSync:{}});
 
@@ -806,6 +812,57 @@ const stk=i=>STICKERS.find(s=>s.id===i)||STICKERS[0];
    Mit Firebase läuft alles über die Datenbank: erstellen, beitreten, tippen, auswerten. */
 const myUid=()=>FB?.auth?.currentUser?.uid||null;
 
+/* ══════════ ECHTES PREMIUM (Stripe) ══════════
+   Der Status selbst lebt im Firestore-Dokument users/{uid}, nicht mehr nur lokal in
+   S.premium — der Webhook (api/webhook.js) schreibt dort hin, sobald Stripe eine
+   Zahlung bestätigt oder ein Abo endet. Hier wird beim Login nur noch gelesen. */
+async function syncPremiumStatus(uid){
+  if(!uid||!FB) return;
+  try{
+    const snap=await FB.getDoc(FB.doc(FB.db,'users',uid));
+    const d=snap.exists()?snap.data():null;
+    S.premium=!!d?.premium;
+    S.stripeCustomerId=d?.stripeCustomerId||null;
+  }catch(e){ console.warn('Premium-Status laden:',e); }
+}
+/* Nach der Rückkehr von Stripe kann es einen Moment dauern, bis der Webhook das
+   Firestore-Dokument aktualisiert hat — kurz ein paar Mal nachschauen statt sofort
+   aufzugeben. */
+async function wartenAufPremium(uid,versuche){
+  versuche=versuche||6;
+  for(let i=0;i<versuche;i++){
+    await syncPremiumStatus(uid);
+    if(S.premium) return true;
+    await new Promise(r=>setTimeout(r,1200));
+  }
+  return false;
+}
+/* Öffnet die von Stripe gehostete Bezahlseite (Testmodus, solange in der Anleitung
+   Testschlüssel eingetragen sind — siehe api/checkout.js). */
+async function startCheckout(){
+  const uid=myUid(); if(!uid) return toast('Bitte erst anmelden');
+  const btn=app.querySelector('#buy'); if(btn){btn.disabled=true;btn.textContent='Einen Moment …';}
+  try{
+    const res=await fetch(CFG.checkoutUrl,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({uid,email:S.user?.email})});
+    const d=await res.json();
+    if(d.url) location.href=d.url;
+    else{ toast('Da ist etwas schiefgelaufen.'); if(btn){btn.disabled=false;btn.textContent='Premium holen — '+CFG.price;} }
+  }catch(e){ console.warn('Checkout:',e); toast('Keine Verbindung zur Bezahlseite.');
+    if(btn){btn.disabled=false;btn.textContent='Premium holen — '+CFG.price;} }
+}
+/* Öffnet Stripes Kundenportal — dort kündigt man selbst, statt dass wir premium
+   lokal einfach ausschalten (das würde am echten Abo ja nichts ändern). */
+async function openBillingPortal(){
+  if(!S.stripeCustomerId) return toast('Kein aktives Abo gefunden.');
+  try{
+    const res=await fetch(CFG.portalUrl,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({customerId:S.stripeCustomerId})});
+    const d=await res.json();
+    if(d.url) location.href=d.url; else toast('Da ist etwas schiefgelaufen.');
+  }catch(e){ console.warn('Kundenportal:',e); toast('Keine Verbindung zum Kundenportal.'); }
+}
+
 /* Firestore liefert Date-Felder als Timestamp-Objekt zurück, nicht als JS-Date —
    ein einfacher <=-Vergleich (wie in started()) verhält sich damit unberechenbar.
    Deshalb hier einmal sauber in echte Date-Objekte umwandeln. */
@@ -815,7 +872,7 @@ function fireToLocal(id,d,uid){
     ({id:mid===uid?'me':mid,name:m.name,pts:m.pts||0}));
   const events=(d.events||[]).map(e=>({...e,start:toJSDate(e.start),lockAt:toJSDate(e.lockAt)}));
   const r=mkRound({id,compId:d.compId,sport:d.sport,name:d.name,comp:d.comp,rules:d.rules,
-    custom:d.custom,modus:d.modus,useDates:d.useDates,teams:d.teams,events,visibility:d.visibility,code:d.code,
+    custom:d.custom,modus:d.modus,exactOnly:d.exactOnly,useDates:d.useDates,teams:d.teams,events,visibility:d.visibility,code:d.code,
     owner:d.ownerUid===uid?'me':(d.ownerName||d.ownerUid),members:membersArr,requests:[],chat:d.chat||[]});
   r.results=d.results||{};
   r.picks=(d.picks&&d.picks[uid])||{};
@@ -838,7 +895,7 @@ async function fsCreateRound(data,id){
   const uid=myUid(); if(!uid) return null;
   const ref=id?FB.doc(FB.db,'rounds',id):FB.doc(FB.collection(FB.db,'rounds'));
   const payload={compId:data.compId||null,sport:data.sport||'fb',name:data.name,comp:data.comp||'',
-    rules:data.rules||'',custom:!!data.custom,modus:data.modus||'regler',useDates:data.useDates!==false,
+    rules:data.rules||'',custom:!!data.custom,modus:data.modus||'regler',exactOnly:!!data.exactOnly,useDates:data.useDates!==false,
     teams:data.teams||[],events:data.events||[],chat:[],
     results:{},visibility:data.visibility||'private',code:code(),
     ownerUid:uid,ownerName:S.user?.displayName||'Du',
@@ -1549,7 +1606,7 @@ function vHome(){
     if(n) toast(`${n} Spieltag${n>1?'e':''} ausgewertet`);};
   app.querySelectorAll('[data-l]').forEach(b=>b.onclick=()=>go('legal',{flow:b.dataset.l}));
   const p=app.querySelector('#prem'); if(p) p.onclick=()=>go('premium');
-  const c=app.querySelector('#unprem'); if(c) c.onclick=()=>{S.premium=false;toast('Premium beendet');render();};
+  const c=app.querySelector('#unprem'); if(c) c.onclick=openBillingPortal;
 }
 function openRound(id){
   S.roundId=id;S.tab='tippen';
@@ -1678,13 +1735,12 @@ function vPremium(){
     </div>
   </main>
   <div class="dock">
-    <div class="dockmsg">Simulation — es wird nichts abgebucht</div>
-    <button class="btn" id="buy">${S.premium?'Premium ist aktiv':'Premium holen — '+CFG.price}</button>
+    <div class="dockmsg">${S.premium?'Verwaltung über das Stripe-Kundenportal':'Weiter zur sicheren Bezahlseite von Stripe'}</div>
+    <button class="btn" id="buy">${S.premium?'Abo verwalten':'Premium holen — '+CFG.price}</button>
   </div>`;
   bindBack();
   const b=app.querySelector('#buy');
-  b.disabled=S.premium;
-  b.onclick=()=>{S.premium=true;toast('Premium aktiv ★');go('home');};
+  b.onclick=S.premium?openBillingPortal:startCheckout;
 }
 
 /* ═══════════ RUNDE BEITRETEN ═══════════ */
@@ -1898,6 +1954,17 @@ function vCreate(){
           <button class="sw" id="reglerSw" aria-pressed="${modus==='regler'}" aria-label="Mit Regler"><i></i></button>
         </div>`:''}
 
+        ${modus!=='einzel'&&!isMma?`
+        <div class="swrow" style="border:none;border-radius:0;border-top:1px solid var(--line)">
+          <div>
+            <div class="swtitle">Nur genaues Ergebnis</div>
+            <div class="swsub">${d.exactOnly
+              ? 'An — statt Sieg/Unentschieden/Niederlage wird nur noch 2:1 o.ä. getippt'
+              : 'Aus — Sieg/Unentschieden/Niederlage, genaues Ergebnis bleibt Zusatzoption'}</div>
+          </div>
+          <button class="sw" id="exactSw" aria-pressed="${!!d.exactOnly}" aria-label="Nur genaues Ergebnis"><i></i></button>
+        </div>`:''}
+
         ${modus==='regler'?`
         <div style="padding:14px;border-top:1px solid var(--line)">
           <p class="hint" style="margin:0 0 12px">Du bekommst pro ${wSpieltag} ${CFG.budget} Punkte zum Verteilen und setzt frei,
@@ -1947,10 +2014,15 @@ function vCreate(){
     app.querySelectorAll('[data-v]').forEach(b=>b.onclick=()=>{keep();
       d.visibility=b.dataset.v;render();});
     app.querySelector('#quoteSw').onclick=()=>{keep();
-      d.modus=modus==='einzel'?'regler':'einzel';render();};
+      d.modus=modus==='einzel'?'regler':'einzel';
+      if(d.modus==='einzel') d.exactOnly=false;
+      render();};
     const reglerSwEl=app.querySelector('#reglerSw');
     if(reglerSwEl) reglerSwEl.onclick=()=>{keep();
       d.modus=modus==='regler'?'quotenfix':'regler';render();};
+    const exactSwEl=app.querySelector('#exactSw');
+    if(exactSwEl) exactSwEl.onclick=()=>{keep();
+      d.exactOnly=!d.exactOnly;render();};
     app.querySelector('#back').onclick=()=>{keep();go('create',{flow:'comp'});};
     app.querySelector('#mk').onclick=async()=>{keep();
       const btn=app.querySelector('#mk');btn.disabled=true;btn.textContent='Einen Moment …';
@@ -2173,21 +2245,23 @@ async function buildOfficial(d){
   const c=COMPS[d.compId];
   const name=(d.name||'').trim()||('Meine '+c.kurz+'-Runde');
   const modus=d.modus||'regler';
+  const exactOnly=!!d.exactOnly;
   const rules=(d.rules||'').trim()||(
     modus==='einzel'?`Getippt wird auf ${c.name}. Ohne Quoten — jeder richtige Tipp zählt `+
       `${CFG.amateurPts} Punkte, gleich viel für alle. Ergebnisse kommen automatisch.`
     :modus==='quotenfix'?`Getippt wird auf ${c.name}. Fester Einsatz von ${CFG.fixEinsatz} Punkten je Tipp, `+
       `Treffer zählen Einsatz mal Quote. Ergebnisse kommen automatisch.`
     :`Getippt wird auf ${c.name}. ${CFG.budget} Punkte je Spieltag, `+
-      `Treffer zählen Einsatz mal Quote. Ergebnisse kommen automatisch.`);
+      `Treffer zählen Einsatz mal Quote. Ergebnisse kommen automatisch.`)
+    +(exactOnly?' Getippt wird nur das genaue Ergebnis, nicht Sieg/Unentschieden/Niederlage.':'');
   if(FB_ON&&FB){
     const id=await fsCreateRound({compId:d.compId,sport:c.sport,name,comp:c.name,
-      rules,visibility:d.visibility,modus});
+      rules,visibility:d.visibility,modus,exactOnly});
     if(!id) return toast('Da ist etwas schiefgelaufen. Versuch es nochmal.');
     toast('Runde erstellt');openRound(id);return;
   }
   const id='o'+(++SEQ);
-  ROUNDS[id]=mkRound({id,compId:d.compId,name,visibility:d.visibility,rules,modus,
+  ROUNDS[id]=mkRound({id,compId:d.compId,name,visibility:d.visibility,rules,modus,exactOnly,
     members:[{id:'me',name:S.user?.displayName||'Du',pts:0}]});
   toast('Runde erstellt');
   openRound(id);
@@ -2706,13 +2780,18 @@ function matchCard(ev,isMain){
   const zu=st||started(ev);
   const el=document.createElement('article');el.className='match'+(isMain?' headline':'');
   const nm=ev.sport==='mma'?[ev.home,ev.away]:[short(ev.home),short(ev.away)];
+  /* Runden mit r.exactOnly kennen nur das genaue Ergebnis, nicht zusätzlich Sieg/
+     Unentschieden/Niederlage — bewusst getrennt vom sonstigen Spielmodus (Regler/
+     Quotenfix/Einzel), der weiterhin bestimmt, wie die Punkte berechnet werden. */
+  const nurExakt=!!r.exactOnly&&!ev.noOdds;
   el.innerHTML=`<div class="mtop">${ev.sport==='mma'?(isMain?'<span class="src headtag">Hauptkampf</span>':''):(ev.start?when(ev.start):'')}
     ${ev.noOdds||ev.source==='mkt'?'':'<span class="src">Modell</span>'}</div>
     <div class="who">${esc(nm[0])} <em>${ev.sport==='mma'?'vs':'—'}</em> ${esc(nm[1])}</div>
-    <div class="odds"></div>`;
+    ${nurExakt?'':'<div class="odds"></div>'}`;
   if(zu&&!st) el.querySelector('.mtop').insertAdjacentHTML('beforeend',
     `<span class="src" style="margin-left:0">${res?'Beendet':(ev.sport==='mma'||ev.noOdds?'Läuft':'Gestartet')}</span>`);
 
+  if(!nurExakt){
   const od=el.querySelector('.odds');
   ev.sides.forEach(s=>{
     const b=document.createElement('button');
@@ -2739,6 +2818,7 @@ function matchCard(ev,isMain){
     if(verloren) b.classList.add('lose');
     od.appendChild(b);
   });
+  }
 
   if(ev.exact&&ev.exact.length&&!zu&&!ev.noOdds){
     const w=document.createElement('div');w.className='exact';
@@ -2747,9 +2827,21 @@ function matchCard(ev,isMain){
       w.innerHTML=`<button class="exlock">
         <span class="pill b">★</span>
         <span class="t"><b>Genaues Ergebnis tippen</b>
-          <small>Quoten bis ${best} statt ${fq(Math.max(...ev.sides.map(s=>s.q)))}</small></span>
+          <small>${nurExakt?`Quoten bis ${best}`:`Quoten bis ${best} statt ${fq(Math.max(...ev.sides.map(s=>s.q)))}`}</small></span>
         <span style="color:var(--blue)">›</span></button>`;
       w.querySelector('button').onclick=()=>go('premium');
+    }else if(nurExakt){
+      /* Direkt offen, kein Zusammenklappen — es gibt hier ja keine Alternative dazu. */
+      w.innerHTML=`<div class="axis">${esc(nm[0])} : ${esc(nm[1])}</div>
+        <div class="grid"></div>`;
+      const g=w.querySelector('.grid');
+      ev.exact.forEach(s=>{
+        const b=document.createElement('button');
+        b.setAttribute('aria-pressed',!!(p&&p.type==='exact'&&p.side===s.key));
+        b.innerHTML=`<span class="s">${s.label}</span><span class="o">${fq(s.q)}</span>`;
+        b.onclick=()=>pick(ev,s,'exact');
+        g.appendChild(b);
+      });
     }else{
       const open=!!(p&&p.type==='exact');
       w.innerHTML=`<button class="exhead" aria-expanded="${open}">
@@ -3002,16 +3094,21 @@ function tabTable(){
     if(!started(ev)&&!res) return '–';
     const label=p.type==='exact'&&S.premium?esc(p.side):tendAbbr(p,ev);
     const tend=p.type==='exact'?scoreTend(p.side):p.side;
+    /* Kleine blaue Zahl neben dem Tipp zeigt, wie viele Punkte er bringt — aber
+       nur, wenn er (aktuell) richtig liegt. Bei einem falschen Tipp wird bewusst
+       keine "0" ergänzt, das würde nur unnötig auffallen. */
+    const ptsTag=pts=>`<span style="color:var(--blue);font-size:9px;font-weight:700;
+      vertical-align:super;margin-left:1px">${fmt(pts)}</span>`;
     if(!res){
       /* Spiel läuft: der Tipp wird schon mitgefärbt, aber in der Live-Farbe —
          das signalisiert "steht so, kann sich aber noch drehen". */
       const lv=liveResult(ev,r);
       if(!lv) return label;                 // angepfiffen, aber noch kein Stand da
-      return tend===lv.side
-        ? `<span style="color:var(--live);font-weight:700">${label}</span>`
-        : `<span style="opacity:.45">${label}</span>`;
+      if(tend===lv.side) return `<span style="color:var(--live);font-weight:700">${label}</span>${ptsTag(ptsFor(p,lv,ev))}`;
+      return `<span style="opacity:.45">${label}</span>`;
     }
-    return `<span style="color:${tend===res.side?'var(--win)':'var(--bad)'}">${label}</span>`;
+    if(tend===res.side) return `<span style="color:var(--win)">${label}</span>${ptsTag(ptsFor(p,res,ev))}`;
+    return `<span style="color:var(--bad)">${label}</span>`;
   };
   /* Alle Spieltage (bzw. bei UFC: aktuelle Karte + vergangene Kämpfe) nebeneinander,
      mit einer farblich getrennten Kopfzeile. Die Färbung zieht sich bei vergangenen
@@ -3394,7 +3491,7 @@ function drawDock(){
   const pend=Object.keys(r.pendingSync||{}).filter(id=>scopeEvs.some(e=>e.id===id)).length;
   if(n&&pend){
     f.innerHTML=`<div class="dock">
-      <button class="btn" id="submitPicks">${frei?`${n} von ${scopeEvs.length} Tipps abgeben`:`${n} Tipp${n>1?'s':''} abgeben`}</button>
+      <button class="btn" id="submitPicks">${frei?`${pend} von ${scopeEvs.length} Tipps abgeben`:`${pend} Tipp${pend>1?'s':''} abgeben`}</button>
       ${!frei&&r.modus==='regler'&&left()>0?`<p class="hint" style="text-align:center;margin-top:9px;font-size:11.5px">
         noch ${left()} P übrig</p>`:''}</div>`;
     f.querySelector('#submitPicks').onclick=submitPicks;
@@ -3594,7 +3691,7 @@ function vSettings(){
     toast('Gespeichert');render();
   };
   app.querySelector('#ab').onclick=()=>{
-    if(S.premium){S.premium=false;toast('Premium beendet');render();} else go('premium');};
+    if(S.premium) openBillingPortal(); else go('premium');};
   app.querySelectorAll('[data-l]').forEach(b=>b.onclick=()=>go('legal',{flow:b.dataset.l}));
   app.querySelector('#del').onclick=async()=>{
     if(!confirm('Konto wirklich löschen? Alle Tipps gehen verloren.')) return;
@@ -3785,6 +3882,14 @@ function vLegal(){
           render();
           await fsLoadMyRounds();
           await tryPendingJoin();
+          if(S.premiumReturn==='success'){
+            toast('Zahlung erhalten — Premium wird aktiviert …');
+            const ok=await wartenAufPremium(uid);
+            toast(ok?'Premium ist aktiv ★':'Das dauert länger als gedacht — schau in ein, zwei Minuten noch mal rein.');
+            S.premiumReturn=null; render();
+          }else{
+            await syncPremiumStatus(uid);
+          }
         }
       }
       render();

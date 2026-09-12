@@ -4,26 +4,108 @@
  * Ersetzt sync.js + GitHub Actions: läuft nicht mehr nach einem festen
  * Zeitplan, sondern bei jedem Seitenaufruf — mit kurzer Zwischenspeicherung
  * (Cache-Control-Header unten), damit nicht jeder einzelne Besuch eine neue
- * Anfrage an die echten Datenquellen auslöst. In der Praxis heißt das: die
- * Daten sind nie älter als ~90 Sekunden, egal wann jemand die App öffnet.
+ * Anfrage an die echten Datenquellen auslöst.
  *
- * Spielplan + Ergebnisse : OpenLigaDB   (kostenlos, ohne Schlüssel)
- * Quoten                 : The Odds API (Schlüssel als Vercel-Umgebungsvariable
- *                           ODDS_API_KEY — landet NIE im Browser, nur hier
- *                           auf dem Server)
- * UFC-Ergebnisse         : ESPN Scoreboard (kostenlos, ohne Schlüssel)
+ * Spielplan + Ergebnisse : OpenLigaDB      (kostenlos, ohne Schlüssel)
+ * Quoten (Bundesliga etc): eigenes Modell  (Tabellenwerte aus OpenLigaDB,
+ *                           keine externe Quote nötig — echte Marktquoten
+ *                           würden hier zwar minimal realistischer sein,
+ *                           kosten aber Odds-API-Guthaben ohne echten Vorteil
+ *                           fürs Tippspiel; bewusst weggelassen)
+ * Champions League       : ESPN Scoreboard (Ansetzung, Live-Stand, Quote wo
+ *                           vorhanden — kostenlos, kein Odds-API-Guthaben)
+ * UFC                    : The Odds API für ECHTE Marktquoten, ESPN Scoreboard
+ *                           für Ergebnisse und zum Aussortieren von Nicht-UFC-
+ *                           Kämpfen (die MMA-Kategorie bei Odds API ist nicht
+ *                           UFC-exklusiv). Odds-API-Guthaben wird NICHT bei
+ *                           jedem Seitenaufruf verbraucht, sondern nur alle
+ *                           6 Stunden einmal — dazwischen läuft alles über
+ *                           einen Zwischenspeicher in Vercel KV (siehe unten).
+ *                           Gibt es (noch) keine echte Quote für einen Kampf,
+ *                           taucht er schlicht nicht auf — KEINE Platzhalter-
+ *                           oder Modell-Quote für noch offene Kämpfe, damit
+ *                           nie ein falscher Favorit angezeigt wird.
  *
  * WICHTIGER UNTERSCHIED zu sync.js: Serverless-Funktionen haben keine eigene
  * Festplatte, die zwischen Aufrufen erhalten bleibt — "die letzte data.json
- * lesen, um alte Kämpfe zu übernehmen" geht hier nicht mehr. Stattdessen wird
- * ESPN für ein deutlich breiteres Zeitfenster abgefragt (21 Tage zurück statt
- * 3), sodass sich die Historie bei jedem Aufruf von selbst wieder zusammensetzt
- * — kein gespeicherter Zustand nötig, und damit auch keine Möglichkeit, dass
- * dieser Zustand jemals veraltet oder falsch wird.
+ * lesen, um alte Kämpfe zu übernehmen" geht hier nicht mehr. Für UFC-Ergebnisse
+ * wird ESPN deshalb für ein deutlich breiteres Zeitfenster abgefragt (21 Tage
+ * zurück), für die Odds-API-Quoten übernimmt stattdessen Vercel KV die Rolle
+ * des Gedächtnisses zwischen Aufrufen.
  */
 
-const KEY = process.env.ODDS_API_KEY;
 const SEASON = process.env.SEASON || '2026';
+const ODDS_KEY = process.env.ODDS_API_KEY;
+
+/* ══════════ ZWISCHENSPEICHER FÜR ODDS-API (Vercel KV) ══════════
+   Ohne das würde jeder einzelne Seitenaufruf live bei The Odds API anfragen
+   und binnen weniger Tage das komplette Monats-Guthaben (500 Anfragen) auf-
+   brauchen — genau das ist am 12.09.2026 passiert. Stattdessen wird hier nur
+   alle 6 Stunden EINMAL wirklich nachgefragt; dazwischen liefert jeder Aufruf
+   das letzte gespeicherte Ergebnis aus Vercel KV, komplett unabhängig davon,
+   wie oft die App in der Zwischenzeit geöffnet wird.
+
+   Kommt eine frische Abfrage leer zurück (Guthaben erschöpft, Odds API kurz
+   down, o.ä.), wird der Speicher NICHT überschrieben — sonst würde ein
+   einziger fehlgeschlagener Versuch die zuletzt bekannten, guten Quoten
+   sofort löschen. Stattdessen bleibt der alte Stand einfach etwas länger
+   als 6 Stunden gültig, bis der nächste Versuch wieder klappt.
+
+   Voraussetzung: In den Vercel-Projekteinstellungen muss unter "Storage"
+   einmalig ein KV-Speicher angelegt und mit diesem Projekt verbunden sein —
+   danach setzt Vercel KV_REST_API_URL und KV_REST_API_TOKEN automatisch als
+   Umgebungsvariablen. Ohne die beiden läuft die App weiter, fragt dann aber
+   wieder bei jedem Aufruf live nach (kein Absturz, nur kein Schutz). */
+const KV_URL   = process.env.KV_REST_API_URL;
+const KV_TOKEN = process.env.KV_REST_API_TOKEN;
+const ODDS_CACHE_TTL_MS = 6*3600e3;
+const ODDS_CACHE_KEY = 'ufc-odds-v1';
+
+async function kvGet(key){
+  if(!KV_URL || !KV_TOKEN) return null;
+  try{
+    const r = await fetch(`${KV_URL}/get/${key}`, {headers:{Authorization:`Bearer ${KV_TOKEN}`}});
+    if(!r.ok) return null;
+    const j = await r.json();
+    return j.result == null ? null : JSON.parse(j.result);
+  }catch(e){ return null; }
+}
+async function kvSet(key, value){
+  if(!KV_URL || !KV_TOKEN) return;
+  try{
+    await fetch(`${KV_URL}/set/${key}`, {
+      method:'POST',
+      headers:{Authorization:`Bearer ${KV_TOKEN}`},
+      body: JSON.stringify(value)
+    });
+  }catch(e){ /* Cache-Schreibfehler ist unkritisch — nächster Versuch in 6h */ }
+}
+
+/* Rohe, ungecachte Abfrage bei The Odds API — wird ab jetzt nur noch von
+   loadOddsCached() aus aufgerufen, nie mehr direkt bei jedem Seitenaufruf. */
+async function loadOddsRoh(sportKey){
+  if(!ODDS_KEY) return [];
+  const u = new URLSearchParams({apiKey:ODDS_KEY, regions:'eu', markets:'h2h', oddsFormat:'decimal'});
+  try{
+    const r = await fetch(`https://api.the-odds-api.com/v4/sports/${sportKey}/odds/?${u}`);
+    if(!r.ok) return [];
+    return await r.json();
+  }catch(e){ return []; }
+}
+
+async function loadOddsCached(sportKey){
+  const cached = await kvGet(ODDS_CACHE_KEY);
+  if(cached && (Date.now()-cached.zeit) < ODDS_CACHE_TTL_MS) return cached.daten;
+
+  const frisch = await loadOddsRoh(sportKey);
+  if(frisch.length){
+    await kvSet(ODDS_CACHE_KEY, {zeit:Date.now(), daten:frisch});
+    return frisch;
+  }
+  /* Frische Abfrage kam leer zurück — altes Ergebnis weiterverwenden statt
+     den Cache zu leeren, falls überhaupt schon mal was Gutes gespeichert war. */
+  return cached ? cached.daten : [];
+}
 
 /**
  * ESPN-Anbindung — direkt in dieser Datei statt als Import, damit kein
@@ -154,9 +236,9 @@ function fensterTage(zurueck = 4, vor = 4){
 
 /* Wettbewerbe aus OpenLigaDB — dort seit Jahren zuverlässig gepflegt. */
 const LEAGUES = [
-  {id:'bl1', name:'Bundesliga',    ol:'bl1', odds:'soccer_germany_bundesliga'},
-  {id:'bl2', name:'2. Bundesliga', ol:'bl2', odds:'soccer_germany_bundesliga2'},
-  {id:'bl3', name:'3. Liga',       ol:'bl3', odds:'soccer_germany_liga3'}
+  {id:'bl1', name:'Bundesliga',    ol:'bl1'},
+  {id:'bl2', name:'2. Bundesliga', ol:'bl2'},
+  {id:'bl3', name:'3. Liga',       ol:'bl3'}
 ];
 /* Die Champions League kommt NICHT aus OpenLigaDB: der dortige Eintrag für
    2026/27 ist nur ein Platzhalter-Gerüst (identische Anstoßzeiten, identische
@@ -165,7 +247,6 @@ const LEAGUES = [
 const ESPN_LEAGUES = [
   {id:'ucl', name:'Champions League', slug:'uefa.champions'}
 ];
-const UFC = {id:'ufc', name:'UFC', odds:'mma_mixed_martial_arts'};
 
 const PRIOR = [1.40, 1.40];
 const SHRINK = 6;
@@ -287,15 +368,6 @@ async function loadSchedule(league){
   });
 }
 
-async function loadOdds(sportKey){
-  if(!KEY) return [];
-  const u = new URLSearchParams({apiKey:KEY, regions:'eu', markets:'h2h', oddsFormat:'decimal'});
-  try{
-    const r = await fetch(`https://api.the-odds-api.com/v4/sports/${sportKey}/odds/?${u}`);
-    if(!r.ok) return [];
-    return await r.json();
-  }catch(e){ return []; }
-}
 const espnDate = ts => {
   const d = new Date(ts);
   return d.getUTCFullYear()+String(d.getUTCMonth()+1).padStart(2,'0')+String(d.getUTCDate()).padStart(2,'0');
@@ -307,8 +379,14 @@ function sameFighter(a,b){
   if(!x || !y) return false;
   return x===y || x.includes(y) || y.includes(x);
 }
+
+/* Ergebnisse UND die vollständige Liste echter UFC-Paarungen von ESPN.
+   Letztere braucht es, weil die "mma_mixed_martial_arts"-Kategorie bei
+   The Odds API NICHT UFC-exklusiv ist — andere Promotions können mit
+   reinrutschen. Ein Kampf gilt nur als echtes UFC, wenn ESPN ihn für den
+   gleichen Tag auch kennt (Abgleich passiert im handler). */
 async function loadEspnData(dateStrs){
-  const finished=[], allePaarungen=[];
+  const roh = [];
   for(const ds of dateStrs){
     try{
       const r = await fetch(`https://site.api.espn.com/apis/site/v2/sports/mma/ufc/scoreboard?dates=${ds}`);
@@ -318,15 +396,25 @@ async function loadEspnData(dateStrs){
         for(const comp of ev.competitions||[]){
           const cs = comp.competitors||[];
           if(cs.length<2||!cs[0].athlete?.fullName||!cs[1].athlete?.fullName) continue;
-          allePaarungen.push({a:cs[0].athlete.fullName, b:cs[1].athlete.fullName});
-          if(!comp.status?.type?.completed) continue;
-          const winner = cs.find(c=>c.winner===true), loser = cs.find(c=>c.winner===false);
-          if(!winner?.athlete?.fullName || !loser?.athlete?.fullName) continue;
-          finished.push({winnerName:winner.athlete.fullName, loserName:loser.athlete.fullName, date:comp.date});
+          const finished = !!comp.status?.type?.completed;
+          let winner = null;
+          if(finished){
+            const w = cs.find(c=>c.winner===true);
+            if(w===cs[0]) winner='A'; else if(w===cs[1]) winner='B';
+          }
+          roh.push({a:cs[0].athlete.fullName, b:cs[1].athlete.fullName, date:comp.date, finished, winner});
         }
     }catch(e){ /* dieser Tag wird übersprungen, Rest läuft weiter */ }
   }
-  return {finished, allePaarungen};
+  /* ESPN kann denselben Kampf über zwei Datums-Buckets doppelt liefern (Zeitzonen) —
+     per Namens-Id entdoppeln, die Version mit Ergebnis gewinnt. */
+  const proId = new Map();
+  for(const f of roh){
+    const id = mmaId(f.a,f.b);
+    const vorhanden = proId.get(id);
+    if(!vorhanden || (f.finished && !vorhanden.finished)) proId.set(id, f);
+  }
+  return [...proId.values()];
 }
 function bestPrices(ev){
   const best={};
@@ -419,16 +507,20 @@ function buildEspnFootball(m){
 const isWeekend = ts => { const d = new Date(ts).getUTCDay(); return d===0 || d===6; };
 const mmaId = (a,b) => 'mma-'+[normName(a),normName(b)].sort().join('-');
 
-function buildUFC(oddsEvents, results){
+function buildUFC(oddsEvents, rohKaempfe){
   const built = oddsEvents.map(ev => {
     const best = bestPrices(ev);
     const qa = best[ev.home_team], qb = best[ev.away_team];
     if(!qa || !qb) return null;
+    const hit = rohKaempfe.find(f =>
+      (sameFighter(f.a, ev.home_team) && sameFighter(f.b, ev.away_team)) ||
+      (sameFighter(f.a, ev.away_team) && sameFighter(f.b, ev.home_team)));
     let finished=false, winner=null;
-    const hit = results.find(f =>
-      (sameFighter(f.winnerName, ev.home_team) && sameFighter(f.loserName, ev.away_team)) ||
-      (sameFighter(f.winnerName, ev.away_team) && sameFighter(f.loserName, ev.home_team)));
-    if(hit){ finished=true; winner = sameFighter(hit.winnerName, ev.home_team) ? 'A' : 'B'; }
+    if(hit?.finished){
+      finished = true;
+      const aIstHeim = sameFighter(hit.a, ev.home_team);
+      winner = (aIstHeim ? hit.winner==='A' : hit.winner==='B') ? 'A' : 'B';
+    }
     return {
       id:mmaId(ev.home_team,ev.away_team), day:1, sport:'mma', source:'mkt',
       start:ev.commence_time, home:ev.home_team, away:ev.away_team, finished,
@@ -440,17 +532,24 @@ function buildUFC(oddsEvents, results){
     };
   }).filter(Boolean);
 
-  for(const f of results){
+  /* Bereits entschiedene Kämpfe, die ESPN kennt, aber die bei Odds API nicht
+     (mehr) gelistet sind (z.B. weil die Karte durch ist und die Wetten
+     geschlossen wurden) — rein zur Anzeige/History, KEIN Effekt auf laufendes
+     Tippen, deshalb reicht ein neutraler Platzhalter statt einer echten Quote. */
+  for(const f of rohKaempfe){
+    if(!f.finished) continue;
     const already = built.some(b =>
-      (sameFighter(f.winnerName,b.home) && sameFighter(f.loserName,b.away)) ||
-      (sameFighter(f.winnerName,b.away) && sameFighter(f.loserName,b.home)));
+      (sameFighter(f.a,b.home) && sameFighter(f.b,b.away)) ||
+      (sameFighter(f.a,b.away) && sameFighter(f.b,b.home)));
     if(already) continue;
+    const sieger = f.winner==='A' ? f.a : f.b;
+    const verlierer = f.winner==='A' ? f.b : f.a;
     built.push({
-      id:mmaId(f.winnerName,f.loserName), day:1, sport:'mma', source:'mkt',
-      start:f.date||null, home:f.winnerName, away:f.loserName, finished:true, winner:'A',
+      id:mmaId(f.a,f.b), day:1, sport:'mma', source:'mkt',
+      start:f.date||null, home:sieger, away:verlierer, finished:true, winner:'A',
       sides:[
-        {key:'A', label:f.winnerName.split(' ').pop(), q:1.01},
-        {key:'B', label:f.loserName.split(' ').pop(), q:1.01}
+        {key:'A', label:sieger.split(' ').pop(), q:1.01},
+        {key:'B', label:verlierer.split(' ').pop(), q:1.01}
       ]
     });
   }
@@ -504,8 +603,10 @@ export default async function handler(req, res) {
   for(const L of LEAGUES){
     try{
       const [schedule, table] = await Promise.all([loadSchedule(L.ol), loadRatings(L.ol)]);
-      const odds    = await loadOdds(L.odds);
-      const matches = schedule.map(m => buildFootball(m, odds, table));
+      /* Kein Odds-API-Aufruf mehr — buildFootball hat für genau diesen Fall
+         schon ein eingebautes Modell (echte Tabellenwerte aus OpenLigaDB statt
+         Marktquote). Damit hängt nichts mehr an einem begrenzten Kontingent. */
+      const matches = schedule.map(m => buildFootball(m, [], table));
       competitions.push({id:L.id, name:L.name, sport:'fb', matches});
     }catch(e){ /* ein ausgefallener Wettbewerb reißt die anderen nicht mit */ }
   }
@@ -524,28 +625,38 @@ export default async function handler(req, res) {
 
   let fights = [];
   try{
-    const odds = await loadOdds(UFC.odds);
-    /* 21 Tage zurück statt 3 — ersetzt das frühere "alte data.json lesen",
-       das es in einer Serverless-Funktion ohne eigene Festplatte nicht mehr
-       geben kann. So bleibt eine kürzlich entschiedene Card trotzdem sichtbar,
-       ganz ohne gespeicherten Zustand. */
-    const dateSet = new Set();
-    odds.forEach(ev => dateSet.add(espnDate(ev.commence_time)));
-    for(let i=0;i<21;i++) dateSet.add(espnDate(Date.now()-i*864e5));
-    const {finished:results, allePaarungen} = await loadEspnData(dateSet);
-    const istEchtesUFC = ev => allePaarungen.some(p =>
-      (sameFighter(p.a,ev.home_team)&&sameFighter(p.b,ev.away_team)) ||
-      (sameFighter(p.a,ev.away_team)&&sameFighter(p.b,ev.home_team)));
-    const proTag={};
-    odds.forEach(ev=>{ const d=espnDate(ev.commence_time); (proTag[d]=proTag[d]||[]).push(ev); });
-    let oddsGefiltert=[];
-    Object.values(proTag).forEach(evsAmTag=>{
-      const treffer=evsAmTag.filter(istEchtesUFC);
-      if(treffer.length/evsAmTag.length>=0.5) oddsGefiltert.push(...treffer);
-      else oddsGefiltert.push(...evsAmTag);
-    });
-    fights = buildUFC(oddsGefiltert, results);
-    if(fights.length) competitions.push({id:'ufc', name:'UFC', sport:'mma', matches:fights});
+    /* Echte Marktquoten von The Odds API — aber nur alle 6h wirklich abgefragt
+       (loadOddsCached, siehe oben), damit das Guthaben nicht mehr an die
+       Anzahl der Seitenaufrufe gekoppelt ist. Liefert die "mma_mixed_martial_
+       arts"-Kategorie gerade nichts (Guthaben erschöpft, noch nichts gelistet,
+       o.ä.), gibt es schlicht keine UFC-Karte in dieser Antwort — KEIN
+       Platzhalter, KEINE Modellschätzung für offene Kämpfe. */
+    const odds = await loadOddsCached('mma_mixed_martial_arts');
+    if(odds.length){
+      const dateSet = new Set();
+      odds.forEach(ev => dateSet.add(espnDate(ev.commence_time)));
+      for(let i=0;i<21;i++) dateSet.add(espnDate(Date.now()-i*864e5));
+      const rohKaempfe = await loadEspnData(dateSet);
+
+      /* Die "mma_mixed_martial_arts"-Kategorie bei Odds API ist nicht UFC-
+         exklusiv — Abgleich gegen ESPNs echte UFC-Paarungen filtert fremde
+         Promotions raus, ohne einzelne, noch nicht in ESPNs Kalender
+         eingetragene UFC-Kämpfe fälschlich mit rauszuwerfen. */
+      const istEchtesUFC = ev => rohKaempfe.some(p =>
+        (sameFighter(p.a,ev.home_team)&&sameFighter(p.b,ev.away_team)) ||
+        (sameFighter(p.a,ev.away_team)&&sameFighter(p.b,ev.home_team)));
+      const proTag = {};
+      odds.forEach(ev => { const d=espnDate(ev.commence_time); (proTag[d]=proTag[d]||[]).push(ev); });
+      let oddsGefiltert = [];
+      Object.values(proTag).forEach(evsAmTag => {
+        const treffer = evsAmTag.filter(istEchtesUFC);
+        if(treffer.length/evsAmTag.length >= 0.5) oddsGefiltert.push(...treffer);
+        else oddsGefiltert.push(...evsAmTag);
+      });
+
+      fights = buildUFC(oddsGefiltert, rohKaempfe);
+      if(fights.length) competitions.push({id:'ufc', name:'UFC', sport:'mma', matches:fights});
+    }
   }catch(e){ /* UFC fehlt in diesem Aufruf, Rest bleibt trotzdem nutzbar */ }
 
   if(!competitions.length){

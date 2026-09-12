@@ -455,13 +455,46 @@ function buildUFC(oddsEvents, results){
     });
   }
 
-  const weekendOnly = built.filter(f => isWeekend(f.start));
-  const open = weekendOnly.filter(f => !f.finished);
-  if(!open.length) return weekendOnly.filter(f=>f.finished);
-  const first = Math.min(...open.map(f => new Date(f.start).getTime()));
+  const weekendOnly = built.filter(f => isWeekend(f.start) || f.start === null);
+  if(!weekendOnly.length) return [];
+
+  /* Karten-Auswahl per Zeit-Cluster statt per "ist bei der Odds API noch offen":
+     Die alte Logik hat sich daran orientiert, welche Kämpfe die Odds API GERADE
+     als offen (wettbar) listet. Sobald eine Card durch ist, verschwinden ihre
+     Kämpfe dort komplett — und je nachdem, ob schon eine neue Card gelistet war
+     oder nicht, ist entweder die gerade beendete Card verschwunden oder mehrere
+     vergangene Wochenenden wurden zu einer Liste zusammengeworfen. Stattdessen
+     gruppieren wir jetzt alle bekannten Kämpfe (egal ob offen oder schon
+     entschieden) rein nach Startzeit in Cards und wählen die Card, die dem
+     aktuellen Zeitpunkt am nächsten liegt — das bleibt stabil, unabhängig
+     davon, was die Odds API gerade zufällig anzeigt. */
+  const timed = weekendOnly.filter(f => f.start !== null)
+    .sort((a,b) => new Date(a.start) - new Date(b.start));
+  const untimed = weekendOnly.filter(f => f.start === null);
+  if(!timed.length) return untimed;
+
   const WINDOW = 2*864e5;
-  return weekendOnly.filter(f =>
-    f.finished || new Date(f.start).getTime() - first <= WINDOW);
+  const cards = [];
+  for(const f of timed){
+    const t = new Date(f.start).getTime();
+    const card = cards[cards.length-1];
+    if(card && t - card.max <= WINDOW){
+      card.fights.push(f);
+      card.max = Math.max(card.max, t);
+    } else {
+      cards.push({fights:[f], min:t, max:t});
+    }
+  }
+
+  const now = Date.now();
+  let closest = cards[0], closestDist = Infinity;
+  for(const card of cards){
+    const dist = now < card.min ? card.min - now
+               : now > card.max ? now - card.max
+               : 0;
+    if(dist < closestDist){ closestDist = dist; closest = card; }
+  }
+  return [...closest.fights, ...untimed];
 }
 
 export default async function handler(req, res) {

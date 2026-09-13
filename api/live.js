@@ -242,18 +242,21 @@ export default async function handler(req, res) {
     }
   }catch(e){ /* CL fehlt in diesem Aufruf, Bundesligen laufen weiter */ }
 
-  for(const L of LEAGUES){
+  await Promise.all(LEAGUES.map(async L => {
     try{
-      /* ESPN-Live-Daten für diese Liga vorab laden — kleines Zeitfenster
-         (heute ± 3 Tage) reicht für ein Bundesliga-Wochenende. */
+      /* ESPN-Live-Daten für diese Liga vorab laden — heute + gestern reicht,
+         weil unten ohnehin nur Spiele der letzten 6 Stunden verwendet werden.
+         (Vorher: ±3 Tage = 7 Anfragen pro Liga, das hat die Funktion beim
+         Vercel-Zeitlimit ins Stolpern gebracht und ALLES leer zurückgegeben,
+         auch die OpenLigaDB-Rückfallebene.) */
       let espnSpiele = [];
-      try{ espnSpiele = await loadEspnSoccer(ESPN_SLUG[L], fensterTage(3,3)); }
+      try{ espnSpiele = await loadEspnSoccer(ESPN_SLUG[L], [espnDay(jetzt-864e5), espnDay(jetzt)]); }
       catch(e){ /* ESPN nicht erreichbar — unten greift die OpenLigaDB-Rückfallebene */ }
 
       const r = await fetch(`https://api.openligadb.de/getmatchdata/${L}/${SEASON}`);
-      if(!r.ok) continue;
+      if(!r.ok) return;
       const rows = await r.json();
-      if(!Array.isArray(rows)) continue;
+      if(!Array.isArray(rows)) return;
       for(const m of rows){
         const start = new Date(m.matchDateTime).getTime();
         /* Nur Spiele im relevanten Zeitfenster mitschicken — alles andere
@@ -283,7 +286,7 @@ export default async function handler(req, res) {
         if(lv) live['ol'+m.matchID] = {score:lv.score, minute:lv.minute, finished:false};
       }
     }catch(e){ /* eine ausgefallene Liga reißt die anderen nicht mit */ }
-  }
+  }));
 
   /* Kurz zwischengespeichert: schauen mehrere Leute gleichzeitig zu, fragt
      trotzdem nur einer wirklich bei OpenLigaDB nach. 25 Sekunden sind kurz

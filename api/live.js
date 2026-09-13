@@ -151,6 +151,37 @@ function fensterTage(zurueck = 4, vor = 4){
    einen Live-Ticker unbrauchbar. */
 const LEAGUES = ['bl1', 'bl2', 'bl3'];
 
+/* ESPN als bevorzugte Live-Quelle auch für die drei deutschen Ligen (siehe
+   handler unten): OpenLigaDB ist community-gepflegt — Zwischenstände tragen
+   dort Freiwillige von Hand ein, was während des Spiels unzuverlässig sein
+   kann. ESPN bezieht seine Live-Daten von einem professionellen Feed und ist
+   während des Spiels deutlich verlässlicher; das Endergebnis nach Abpfiff
+   bleibt bei OpenLigaDB (dort seit Jahren zuverlässig). */
+const ESPN_SLUG = {bl1:'ger.1', bl2:'ger.2', bl3:'ger.3'};
+const normTeam = s => String(s).toLowerCase().normalize('NFD')
+  .replace(/[\u0300-\u036f]/g,'').replace(/[^a-z]/g,'');
+/* ESPN übersetzt manche Städtenamen ins Englische, OpenLigaDB nicht — bei
+   reiner Buchstaben-Normalisierung (Umlaute entfernen) bleiben "Köln" und
+   "Cologne" trotzdem zwei komplett verschiedene Wörter. Bekannte Fälle hier
+   ergänzen, falls in Zukunft noch ein Verein nicht erkannt wird. */
+const TEAM_ALIASE = {
+  koln: ['cologne'],
+  munchen: ['munich'],
+  nurnberg: ['nuremberg'],
+};
+function sameTeam(a,b){
+  const x=normTeam(a), y=normTeam(b);
+  if(!x || !y) return false;
+  if(x===y || x.includes(y) || y.includes(x)) return true;
+  for(const [de, alts] of Object.entries(TEAM_ALIASE)){
+    const xHatDe = x.includes(de), yHatDe = y.includes(de);
+    for(const en of alts){
+      if((xHatDe && y.includes(en)) || (yHatDe && x.includes(en))) return true;
+    }
+  }
+  return false;
+}
+
 /* Endstand — nur wenn das Spiel wirklich abgeschlossen ist. */
 function endResult(m){
   if(!m.matchIsFinished) return null;
@@ -213,6 +244,12 @@ export default async function handler(req, res) {
 
   for(const L of LEAGUES){
     try{
+      /* ESPN-Live-Daten für diese Liga vorab laden — kleines Zeitfenster
+         (heute ± 3 Tage) reicht für ein Bundesliga-Wochenende. */
+      let espnSpiele = [];
+      try{ espnSpiele = await loadEspnSoccer(ESPN_SLUG[L], fensterTage(3,3)); }
+      catch(e){ /* ESPN nicht erreichbar — unten greift die OpenLigaDB-Rückfallebene */ }
+
       const r = await fetch(`https://api.openligadb.de/getmatchdata/${L}/${SEASON}`);
       if(!r.ok) continue;
       const rows = await r.json();
@@ -224,6 +261,19 @@ export default async function handler(req, res) {
         if(!Number.isFinite(start)) continue;
         if(start > jetzt || jetzt - start > 6*3600e3) continue;
 
+        /* ESPN bevorzugt: verlässlicherer Live-Feed als OpenLigaDBs von Hand
+           gepflegte Einträge. Abgleich per Teamnamen, da die IDs der beiden
+           Quellen nichts miteinander zu tun haben. */
+        const treffer = espnSpiele.find(e =>
+          sameTeam(e.home, m.team1?.teamName) && sameTeam(e.away, m.team2?.teamName));
+        if(treffer){
+          if(treffer.finished){ live['ol'+m.matchID] = {score:treffer.score, finished:true}; continue; }
+          if(treffer.live){ live['ol'+m.matchID] = {score:treffer.liveScore, minute:treffer.minute, finished:false}; continue; }
+        }
+
+        /* Kein ESPN-Treffer (Team-Namen zu unterschiedlich, oder ESPN gerade
+           nicht erreichbar) — OpenLigaDB als Rückfallebene, besser als gar
+           nichts anzuzeigen. */
         const score = endResult(m);
         if(score){
           live['ol'+m.matchID] = {score, finished:true};

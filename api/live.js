@@ -36,6 +36,17 @@ const SEASON = process.env.SEASON || '2026';
  * */
 
 /* Amerikanische Quoten (-150 / +350) in dezimale umrechnen (1,67 / 4,50). */
+/* OpenLigaDB liefert matchDateTime in deutscher Ortszeit OHNE Zeitzonen-Angabe
+   — naiv geparst hält JavaScript das für UTC und verschiebt die Zeit um 1-2
+   Stunden. matchDateTimeUTC ist das richtige Feld, aber auch das kommt ohne
+   "Z" — das hängen wir hier explizit an, damit es eindeutig als UTC erkannt
+   wird. Fehlt matchDateTimeUTC ausnahmsweise, bleibt nur der unsichere
+   Rückfall auf matchDateTime. */
+function utcZeit(m){
+  if(m.matchDateTimeUTC)
+    return /[Zz]|[+-]\d\d:\d\d$/.test(m.matchDateTimeUTC) ? m.matchDateTimeUTC : m.matchDateTimeUTC+'Z';
+  return m.matchDateTime || null;
+}
 function americanToDecimal(v){
   const n = Number(String(v).replace('+',''));
   if(!Number.isFinite(n) || n === 0) return null;
@@ -200,7 +211,7 @@ function endResult(m){
    ewig als "läuft" gilt, falls es niemand als beendet markiert. */
 function liveInfo(m){
   if(m.matchIsFinished) return null;
-  const start = new Date(m.matchDateTime).getTime();
+  const start = new Date(utcZeit(m)).getTime();
   const now = Date.now();
   if(!Number.isFinite(start)) return null;
   if(start > now || now - start > 3.5*3600e3) return null;
@@ -258,7 +269,11 @@ export default async function handler(req, res) {
       const rows = await r.json();
       if(!Array.isArray(rows)) return;
       for(const m of rows){
-        const start = new Date(m.matchDateTime).getTime();
+        /* matchDateTimeUTC statt matchDateTime: Letzteres liefert OpenLigaDB
+           in deutscher Ortszeit ohne Zeitzonen-Angabe — naiv als UTC geparst
+           lag ein laufendes Spiel dadurch bis zu 2 Stunden "in der Zukunft"
+           und wurde fälschlich als "noch nicht angepfiffen" übersprungen. */
+        const start = new Date(utcZeit(m)).getTime();
         /* Nur Spiele im relevanten Zeitfenster mitschicken — alles andere
            ändert sich gerade ohnehin nicht und würde die Antwort aufblähen. */
         if(!Number.isFinite(start)) continue;

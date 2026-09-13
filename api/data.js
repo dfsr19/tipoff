@@ -124,6 +124,17 @@ async function loadOddsCached(sportKey){
  * */
 
 /* Amerikanische Quoten (-150 / +350) in dezimale umrechnen (1,67 / 4,50). */
+/* OpenLigaDB liefert matchDateTime in deutscher Ortszeit OHNE Zeitzonen-Angabe
+   — naiv geparst hält JavaScript das für UTC und verschiebt die Zeit um 1-2
+   Stunden. matchDateTimeUTC ist das richtige Feld, aber auch das kommt ohne
+   "Z" — das hängen wir hier explizit an, damit es eindeutig als UTC erkannt
+   wird. Fehlt matchDateTimeUTC ausnahmsweise, bleibt nur der unsichere
+   Rückfall auf matchDateTime. */
+function utcZeit(m){
+  if(m.matchDateTimeUTC)
+    return /[Zz]|[+-]\d\d:\d\d$/.test(m.matchDateTimeUTC) ? m.matchDateTimeUTC : m.matchDateTimeUTC+'Z';
+  return m.matchDateTime || null;
+}
 function americanToDecimal(v){
   const n = Number(String(v).replace('+',''));
   if(!Number.isFinite(n) || n === 0) return null;
@@ -329,7 +340,7 @@ function endResult(m){
    Spiel ewig als "läuft gerade" gilt, falls jemand vergisst, es abzuschließen. */
 function liveInfo(m){
   if(m.matchIsFinished) return null;
-  const start = new Date(m.matchDateTime).getTime();
+  const start = new Date(utcZeit(m)).getTime();
   const now = Date.now();
   if(!Number.isFinite(start)) return null;
   if(start > now || now - start > 3.5*3600e3) return null;
@@ -360,7 +371,7 @@ async function loadSchedule(league){
     const score = endResult(m);
     const live  = score ? null : liveInfo(m);
     return {
-      id:'ol'+m.matchID, day: m.group?.groupOrderID || 1, start: m.matchDateTime,
+      id:'ol'+m.matchID, day: m.group?.groupOrderID || 1, start: utcZeit(m),
       home: m.team1.teamName, away: m.team2.teamName, finished: !!score,
       ...(score ? {score} : {}),
       ...(live ? {live:true, liveScore:live.score, minute:live.minute} : {})

@@ -441,9 +441,9 @@ textarea{min-height:88px;resize:vertical;line-height:1.55}
 #ptr{position:fixed;top:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;
   display:flex;justify-content:center;align-items:flex-end;height:0;overflow:hidden;
   opacity:0;z-index:25;pointer-events:none;transition:height .15s ease-out,opacity .15s ease-out}
-#ptr i{width:22px;height:22px;margin-bottom:11px;border-radius:50%;
-  border:2.5px solid var(--line-2);border-top-color:var(--blue);transition:border-color .15s}
-#ptr.ready i{border-top-color:var(--win)}
+#ptr i{width:28px;height:28px;margin-bottom:11px;border-radius:50%;
+  border:4px solid rgba(80,170,240,.22);border-top-color:var(--blue);transition:border-color .15s}
+#ptr.ready i{border-top-color:var(--blue);border-color:rgba(80,170,240,.4)}
 #ptr.spin i{animation:ptrspin .7s linear infinite}
 @keyframes ptrspin{to{transform:rotate(360deg)}}
 
@@ -745,26 +745,45 @@ async function refreshAll(){
    ist (sonst würde normales Scrollen versehentlich ein Update auslösen). */
 (function(){
   const ind=document.getElementById('ptr');
-  const SCHWELLE=68;
-  let startY=0, ziehend=false, distanz=0, laedt=false;
+  /* Bewusst großzügig: erst ab dieser Strecke löst das Nachladen aus. Vorher
+     war es so empfindlich, dass schon leichtes Scrollen ein Update anstieß. */
+  const SCHWELLE=130;
+  /* Die ersten Millimeter werden komplett ignoriert — sonst zuckt der Indikator
+     bei jedem normalen Wisch kurz auf. */
+  const TOTZONE=35;
+  let startY=0, startX=0, ziehend=false, entschieden=false, distanz=0, laedt=false;
   const obenAngekommen=()=>(window.scrollY||document.documentElement.scrollTop||0)<=0;
+  const zuruecksetzen=()=>{
+    ind.style.height='0px';ind.style.opacity='0';ind.classList.remove('ready');
+    ziehend=false; entschieden=false; distanz=0;
+  };
   document.addEventListener('touchstart',e=>{
-    if(laedt||!obenAngekommen()) return;
-    startY=e.touches[0].clientY; ziehend=true; distanz=0;
+    if(laedt||e.touches.length>1||!obenAngekommen()) return;
+    startY=e.touches[0].clientY; startX=e.touches[0].clientX;
+    ziehend=true; entschieden=false; distanz=0;
   },{passive:true});
   document.addEventListener('touchmove',e=>{
     if(!ziehend) return;
-    distanz=e.touches[0].clientY-startY;
-    if(distanz>0&&obenAngekommen()){
-      ind.style.height=Math.min(distanz*.5,64)+'px';
-      ind.style.opacity=Math.min(distanz/SCHWELLE,1);
-      ind.classList.toggle('ready',distanz>SCHWELLE);
-    }else{ ziehend=false; }
+    const dy=e.touches[0].clientY-startY, dx=Math.abs(e.touches[0].clientX-startX);
+    /* Einmalige Richtungsentscheidung: quer gewischt (z.B. in der Tabelle) oder
+       nach oben gescrollt → diese Geste ist kein Nachladen mehr. */
+    if(!entschieden&&(Math.abs(dy)>10||dx>10)){
+      entschieden=true;
+      if(dy<=0||dx>Math.abs(dy)*.6){ zuruecksetzen(); return; }
+    }
+    if(!obenAngekommen()){ zuruecksetzen(); return; }
+    distanz=dy-TOTZONE;
+    if(distanz<=0){ ind.style.height='0px'; ind.style.opacity='0'; return; }
+    /* Spürbarer Widerstand: je weiter gezogen, desto zäher */
+    ind.style.height=Math.min(distanz*.42,58)+'px';
+    ind.style.opacity=Math.min(distanz/SCHWELLE,1);
+    ind.classList.toggle('ready',distanz>SCHWELLE);
   },{passive:true});
   document.addEventListener('touchend',async()=>{
     if(!ziehend) return;
-    ziehend=false;
-    if(distanz>SCHWELLE&&!laedt){
+    const ausloesen=distanz>SCHWELLE&&!laedt;
+    ziehend=false; entschieden=false;
+    if(ausloesen){
       laedt=true;
       ind.classList.add('spin');
       ind.style.height='52px';ind.style.opacity='1';
@@ -772,8 +791,7 @@ async function refreshAll(){
       ind.classList.remove('spin');
       laedt=false;
     }
-    ind.style.height='0px';ind.style.opacity='0';ind.classList.remove('ready');
-    distanz=0;
+    zuruecksetzen();
   });
 })();
 
@@ -1246,6 +1264,37 @@ function nextDayOf(r){
   return n?(n.day||1):1;
 }
 
+/* ─── Was steht als Nächstes an? ───
+   Statt nur "ST 4" die konkrete nächste Partie. Stolperstein: an einem
+   Bundesliga-Samstag stoßen fünf Spiele gleichzeitig an — dann ergibt eine
+   einzelne Paarung ein schiefes Bild. Deshalb werden alle Spiele im selben
+   Anstoß-Zeitfenster (15 Minuten) zusammengefasst und nur gezählt.          */
+function nextUpOf(r){
+  const list=(r.custom?r.events:evOf(r.compId)).filter(e=>e.start&&e.start>new Date())
+    .sort((a,b)=>a.start-b.start);
+  if(!list.length) return null;
+  const erste=list[0], fenster=15*60e3;
+  const gleichzeitig=list.filter(e=>Math.abs(e.start-erste.start)<fenster);
+  const zeit=erste.start.toLocaleString('de-DE',
+    {weekday:'short',hour:'2-digit',minute:'2-digit'}).replace(',','');
+  return {
+    zeit, anzahl:gleichzeitig.length, start:erste.start, day:erste.day||1,
+    text:gleichzeitig.length>1
+      ? `${zeit} · ${gleichzeitig.length} ${r.sport==='mma'?'Kämpfe':'Spiele'}`
+      : `${zeit} · ${short(erste.home)}–${short(erste.away)}`,
+    events:gleichzeitig
+  };
+}
+
+/* Wie viele Spiele des nächsten Anstoßes hat der Nutzer noch nicht getippt?
+   Grundlage ist dasselbe Zeitfenster wie oben — es geht um das, was jetzt
+   ansteht, nicht um den gesamten Spieltag.                                  */
+function openPicksOf(r){
+  const n=nextUpOf(r); if(!n) return 0;
+  r.picks=r.picks||{};
+  return n.events.filter(e=>!r.picks[e.id]).length;
+}
+
 const fmt=n=>n.toLocaleString('de-DE',{minimumFractionDigits:1,maximumFractionDigits:1});
 /* Bei eigenen Ligen gibt's nur ganze Punkte — keine Nachkommastelle nötig. */
 const fmtPts=(n,custom)=>custom?String(Math.round(n)):fmt(n);
@@ -1594,19 +1643,32 @@ function vHome(){
     <div class="sec">Meine Runden<span class="ln"></span></div>
     ${mine.length?mine.map(r=>{
       const req=r.owner==='me'&&r.requests.length;
-      return `<button class="round" data-r="${r.id}">
+      const bg=(!r.custom&&COMPBG[r.compId])?COMPBG[r.compId]:null;
+      const posY={bl1:'48%',bl2:'62%',bl3:'44%',ucl:'30%',ufc:'38%'}[r.compId]||'center';
+      const nx=nextUpOf(r), offen=openPicksOf(r);
+      const modusTxt=r.custom?'Ohne Quoten'
+        :r.modus==='einzel'?'Ohne Quoten'
+        :r.modus==='quotenfix'?'Mit Quoten · fester Einsatz'
+        :'Mit Quoten · Regler';
+      return `<button class="round" data-r="${r.id}"
+        style="${bg?`background-image:linear-gradient(105deg,rgba(11,13,18,.95) 34%,rgba(11,13,18,.72) 100%),url('${bg}');
+          background-size:cover;background-position:center ${posY}`:''}">
         <div class="top">
           <span class="pill b">${compTag(r)}</span>
           ${r.visibility==='public'?'<span class="pill g">Öffentlich</span>':''}
           ${req?`<span class="pill solid">${req} Anfrage${req>1?'n':''}</span>`:''}
+          ${offen?`<span class="pill solid" style="background:var(--live);color:#1A1200">
+            ${offen} offene${offen>1?'':'r'} Tipp${offen>1?'s':''}</span>`:''}
           <span class="arw">›</span>
         </div>
-        <div class="nm" style="margin-bottom:12px">${esc(r.name)}</div>
+        <div class="nm" style="margin-bottom:4px">${esc(r.name)}</div>
+        <div style="font-size:11px;color:var(--muted);font-weight:500;margin-bottom:11px">${modusTxt}</div>
         <div class="row">
           <div>Platz<b>${rank(r)}<span style="font-size:12px;color:var(--muted)">/${r.members.length}</span></b></div>
           <div>Punkte<b>${fmtPts(r.members.find(m=>m.id==='me').pts,r.custom||r.modus!=='regler')}</b></div>
-          <div>${r.sport==='mma'?'Kämpfe':'Als nächstes'}
-            <b class="hot">${r.sport==='mma'?eventsOf(r,1).length:'ST '+nextDayOf(r)}</b></div>
+          <div style="min-width:0;flex:1">Als nächstes
+            <b class="hot" style="font-size:13px;white-space:nowrap;overflow:hidden;
+              text-overflow:ellipsis;display:block">${nx?esc(nx.text):'—'}</b></div>
         </div>
       </button>`;}).join(''):'<p class="hint">Noch keine Runde — wähl oben einen Wettbewerb oder tritt einer Runde bei.</p>'}
 

@@ -206,6 +206,11 @@ textarea{min-height:88px;resize:vertical;line-height:1.55}
   border-radius:var(--r);padding:15px;margin-bottom:11px;display:block;transition:all .15s}
 .round:active{transform:scale(.99);border-color:var(--line-2)}
 .round .top{display:flex;align-items:center;gap:8px;margin-bottom:13px}
+.round .rtop{display:flex;align-items:center;gap:8px;
+  margin:-15px -15px 13px -15px;padding:11px 15px;
+  background:linear-gradient(180deg,rgba(6,8,13,.6),rgba(6,8,13,.18));
+  border-bottom:1px solid rgba(255,255,255,.08);
+  border-radius:calc(var(--r) - 1px) calc(var(--r) - 1px) 0 0}
 .ctag2{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;
   text-transform:uppercase;letter-spacing:.05em;color:#fff;text-shadow:0 1px 4px rgba(0,0,0,.75)}
 .ctag2 svg{flex-shrink:0;opacity:.92}
@@ -450,7 +455,7 @@ textarea{min-height:88px;resize:vertical;line-height:1.55}
   border:3px solid rgba(255,255,255,.14);border-top-color:var(--blue);border-right-color:var(--blue);
   transition:transform .15s}
 #ptr.ready i{transform:scale(1.15)}
-#ptr.spin i{animation:ptrspin .6s linear infinite}
+#ptr.spin i{transition:none;animation:ptrspin .6s linear infinite}
 @keyframes ptrspin{to{transform:rotate(360deg)}}
 
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
@@ -1688,7 +1693,7 @@ function vHome(){
       return `<button class="round" data-r="${r.id}"
         style="${bg?`background-image:linear-gradient(105deg,rgba(11,13,18,.95) 34%,rgba(11,13,18,.72) 100%),url('${bg}');
           background-size:cover;background-position:center ${posY}`:''}">
-        <div class="top">
+        <div class="rtop">
           ${compTagPlain(r)}
           ${r.visibility==='public'?'<span class="pill g">Öffentlich</span>':''}
           ${req?`<span class="pill solid">${req} Anfrage${req>1?'n':''}</span>`:''}

@@ -70,7 +70,7 @@ input,textarea,select{font:inherit;color:inherit}
 
 /* ═══════ WORTMARKE ═══════ */
 .mark{display:block;height:40px;width:auto}
-.hrow .mark{height:30px}
+.hrow .mark{height:50px}
 .logobtn{background:none;border:none;padding:4px 2px;margin:-4px -2px;cursor:pointer;
   -webkit-tap-highlight-color:transparent}
 
@@ -459,6 +459,57 @@ textarea{min-height:88px;resize:vertical;line-height:1.55}
 #ptr.spin i{transition:none;animation:ptrspin .6s linear infinite}
 @keyframes ptrspin{to{transform:rotate(360deg)}}
 
+
+/* ═══════ ZWISCHENSPIELE ═══════ */
+.composer button.xplus{font-size:24px;font-weight:400;line-height:1}
+.xsep{display:flex;justify-content:center;margin:10px 0 2px}
+.xsep span{background:var(--raise);border:1px solid var(--line-2);color:var(--muted);font-size:11px;font-weight:700;
+  text-transform:uppercase;letter-spacing:.06em;padding:5px 12px;border-radius:20px}
+.xsys{align-self:center;max-width:92%;background:rgba(80,170,240,.08);border:1px solid rgba(80,170,240,.22);
+  border-radius:14px;padding:9px 13px;font-size:12.5px;line-height:1.45;color:var(--text);display:flex;flex-wrap:wrap;gap:6px;align-items:flex-start}
+.xsys .i{flex-shrink:0}
+.xsys>span:nth-child(2){flex:1;min-width:0}
+.xact{flex-basis:100%;display:flex;gap:8px;margin-top:4px;justify-content:flex-end}
+.xmodal{position:fixed;inset:0;z-index:60;background:rgba(3,5,10,.72);display:flex;align-items:flex-end;justify-content:center}
+.xm-card{width:100%;max-width:480px;max-height:86vh;overflow-y:auto;background:var(--surface);border:1px solid var(--line-2);
+  border-radius:22px 22px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom))}
+.xm-h{font-family:'Poppins';font-weight:700;font-size:18px;margin-bottom:12px}
+.xm-l{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:14px 0 7px}
+.xopts{display:flex;flex-wrap:wrap;gap:7px}
+.xopt{padding:9px 13px;border-radius:11px;background:var(--raise);border:1px solid var(--line-2);color:var(--text);font-size:13px;font-weight:600}
+.xopt.on{background:var(--blue);border-color:var(--blue);color:#04121F}
+.xopt.xred{background:#c0392b;border-color:#c0392b;color:#fff;flex:1;padding:13px}
+.xopt.xblk{background:#15171b;border-color:#3a3f47;color:#fff;flex:1;padding:13px}
+.xg{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.xg-main{flex:1;display:flex;align-items:center;gap:12px;text-align:left;background:var(--card);border:1px solid var(--line);
+  border-radius:14px;padding:12px}
+.xg.off .xg-main{opacity:.5}
+.xg-ico{font-size:24px;width:32px;text-align:center;flex-shrink:0}
+.xg-t b{display:block;font-size:14.5px}
+.xg-t small{display:block;font-size:12px;color:var(--muted);margin-top:2px;line-height:1.35}
+.xg-q{width:34px;height:34px;flex-shrink:0;border-radius:50%;background:var(--raise);border:1px solid var(--line-2);
+  color:var(--blue);font-weight:800;font-size:15px}
+.xg-help{font-size:12.5px;line-height:1.5;color:var(--muted);background:var(--raise);border-radius:12px;padding:10px 12px;margin:-2px 0 10px}
+.xspy{display:flex;justify-content:space-between;padding:11px 2px;border-bottom:1px solid var(--line);font-size:14px}
+.xwheel-wrap{position:relative;width:230px;height:230px;margin:6px auto 0}
+.xwheel{width:100%;height:100%;border-radius:50%;border:6px solid #6b4e1f;box-shadow:0 0 0 2px #a67c2e,0 8px 30px rgba(0,0,0,.5);
+  display:flex;align-items:center;justify-content:center}
+.xhub{width:62px;height:62px;border-radius:50%;background:#2a2d33;border:3px solid #a67c2e;color:#fff;font-family:'Poppins';
+  font-weight:800;font-size:22px;display:flex;align-items:center;justify-content:center}
+.xptr{position:absolute;top:-8px;left:50%;transform:translateX(-50%);width:0;height:0;z-index:2;
+  border-left:11px solid transparent;border-right:11px solid transparent;border-top:20px solid #f5d27a}
+.xrl-res{margin-top:14px;text-align:center;font-weight:700;font-size:15px;padding:12px;border-radius:12px}
+.xrl-res.w{background:rgba(52,211,153,.14);color:var(--win)}
+.xrl-res.l{background:rgba(248,113,113,.14);color:var(--bad)}
+.xbox{margin-top:18px;border-radius:var(--r);padding:2px;background:linear-gradient(120deg,#50AAF0,#a78bfa,#f5b942)}
+.xbox-in{background:var(--card);border-radius:calc(var(--r) - 2px)}
+.xbox-list{padding:0 14px 14px;display:grid;gap:8px}
+.xbox-list div{display:flex;gap:10px;font-size:12.5px;color:var(--muted);line-height:1.4}
+.xbox-list b{color:var(--text)}
+.rank .nm small{display:block;font-size:11px;font-weight:600;color:var(--muted);margin-top:2px}
+.rank .nm small .pd{color:var(--live)}
+.xover{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;margin-top:14px}
+.xover div{font-size:12.5px;padding:5px 0;color:var(--text);display:flex;gap:8px}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -909,7 +960,7 @@ const mkRound=(o)=>({id:o.id||'r'+(++SEQ),compId:o.compId||null,
   sport:o.sport||(o.compId?COMPS[o.compId].sport:'fb'),name:o.name,
   comp:o.comp||(o.compId?COMPS[o.compId].name:'Eigene Runde'),
   rules:o.rules||'',members:o.members||[],picks:{},settled:{},settledEvents:{},chat:o.chat||[],
-  custom:!!o.custom,modus:o.modus||'regler',exactOnly:!!o.exactOnly,useDates:o.useDates!==false,teams:o.teams||[],events:o.events||[],results:o.results||{},
+  custom:!!o.custom,modus:o.modus||'regler',exactOnly:!!o.exactOnly,extras:o.extras!==false,games:o.games||{},useDates:o.useDates!==false,teams:o.teams||[],events:o.events||[],results:o.results||{},
   visibility:o.visibility||'private',code:o.code||code(),owner:o.owner||'me',
   requests:o.requests||[],joined:o.joined!==false,pendingSync:{}});
 
@@ -1015,7 +1066,7 @@ function fireToLocal(id,d,uid){
     ({id:mid===uid?'me':mid,name:m.name,pts:m.pts||0}));
   const events=(d.events||[]).map(e=>({...e,start:toJSDate(e.start),lockAt:toJSDate(e.lockAt)}));
   const r=mkRound({id,compId:d.compId,sport:d.sport,name:d.name,comp:d.comp,rules:d.rules,
-    custom:d.custom,modus:d.modus,exactOnly:d.exactOnly,useDates:d.useDates,teams:d.teams,events,visibility:d.visibility,code:d.code,
+    custom:d.custom,modus:d.modus,exactOnly:d.exactOnly,extras:d.extras!==false,games:d.games||{},useDates:d.useDates,teams:d.teams,events,visibility:d.visibility,code:d.code,
     owner:d.ownerUid===uid?'me':(d.ownerName||d.ownerUid),members:membersArr,requests:[],chat:d.chat||[]});
   r.results=d.results||{};
   r.picks=(d.picks&&d.picks[uid])||{};
@@ -1038,7 +1089,7 @@ async function fsCreateRound(data,id){
   const uid=myUid(); if(!uid) return null;
   const ref=id?FB.doc(FB.db,'rounds',id):FB.doc(FB.collection(FB.db,'rounds'));
   const payload={compId:data.compId||null,sport:data.sport||'fb',name:data.name,comp:data.comp||'',
-    rules:data.rules||'',custom:!!data.custom,modus:data.modus||'regler',exactOnly:!!data.exactOnly,useDates:data.useDates!==false,
+    rules:data.rules||'',custom:!!data.custom,modus:data.modus||'regler',exactOnly:!!data.exactOnly,extras:data.extras!==false,games:{},useDates:data.useDates!==false,
     teams:data.teams||[],events:data.events||[],chat:[],
     results:{},visibility:data.visibility||'private',code:code(),
     ownerUid:uid,ownerName:S.user?.displayName||'Du',
@@ -1441,7 +1492,7 @@ function render(){
   app.style.background='';
   /* Chat-Live-Listener nur abgemeldet lassen, solange man wirklich im Chat-Tab
      genau dieser Runde ist — sonst würde er unbemerkt weiterlaufen. */
-  if(chatUnsub&&!(S.screen==='round'&&S.tab==='chat'&&S.roundId===chatUnsubRoundId)) stopChatSync();
+  if(chatUnsub&&!(S.screen==='round'&&S.roundId===chatUnsubRoundId)) stopChatSync();
   (SCREENS[S.screen]||vHome)(); if(S.menu) drawMenu();
 }
 
@@ -1652,7 +1703,7 @@ async function logout(){
 
 /* ═══════════ STARTSEITE ═══════════ */
 function vHome(){
-  const rank=r=>[...r.members].sort((a,b)=>b.pts-a.pts).findIndex(m=>m.id==='me')+1;
+  const rank=r=>{const L=xOn(r)?xLedger(r):null;return [...r.members].sort((a,b)=>totalPts(r,b,L)-totalPts(r,a,L)).findIndex(m=>m.id==='me')+1;};
   const mine=myRounds();
 
   app.innerHTML=`
@@ -1731,7 +1782,7 @@ function vHome(){
         <div style="font-size:11px;color:var(--muted);font-weight:500;margin-bottom:11px">${modusTxt}</div>
         <div class="row">
           <div>Platz<b>${rank(r)}<span style="font-size:12px;color:var(--muted)">/${r.members.length}</span></b></div>
-          <div>Punkte<b>${fmtPts(r.members.find(m=>m.id==='me').pts,r.custom||r.modus!=='regler')}</b></div>
+          <div>Punkte<b>${fmtPts(totalPts(r,r.members.find(m=>m.id==='me')),r.custom||r.modus!=='regler')}</b></div>
           <div style="min-width:0;flex:1">Als nächstes
             <b class="hot" style="font-size:12.5px;line-height:1.4;overflow:hidden;
               text-overflow:ellipsis;display:block">${naechstesHtml}</b></div>
@@ -1820,8 +1871,6 @@ const promoCard=()=>`<div class="promo">
       <small>Tipp auf deine Mannschaft, nicht nur auf die großen Namen</small></span></div>
     <div class="perk"><i>🎯</i><span>Exaktes Ergebnis tippen
       <small>2:1 statt nur „Heimsieg" — viel höhere Quoten</small></span></div>
-    <div class="perk"><i>💬</i><span>Chatfunktion
-      <small>Lästern und feiern, direkt in der Runde</small></span></div>
     <div class="perk"><i>🏟</i><span>Unbegrenzt viele Runden
       <small>Ohne Premium sind es ${CFG.freeRounds} gleichzeitig</small></span></div>
   </div>
@@ -1829,7 +1878,7 @@ const promoCard=()=>`<div class="promo">
 const activeCard=()=>`<div class="promo">
   <span class="pill b">★ Aktiv</span>
   <h2>Alles <em>freigeschaltet.</em></h2>
-  <p>Alle Wettbewerbe, Ergebnis-Tipps, Chat und unbegrenzt viele Runden.</p>
+  <p>Alle Wettbewerbe, Ergebnis-Tipps und unbegrenzt viele Runden.</p>
   <div class="codebox">
     <div style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">
       Dein Einladungscode</div>
@@ -1885,14 +1934,6 @@ function vPremium(){
         <button><span class="sd">X</span><span class="q">3,90</span></button>
         <button aria-pressed="true"><span class="sd">2:1</span><span class="q">9,40</span></button>
       </div>
-    </div>
-
-    <div class="card" style="margin-bottom:11px">
-      <span class="pill b">💬 Chatfunktion</span>
-      <h3 style="font-family:'Poppins';font-size:16px;font-weight:700;margin:11px 0 7px">
-        Reden, lästern, feiern</h3>
-      <p class="hint" style="margin:0">Ohne Premium wird nur getippt. Mit Premium bekommt
-        jede deiner Runden einen eigenen Chat — mit Stickern.</p>
     </div>
 
     <div class="card" style="margin-bottom:11px">
@@ -2207,6 +2248,20 @@ function vCreate(){
       </div>
 
 
+      <div class="xbox"><div class="xbox-in">
+        <div class="swrow" style="border:none">
+          <div>
+            <div class="swtitle">🎰 Zwischenspiele</div>
+            <div class="swsub">Duelle, Pott, Roulette und mehr, gestartet im Chat über das +</div>
+          </div>
+          <button class="sw" id="xSw" aria-pressed="${d.extras!==false}" aria-label="Zwischenspiele"><i></i></button>
+        </div>
+        ${d.extras!==false?`<div class="xbox-list">${['duel','dbl','pot','spy','rl'].map(k=>
+          `<div><span>${XG[k].ico}</span><span><b>${XG[k].name}:</b> ${esc(XG[k].help)}</span></div>`).join('')}
+          <div><span>📜</span><span>Alles, was passiert, steht automatisch im Chat, sortiert nach Spieltagen. Punkte aus den Zwischenspielen zählen zur Tabelle.</span></div>
+        </div>`:''}
+      </div></div>
+
       <label for="rg" style="margin-top:18px">Regeln (frei formulierbar)</label>
       <textarea id="rg" placeholder="Was gilt in deiner Runde?">${esc(d.rules||'')}</textarea>
     </main>
@@ -2224,6 +2279,7 @@ function vCreate(){
     const exactSwEl=app.querySelector('#exactSw');
     if(exactSwEl) exactSwEl.onclick=()=>{keep();
       d.exactOnly=!d.exactOnly;render();};
+    app.querySelector('#xSw').onclick=()=>{keep();d.extras=d.extras===false;render();};
     app.querySelector('#back').onclick=()=>{keep();go('create',{flow:'comp'});};
     app.querySelector('#mk').onclick=async()=>{keep();
       const btn=app.querySelector('#mk');btn.disabled=true;btn.textContent='Einen Moment …';
@@ -2457,12 +2513,12 @@ async function buildOfficial(d){
     +(exactOnly?' Getippt wird nur das genaue Ergebnis, nicht Sieg/Unentschieden/Niederlage.':'');
   if(FB_ON&&FB){
     const id=await fsCreateRound({compId:d.compId,sport:c.sport,name,comp:c.name,
-      rules,visibility:d.visibility,modus,exactOnly});
+      rules,visibility:d.visibility,modus,exactOnly,extras:d.extras!==false});
     if(!id) return toast('Da ist etwas schiefgelaufen. Versuch es nochmal.');
     toast('Runde erstellt');openRound(id);return;
   }
   const id='o'+(++SEQ);
-  ROUNDS[id]=mkRound({id,compId:d.compId,name,visibility:d.visibility,rules,modus,exactOnly,
+  ROUNDS[id]=mkRound({id,compId:d.compId,name,visibility:d.visibility,rules,modus,exactOnly,extras:d.extras!==false,
     members:[{id:'me',name:S.user?.displayName||'Du',pts:0}]});
   toast('Runde erstellt');
   openRound(id);
@@ -2836,12 +2892,13 @@ function autoSchedule(teamsIn){
 /* ═══════════ RUNDE ═══════════ */
 function vRound(){
   const r=R(),fb=r.sport==='fb';
+  ensureRoundSync(r);
   /* Nur der Ersteller einer eigenen Liga trägt Ergebnisse ein. */
   const darfEintragen=r.custom&&r.owner==='me';
   const tabs=['tippen'];
   if(darfEintragen) tabs.push('ergebnis');
   tabs.push('tabelle');
-  if(S.premium) tabs.push('chat');   // ohne Premium gibt es keinen Chat
+  tabs.push('chat');   // Chat ist für alle frei
   tabs.push('info');
   if(!tabs.includes(S.tab)) S.tab='tippen';
   /* Eigenes, größeres Illustrationsmotiv je Wettbewerb (ROUNDBG) — bewusst
@@ -3261,7 +3318,13 @@ function tabTable(){
      sieht, dass sich das noch ändern kann, wird ein Stand mit Live-Anteil in
      der Live-Farbe dargestellt statt in der normalen. */
   const liveOf={}; r.members.forEach(m=>liveOf[m.id]=livePtsOf(r,m));
-  const totalOf=m=>m.pts+(liveOf[m.id]||0);
+  /* Gesamtpunkte inkl. Zwischenspiele; daneben die Punkte des laufenden Spieltags
+     und Einsätze, die gerade in Duellen/Pott stecken ("offen"). */
+  const XL=xOn(r)?xLedger(r):null, XD=XL?XL.days:xDays(r), actX=XD.length?xActiveDay(XD):null;
+  const cst=r.custom||r.modus!=='regler';
+  const totalOf=m=>totalPts(r,m,XL)+(liveOf[m.id]||0);
+  const dayOf=m=>(actX?xDayPts(r,uidOfM(m),actX):0)+(liveOf[m.id]||0);
+  const pendOf=m=>XL?(XL.pending[uidOfM(m)]||0):0;
   const rows=[...r.members].sort((a,b)=>totalOf(b)-totalOf(a));
   let days;
   if(r.sport==='mma'){
@@ -3360,7 +3423,8 @@ function tabTable(){
   app.querySelector('#body').innerHTML=matchTable+rows.map((m,i)=>`
     <div class="rank${i===0?' lead':''}${m.id==='me'?' me':''}">
       <span class="ps">${i+1}</span>
-      <span class="nm">${esc(m.name)}</span>
+      <span class="nm">${esc(m.name)}<small>${actX?`${esc(actX.label)}: ${dayOf(m)>0?'+':''}${fmtPts(dayOf(m),cst)}`:''}${
+        pendOf(m)?` · <span class="pd">${fmtPts(pendOf(m),cst)} offen</span>`:''}</small></span>
       <span class="dl" data-d="${m.id}"></span>
       <span class="pts" data-p="${m.id}"${liveOf[m.id]?' style="color:var(--live)"':''}
         >${fmtPts(totalOf(m),r.custom||r.modus!=='regler')}</span></div>`).join('')+
@@ -3368,8 +3432,10 @@ function tabTable(){
       ?`<p class="hint" style="text-align:center;margin-top:14px;color:var(--live)">
          Ein Spiel läuft gerade — gelbe Punkte sind vorläufig und können sich noch ändern.</p>`
       :'')+
+    (XL&&XL.active.length?`<div class="xover"><div class="xm-l" style="margin:0 0 4px">Laufende Zwischenspiele</div>
+      ${XL.active.map(a=>`<div><span>${a.ico}</span><span>${esc(a.text)}</span></div>`).join('')}</div>`:'')+
     `<p class="hint" style="text-align:center;margin-top:16px">
-      Jede Runde wird getrennt gewertet.</p>`;
+      Gesamtpunkte inklusive Zwischenspiele. Jede Runde wird getrennt gewertet.</p>`;
   app.querySelector('#foot').innerHTML='';
   startLiveTicker();
   /* Beim Öffnen direkt zum aktuellen Spieltag scrollen, statt immer bei Spieltag 1
@@ -3396,20 +3462,6 @@ function scoreTend(s){
   return h>a?'1':h<a?'2':'X';
 }
 
-/* Baut nur die Nachrichtenliste (nicht den ganzen Tab) — wird sowohl beim ersten
-   Rendern als auch bei jedem Live-Update über den Snapshot-Listener aufgerufen. */
-function chatHtml(r){
-  const my=myUid()||'me';
-  return `${r.chat.map(m=>{
-    const mine=m.who===my;
-    return `<div class="msg${mine?' mine':''}">
-      ${mine?'':`<span class="au">${esc(m.name)}</span>`}
-      ${m.sticker?(stk(m.sticker).w
-        ?`<span class="stk word">${stk(m.sticker).w}</span>`
-        :`<span class="stk">${stk(m.sticker).e}</span>`)
-        :`<div class="bub">${esc(m.text)}</div>`}</div>`;}).join('')
-    ||'<div class="empty">Noch keine Nachrichten. Fang an.</div>'}`;
-}
 /* Schreibt eine neue Nachricht ins Firestore-Dokument der Runde (arrayUnion statt
    Überschreiben, damit gleichzeitige Nachrichten anderer nicht verloren gehen).
    Bei lokalen Demo-Runden ohne fsId gibt es niemanden zum Synchronisieren mit. */
@@ -3418,47 +3470,512 @@ async function syncChatMsg(r,msg){
   try{ await FB.updateDoc(FB.doc(FB.db,'rounds',r.fsId),{chat:FB.arrayUnion(msg)}); }
   catch(e){ console.warn('Chat senden:',e); }
 }
+/* ══════════════════════════ ZWISCHENSPIELE ══════════════════════════
+   Duell, Doppelt oder nichts, Pott, Spion (Letztplatzierter) und Roulette
+   (Spieltagssieger). Alles liegt als r.games im Firestore-Dokument der Runde.
+   Die Punkte daraus werden NIE auf members.pts aufaddiert, sondern bei jedem
+   Aufruf aus den gespeicherten Aktionen + echten Ergebnissen neu berechnet.
+   So kommen alle Geräte zum selben Stand, und nichts kann doppelt zählen. */
+const XG={
+  duel:{ico:'⚔️',name:'1-gegen-1-Duell',
+    help:'Du forderst einen Freund zu einem Spiel heraus und setzt Punkte. Er nimmt an und tippt eine andere Seite als du. Wer richtig liegt, bekommt den Einsatz vom anderen. Liegen beide falsch, passiert nichts. Nimmt er bis zum Anpfiff nicht an, verfällt das Duell.'},
+  dbl:{ico:'🎲',name:'Doppelt oder nichts',
+    help:'Einmal pro Spieltag markierst du einen deiner Tipps vor dem Anpfiff. Liegst du richtig, bekommst du die Punkte dieses Tipps noch einmal obendrauf. Liegst du falsch, verlierst du 10 Punkte.'},
+  pot:{ico:'💰',name:'Pott',
+    help:'Einer eröffnet vor dem Spieltag einen Pott mit festem Einsatz. Wer mitmachen will, steigt bis zum ersten Anpfiff ein, wer nicht will, spielt ganz normal weiter. Wer von den Mitspielern am Spieltag die meisten Punkte holt, bekommt den ganzen Pott. Bei Gleichstand wird geteilt. Unter zwei Mitspielern wird der Pott aufgelöst.'},
+  spy:{ico:'🔍',name:'Spion',
+    help:'Wer einen Spieltag als Letzter beendet, darf beim nächsten Spieltag vor dem Anpfiff bei einem Spiel sehen, was die anderen getippt haben. Ein kleiner Vorteil zum Aufholen.'},
+  rl:{ico:'🎡',name:'Roulette',
+    help:'Der Sieger eines Spieltags darf einmal Roulette drehen, muss aber nicht. Er wählt Rot oder Schwarz. Trifft die Farbe, werden seine Punkte dieses Spieltags verdoppelt. Trifft sie nicht, verliert er sie wieder. Bei Grün (die 0) gewinnt die Bank.'}
+};
+const XG_DBL_LOSS=10;
+const XG_RED=new Set([1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]);
+const xOn=r=>!!r&&r.extras!==false;
+const meUid=()=>myUid()||'me';
+const uidOfM=m=>m.id==='me'?meUid():m.id;
+const xName=(r,uid)=>{const m=r.members.find(x=>uidOfM(x)===uid);return m?m.name:'Jemand';};
+const xPicks=(r,uid)=>uid===meUid()?(r.picks||{}):((r.memberPicks&&r.memberPicks[uid])||{});
+const xNewId=()=>'g'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+
+/* Spieltage einer Runde als einheitliche Liste — bei UFC zählt jede Fight Night
+   als eigener "Spieltag". start/end dienen dazu, Chat-Nachrichten zeitlich dem
+   richtigen Spieltag zuzuordnen (wie die Datums-Trenner bei WhatsApp). */
+function xDays(r){
+  let raw=[];
+  if(r.sport==='mma'){
+    ufcCards(orderEvents(eventsOf(r,1))).forEach((c,i)=>{
+      const s=c.evs.find(e=>e.start)?.start;
+      raw.push({d:i+1,evs:c.evs,label:s?'Fight Night '+s.toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit'}):'Fight Night'});
+    });
+  }else{
+    const mx=maxDay(r);
+    for(let d=1;d<=mx;d++){const evs=eventsOf(r,d); if(evs.length) raw.push({d,evs,label:(evs[0].stage&&r.compId==='ucl')?evs[0].stage:d+'. Spieltag'});}
+  }
+  raw.forEach(x=>{
+    const ts=x.evs.filter(e=>e.start).map(e=>+e.start);
+    x.start=ts.length?Math.min(...ts):Infinity;
+    x.end=ts.length?Math.max(...ts)+2.5*3600e3:Infinity;
+    x.done=x.evs.every(e=>eventResult(e,r));
+  });
+  return raw;
+}
+function xDayAt(days,t){
+  for(const x of days){ if(isFinite(x.end)&&x.end>t) return x; }
+  const dated=days.filter(x=>isFinite(x.end));
+  return dated.length?dated[dated.length-1]:days[0];
+}
+const xEvById=(days,id)=>{for(const x of days){const e=x.evs.find(v=>v.id===id); if(e) return {e,x};} return null;};
+const xEvLabel=e=>e?`${short(e.home)}–${short(e.away)}`:'ein Spiel';
+function xSideLabel(e,key){
+  if(!e) return key;
+  if(key==='X') return 'Unentschieden';
+  const i=e.sides.findIndex(s=>s.key===key);
+  return i===0?short(e.home):i===e.sides.length-1?short(e.away):key;
+}
+function xDayPts(r,uid,x){
+  const p=xPicks(r,uid);
+  return x.evs.reduce((s,e)=>{const pk=p[e.id],res=eventResult(e,r),v=pk&&res?ptsFor(pk,res,e):0;return s+(isFinite(v)?v:0);},0);
+}
+/* Aktiver Spieltag = der erste, der noch nicht komplett entschieden ist. */
+const xActiveDay=days=>days.find(x=>!x.done)||days[days.length-1];
+/* Nächster Spieltag, bei dem noch GAR nichts angepfiffen ist (für Pott). */
+const xOpenDay=days=>days.find(x=>x.evs.length&&x.evs.every(e=>!started(e)));
+/* Sieger und Letzte eines abgeschlossenen Spieltags (nur wer dabei war zählt). */
+function xDayRanking(r,x){
+  const list=r.members.map(m=>({uid:uidOfM(m),pts:xDayPts(r,uidOfM(m),x)}));
+  if(list.length<2) return {win:[],last:[],list};
+  const mx=Math.max(...list.map(v=>v.pts)),mn=Math.min(...list.map(v=>v.pts));
+  if(mx===mn) return {win:[],last:[],list};
+  return {win:list.filter(v=>v.pts===mx&&mx>0).map(v=>v.uid),last:list.filter(v=>v.pts===mn).map(v=>v.uid),list};
+}
+
+/* Kernstück: rechnet aus allen gespeicherten Aktionen den Punktestand (fest und
+   "offen"), das Chat-Protokoll und die gerade laufenden Aktionen aus. */
+function xLedger(r){
+  const days=xDays(r),now=Date.now();
+  const settled={},pending={},log=[],active=[];
+  const add=(o,uid,n)=>{o[uid]=(o[uid]||0)+n;};
+  if(!xOn(r)) return {days,settled,pending,log,active};
+  const games=Object.entries(r.games||{}).map(([id,g])=>({id,...g})).sort((a,b)=>a.t-b.t);
+  const custom=r.custom||r.modus!=='regler';
+  const P=n=>fmtPts(n,custom);
+  const endT=e=>e&&e.start?(+e.start+2*3600e3):now;
+
+  games.forEach(g=>{
+    if(g.type==='duel'){
+      const f=xEvById(days,g.ev),e=f&&f.e,res=e&&eventResult(e,r);
+      log.push({t:g.t,ico:'⚔️',text:`${xName(r,g.by)} fordert ${xName(r,g.to)} zum Duell heraus: ${xEvLabel(e)}, ${xSideLabel(e,g.sideA)}, ${g.stake} Punkte`,duel:g});
+      if(g.status==='no'){ log.push({t:g.ta||g.t,ico:'⚔️',text:`${xName(r,g.to)} lehnt das Duell ab`}); return; }
+      if(g.status==='open'){
+        if(e&&started(e)){ log.push({t:+e.start,ico:'⚔️',text:`Duell verfallen – ${xName(r,g.to)} hat nicht rechtzeitig angenommen`}); return; }
+        add(pending,g.by,-g.stake);
+        active.push({ico:'⚔️',text:`Duell ${xName(r,g.by)} gegen ${xName(r,g.to)} (${xEvLabel(e)}) wartet auf Antwort`});
+        return;
+      }
+      log.push({t:g.ta||g.t,ico:'⚔️',text:`${xName(r,g.to)} nimmt an und tippt ${xSideLabel(e,g.sideB)}`});
+      if(!res){
+        add(pending,g.by,-g.stake);add(pending,g.to,-g.stake);
+        active.push({ico:'⚔️',text:`Duell ${xName(r,g.by)} gegen ${xName(r,g.to)} läuft (${xEvLabel(e)}, ${g.stake} P)`});
+        return;
+      }
+      const a=res.side===g.sideA,b=res.side===g.sideB;
+      if(a===b){ log.push({t:endT(e),ico:'⚔️',text:`Duell ${xName(r,g.by)} gegen ${xName(r,g.to)} ohne Sieger`}); return; }
+      const w=a?g.by:g.to,l=a?g.to:g.by;
+      add(settled,w,g.stake);add(settled,l,-g.stake);
+      log.push({t:endT(e),ico:'⚔️',text:`${xName(r,w)} gewinnt das Duell gegen ${xName(r,l)} (+${g.stake})`});
+    }
+    else if(g.type==='dbl'){
+      const f=xEvById(days,g.ev),e=f&&f.e,res=e&&eventResult(e,r),pk=xPicks(r,g.by)[g.ev];
+      log.push({t:g.t,ico:'🎲',text:`${xName(r,g.by)} setzt „Doppelt oder nichts“ auf ${xEvLabel(e)}`});
+      if(!pk) return;
+      if(!res){ active.push({ico:'🎲',text:`Doppelt oder nichts: ${xName(r,g.by)} auf ${xEvLabel(e)}`}); return; }
+      const pts=ptsFor(pk,res,e)||0;
+      if(pts>0){ add(settled,g.by,pts); log.push({t:endT(e),ico:'🎲',text:`Doppelt! ${xName(r,g.by)} bekommt +${P(pts)} extra`}); }
+      else{ add(settled,g.by,-XG_DBL_LOSS); log.push({t:endT(e),ico:'🎲',text:`Nichts – ${xName(r,g.by)} verliert ${XG_DBL_LOSS} Punkte`}); }
+    }
+    else if(g.type==='pot'){
+      const x=days.find(v=>v.d===g.day); if(!x) return;
+      const pl=Object.entries(g.players||{}).sort((a,b)=>a[1]-b[1]);
+      log.push({t:g.t,ico:'💰',text:`${xName(r,g.by)} eröffnet einen Pott für den ${x.label}: ${g.stake} Punkte Einsatz`,pot:g});
+      pl.forEach(([uid,t])=>{ if(uid!==g.by) log.push({t,ico:'💰',text:`${xName(r,uid)} steigt in den Pott ein`}); });
+      const begonnen=x.evs.some(e=>started(e));
+      if(pl.length<2){
+        if(begonnen) log.push({t:x.start,ico:'💰',text:`Pott vom ${x.label} aufgelöst – zu wenige Mitspieler`});
+        else{ add(pending,g.by,-g.stake); active.push({ico:'💰',text:`Pott für den ${x.label}: ${g.stake} P, wartet auf Mitspieler`}); }
+        return;
+      }
+      const sum=g.stake*pl.length;
+      if(!x.done){
+        pl.forEach(([uid])=>add(pending,uid,-g.stake));
+        active.push({ico:'💰',text:`Pott ${x.label}: ${sum} P im Topf – ${pl.map(([u])=>xName(r,u)).join(', ')}`});
+        return;
+      }
+      const sc=pl.map(([uid])=>({uid,pts:xDayPts(r,uid,x)})),mx=Math.max(...sc.map(v=>v.pts));
+      const win=sc.filter(v=>v.pts===mx).map(v=>v.uid),share=sum/win.length;
+      pl.forEach(([uid])=>add(settled,uid,-g.stake));
+      win.forEach(uid=>add(settled,uid,share));
+      log.push({t:x.end-3,ico:'💰',text:`Pott vom ${x.label} (${sum} P) geht an ${win.map(u=>xName(r,u)).join(' und ')}`});
+    }
+    else if(g.type==='spy'){
+      const f=xEvById(days,g.ev);
+      log.push({t:g.t,ico:'🔍',text:`${xName(r,g.by)} schaut sich die Tipps zu ${xEvLabel(f&&f.e)} an`});
+    }
+    else if(g.type==='rl'){
+      const x=days.find(v=>v.d===g.day);
+      const farbe=g.n===0?'Grün':XG_RED.has(g.n)?'Rot':'Schwarz';
+      if(g.win) add(settled,g.by,g.base); else add(settled,g.by,-g.base);
+      log.push({t:g.t,ico:'🎡',text:`${xName(r,g.by)} dreht Roulette auf ${g.color==='rot'?'Rot':'Schwarz'} – ${g.n} ${farbe}. ${
+        g.win?`Punkte vom ${x?x.label:'Spieltag'} verdoppelt (+${P(g.base)})`:g.n===0?`Die Bank gewinnt (−${P(g.base)})`:`Punkte weg (−${P(g.base)})`}`});
+    }
+  });
+
+  /* Abgeleitete Ansagen am Spieltagsende: Sieger (Roulette) und Letzter (Spion). */
+  days.forEach((x,i)=>{
+    if(!x.done||!isFinite(x.end)) return;
+    const rk=xDayRanking(r,x),next=days[i+1];
+    if(rk.win.length) log.push({t:x.end-2,ico:'🏆',text:`Ende ${x.label}: ${rk.win.map(u=>xName(r,u)).join(' und ')} ${rk.win.length>1?'gewinnen':'gewinnt'} den Spieltag und ${rk.win.length>1?'dürfen':'darf'} Roulette drehen`});
+    if(rk.last.length&&next) log.push({t:x.end-1,ico:'🔍',text:`${rk.last.map(u=>xName(r,u)).join(' und ')} ${rk.last.length>1?'sind':'ist'} Letzter und ${rk.last.length>1?'dürfen':'darf'} beim ${next.label} einen Tipp der anderen ansehen`});
+  });
+  log.forEach(l=>{ if(!isFinite(l.t)) l.t=now; });
+  return {days,settled,pending,log:log.filter(l=>l.t<=now+6e4),active};
+}
+const xSettled=(r,m)=>xOn(r)?(xLedger(r).settled[uidOfM(m)]||0):0;
+/* Gesamtpunkte inkl. Zwischenspielen — überall statt m.pts verwenden, wo angezeigt/sortiert wird. */
+function totalPts(r,m,L){ L=L||(xOn(r)?xLedger(r):null); return m.pts+(L?(L.settled[uidOfM(m)]||0):0); }
+
+/* Was darf ich gerade? Liefert pro Spiel den Zustand fürs Menü. */
+function xAvail(r){
+  const L=xLedger(r),days=L.days,me=meUid(),g=Object.values(r.games||{});
+  const act=xActiveDay(days),open=xOpenDay(days);
+  const upcoming=days.flatMap(x=>x.evs.filter(e=>!started(e))).slice(0,12);
+  const out={};
+  out.duel=r.members.length<2?{ok:false,why:'Du brauchst mindestens einen Freund in der Runde'}
+    :!upcoming.length?{ok:false,why:'Gerade kein Spiel vor dem Anpfiff'}:{ok:true,why:'Fordere einen Freund heraus'};
+  const dblDay=act&&act.d;
+  const hatDbl=g.some(v=>v.type==='dbl'&&v.by===me&&v.day===dblDay);
+  const tippbar=act?act.evs.filter(e=>!started(e)&&r.picks&&r.picks[e.id]):[];
+  out.dbl=hatDbl?{ok:false,why:'Für diesen Spieltag schon eingesetzt'}
+    :!tippbar.length?{ok:false,why:'Tippe zuerst ein Spiel, das noch nicht begonnen hat'}:{ok:true,why:`Einmal pro Spieltag · ${act.label}`,day:act,evs:tippbar};
+  const pot=open&&g.find(v=>v.type==='pot'&&v.day===open.d);
+  const potId=pot&&Object.entries(r.games).find(([,v])=>v===pot)[0];
+  out.pot=!open?{ok:false,why:'Der nächste Spieltag hat schon begonnen'}
+    :r.members.length<2?{ok:false,why:'Du brauchst mindestens einen Freund in der Runde'}
+    :pot?(pot.players&&pot.players[me]?{ok:false,why:`Du bist im Pott für den ${open.label}`}
+      :{ok:true,why:`${xName(r,pot.by)} hat einen Pott eröffnet (${pot.stake} P) – einsteigen?`,join:potId,pot,day:open})
+    :{ok:true,why:`Pott für den ${open.label} eröffnen`,day:open};
+  /* Spion: Letzter des zuletzt abgeschlossenen Spieltags, gültig für den nächsten. */
+  let spy={ok:false,why:'Nur für den Letzten des vorherigen Spieltags'};
+  const doneIdx=days.map((x,i)=>x.done&&isFinite(x.end)?i:-1).filter(i=>i>=0).pop();
+  if(doneIdx!==undefined&&days[doneIdx+1]){
+    const prev=days[doneIdx],next=days[doneIdx+1],rk=xDayRanking(r,prev);
+    if(rk.last.includes(me)){
+      const used=g.some(v=>v.type==='spy'&&v.by===me&&v.day===next.d);
+      const evs=next.evs.filter(e=>!started(e));
+      spy=used?{ok:false,why:`Für den ${next.label} schon genutzt`}
+        :!evs.length?{ok:false,why:'Alle Spiele haben schon begonnen'}
+        :{ok:true,why:`Du warst Letzter – wähle ein Spiel vom ${next.label}`,day:next,evs};
+    }
+  }
+  out.spy=spy;
+  /* Roulette: Sieger des zuletzt abgeschlossenen Spieltags, einmal. */
+  let rl={ok:false,why:'Nur für den Sieger des letzten Spieltags'};
+  if(doneIdx!==undefined){
+    const prev=days[doneIdx],rk=xDayRanking(r,prev);
+    if(rk.win.includes(me)){
+      const used=g.some(v=>v.type==='rl'&&v.by===me&&v.day===prev.d);
+      const base=xDayPts(r,me,prev);
+      rl=used?{ok:false,why:`Für den ${prev.label} schon gedreht`}:{ok:true,why:`Du hast den ${prev.label} gewonnen (${fmtPts(base,r.custom||r.modus!=='regler')} P)`,day:prev,base};
+    }
+  }
+  out.rl=rl;
+  out._upcoming=upcoming;
+  return out;
+}
+
+/* ─── Speichern: einzelne Einträge per Punkt-Pfad, damit gleichzeitige
+   Aktionen anderer nicht überschrieben werden (wie beim Chat mit arrayUnion). */
+async function xSave(r,id,rec){
+  r.games=r.games||{}; r.games[id]=rec;
+  if(!r.fsId||!FB) return true;
+  try{ await FB.updateDoc(FB.doc(FB.db,'rounds',r.fsId),{[`games.${id}`]:rec}); return true; }
+  catch(e){ console.warn('Zwischenspiel speichern:',e); toast('Konnte nicht gespeichert werden'); return false; }
+}
+async function xPatch(r,id,patch){
+  const g=r.games[id]; if(!g) return;
+  const upd={};
+  Object.entries(patch).forEach(([k,v])=>{
+    if(k.includes('.')){ const [a,b]=k.split('.'); g[a]=g[a]||{}; g[a][b]=v; }
+    else g[k]=v;
+    upd[`games.${id}.${k}`]=v;
+  });
+  if(!r.fsId||!FB) return;
+  try{ await FB.updateDoc(FB.doc(FB.db,'rounds',r.fsId),upd); }
+  catch(e){ console.warn('Zwischenspiel aktualisieren:',e); toast('Konnte nicht gespeichert werden'); }
+}
+
+/* ─── Chat als Protokoll: Nachrichten + abgeleitete Spiel-Ereignisse, zeitlich
+   sortiert, mit Spieltags-Trennern wie die Datumszeilen bei WhatsApp. */
+function chatHtml(r){
+  const my=meUid();
+  const L=xLedger(r),days=L.days;
+  const items=[
+    ...(r.chat||[]).map(m=>({t:m.t||0,msg:m})),
+    ...L.log.map(l=>({t:l.t,sys:l}))
+  ].sort((a,b)=>a.t-b.t);
+  if(!items.length) return '<div class="empty">Noch keine Nachrichten. Fang an.</div>';
+  let lastLabel=null,out='';
+  items.forEach(it=>{
+    const x=days.length?xDayAt(days,it.t):null,label=x?x.label:null;
+    if(label&&label!==lastLabel){ out+=`<div class="xsep"><span>${esc(label)}</span></div>`; lastLabel=label; }
+    if(it.sys){
+      const l=it.sys;
+      let act='';
+      /* Offene Herausforderung an mich: direkt im Chat annehmen/ablehnen. */
+      if(l.duel&&l.duel.status==='open'&&l.duel.to===my){
+        const f=xEvById(days,l.duel.ev);
+        if(f&&!started(f.e)){
+          const id=l.duel.id;
+          if(id) act=`<div class="xact"><button class="mini ok" data-xacc="${id}">Annehmen</button><button class="mini no" data-xdec="${id}">Ablehnen</button></div>`;
+        }
+      }
+      if(l.pot&&!(l.pot.players||{})[my]){
+        const x2=days.find(v=>v.d===l.pot.day);
+        if(x2&&!x2.evs.some(e=>started(e))){
+          const id=l.pot.id;
+          if(id) act=`<div class="xact"><button class="mini ok" data-xjoin="${id}">Einsteigen (${l.pot.stake} P)</button></div>`;
+        }
+      }
+      out+=`<div class="xsys"><span class="i">${l.ico}</span><span>${esc(l.text)}</span>${act}</div>`;
+      return;
+    }
+    const m=it.msg,mine=m.who===my;
+    out+=`<div class="msg${mine?' mine':''}">
+      ${mine?'':`<span class="au">${esc(m.name)}</span>`}
+      ${m.sticker?(stk(m.sticker).w
+        ?`<span class="stk word">${stk(m.sticker).w}</span>`
+        :`<span class="stk">${stk(m.sticker).e}</span>`)
+        :`<div class="bub">${esc(m.text)}</div>`}</div>`;
+  });
+  return out;
+}
+
+/* ─── Kleines Overlay für die Abläufe der Zwischenspiele. */
+function xModal(html){
+  xClose();
+  const w=document.createElement('div');w.className='xmodal';
+  w.innerHTML=`<div class="xm-card">${html}</div>`;
+  w.addEventListener('click',e=>{ if(e.target===w) xClose(); });
+  document.body.appendChild(w);
+  return w.querySelector('.xm-card');
+}
+function xClose(){ document.querySelectorAll('.xmodal').forEach(m=>m.remove()); }
+const xOpt=(attr,val,label,sel)=>`<button class="xopt${sel?' on':''}" ${attr}="${esc(String(val))}">${label}</button>`;
+function xRefresh(){
+  const r=R(); if(!r) return;
+  const list=document.getElementById('chatList');
+  if(S.tab==='chat'&&list){ list.innerHTML=chatHtml(r); bindChatActions(r); window.scrollTo(0,1e6); }
+  else if(S.screen==='round') render();
+}
+
+/* ─── Das Plus-Menü mit allen Zwischenspielen. */
+function xMenu(){
+  const r=R(),av=xAvail(r);
+  const card=xModal(`<div class="xm-h">Zwischenspiele</div>
+    ${['duel','dbl','pot','spy','rl'].map(k=>`
+      <div class="xg${av[k].ok?'':' off'}">
+        <button class="xg-main" data-xg="${k}" ${av[k].ok?'':'disabled'}>
+          <span class="xg-ico">${XG[k].ico}</span>
+          <span class="xg-t"><b>${XG[k].name}</b><small>${esc(av[k].why)}</small></span>
+        </button>
+        <button class="xg-q" data-xq="${k}" aria-label="Erklärung">?</button>
+      </div>
+      <div class="xg-help" id="xh-${k}" hidden>${esc(XG[k].help)}</div>`).join('')}
+    <button class="btn" style="margin-top:14px;background:var(--raise);color:var(--text)" data-xclose>Schließen</button>`);
+  card.querySelectorAll('[data-xq]').forEach(b=>b.onclick=()=>{const h=card.querySelector('#xh-'+b.dataset.xq);h.hidden=!h.hidden;});
+  card.querySelector('[data-xclose]').onclick=xClose;
+  card.querySelectorAll('[data-xg]').forEach(b=>b.onclick=()=>({duel:xDuelFlow,dbl:xDblFlow,pot:xPotFlow,spy:xSpyFlow,rl:xRlFlow})[b.dataset.xg](r,av[b.dataset.xg],av));
+}
+
+/* ─── Duell */
+function xDuelFlow(r,a,av){
+  const me=meUid(),st={to:null,ev:null,side:null,stake:10};
+  const others=r.members.filter(m=>uidOfM(m)!==me);
+  const evs=av._upcoming;
+  const draw=()=>{
+    const e=evs.find(v=>v.id===st.ev);
+    const card=xModal(`<div class="xm-h">⚔️ Duell</div>
+      <div class="xm-l">Gegner</div><div class="xopts">${others.map(m=>xOpt('data-to',uidOfM(m),esc(m.name),st.to===uidOfM(m))).join('')}</div>
+      <div class="xm-l">Spiel</div><div class="xopts">${evs.map(v=>xOpt('data-ev',v.id,esc(xEvLabel(v)),st.ev===v.id)).join('')}</div>
+      ${e?`<div class="xm-l">Dein Tipp</div><div class="xopts">${e.sides.map(s=>xOpt('data-side',s.key,esc(xSideLabel(e,s.key)),st.side===s.key)).join('')}</div>`:''}
+      <div class="xm-l">Einsatz</div><div class="xopts">${[5,10,20].map(n=>xOpt('data-stake',n,n+' P',st.stake===n)).join('')}</div>
+      <button class="btn" id="xgo" ${st.to&&st.ev&&st.side?'':'disabled'} style="margin-top:14px">Herausfordern</button>`);
+    card.querySelectorAll('[data-to]').forEach(b=>b.onclick=()=>{st.to=b.dataset.to;draw();});
+    card.querySelectorAll('[data-ev]').forEach(b=>b.onclick=()=>{st.ev=b.dataset.ev;st.side=null;draw();});
+    card.querySelectorAll('[data-side]').forEach(b=>b.onclick=()=>{st.side=b.dataset.side;draw();});
+    card.querySelectorAll('[data-stake]').forEach(b=>b.onclick=()=>{st.stake=+b.dataset.stake;draw();});
+    card.querySelector('#xgo').onclick=async()=>{
+      const f=xEvById(xDays(r),st.ev);
+      await xSave(r,xNewId(),{type:'duel',by:me,to:st.to,ev:st.ev,day:f?f.x.d:0,stake:st.stake,sideA:st.side,sideB:null,status:'open',t:Date.now(),ta:null});
+      xClose();toast('Herausforderung gesendet');xRefresh();
+    };
+  };
+  draw();
+}
+function xDuelAccept(r,id){
+  const g=r.games[id],f=xEvById(xDays(r),g.ev),e=f&&f.e;
+  if(!e||started(e)) return toast('Das Spiel hat schon begonnen');
+  const card=xModal(`<div class="xm-h">⚔️ Duell annehmen</div>
+    <p class="hint" style="margin:0 0 10px">${esc(xName(r,g.by))} tippt bei ${esc(xEvLabel(e))} auf ${esc(xSideLabel(e,g.sideA))}, Einsatz ${g.stake} Punkte. Wähle deine Seite:</p>
+    <div class="xopts">${e.sides.filter(s=>s.key!==g.sideA).map(s=>xOpt('data-side',s.key,esc(xSideLabel(e,s.key)))).join('')}</div>`);
+  card.querySelectorAll('[data-side]').forEach(b=>b.onclick=async()=>{
+    await xPatch(r,id,{status:'on',sideB:b.dataset.side,ta:Date.now()});
+    xClose();toast('Duell angenommen');xRefresh();
+  });
+}
+
+/* ─── Doppelt oder nichts */
+function xDblFlow(r,a){
+  const card=xModal(`<div class="xm-h">🎲 Doppelt oder nichts</div>
+    <p class="hint" style="margin:0 0 10px">Welchen deiner Tipps setzt du? Richtig: Punkte doppelt. Falsch: −${XG_DBL_LOSS} Punkte.</p>
+    <div class="xopts">${a.evs.map(e=>xOpt('data-ev',e.id,esc(xEvLabel(e)))).join('')}</div>`);
+  card.querySelectorAll('[data-ev]').forEach(b=>b.onclick=async()=>{
+    await xSave(r,xNewId(),{type:'dbl',by:meUid(),ev:b.dataset.ev,day:a.day.d,t:Date.now()});
+    xClose();toast('Gesetzt');xRefresh();
+  });
+}
+
+/* ─── Pott */
+function xPotFlow(r,a){
+  if(a.join){
+    const card=xModal(`<div class="xm-h">💰 Pott</div>
+      <p class="hint" style="margin:0 0 12px">${esc(xName(r,a.pot.by))} hat einen Pott für den ${esc(a.day.label)} eröffnet. Einsatz: ${a.pot.stake} Punkte. Wer am Spieltag die meisten Punkte holt, bekommt alles.</p>
+      <button class="btn" id="xgo">Einsteigen</button>`);
+    card.querySelector('#xgo').onclick=async()=>{ await xPatch(r,a.join,{['players.'+meUid()]:Date.now()}); xClose();toast('Du bist im Pott');xRefresh(); };
+    return;
+  }
+  let stake=10;
+  const draw=()=>{
+    const card=xModal(`<div class="xm-h">💰 Pott eröffnen</div>
+      <p class="hint" style="margin:0 0 10px">Für den ${esc(a.day.label)}. Die anderen können bis zum ersten Anpfiff einsteigen.</p>
+      <div class="xm-l">Einsatz pro Person</div><div class="xopts">${[5,10,20].map(n=>xOpt('data-stake',n,n+' P',stake===n)).join('')}</div>
+      <button class="btn" id="xgo" style="margin-top:14px">Pott eröffnen</button>`);
+    card.querySelectorAll('[data-stake]').forEach(b=>b.onclick=()=>{stake=+b.dataset.stake;draw();});
+    card.querySelector('#xgo').onclick=async()=>{
+      const t=Date.now();
+      await xSave(r,xNewId(),{type:'pot',by:meUid(),day:a.day.d,stake,players:{[meUid()]:t},t});
+      xClose();toast('Pott eröffnet');xRefresh();
+    };
+  };
+  draw();
+}
+
+/* ─── Spion */
+function xSpyFlow(r,a){
+  const card=xModal(`<div class="xm-h">🔍 Spion</div>
+    <p class="hint" style="margin:0 0 10px">Bei welchem Spiel willst du die Tipps der anderen sehen? Du hast nur einen Versuch.</p>
+    <div class="xopts">${a.evs.map(e=>xOpt('data-ev',e.id,esc(xEvLabel(e)))).join('')}</div>`);
+  card.querySelectorAll('[data-ev]').forEach(b=>b.onclick=async()=>{
+    const e=a.evs.find(v=>v.id===b.dataset.ev);
+    await xSave(r,xNewId(),{type:'spy',by:meUid(),ev:e.id,day:a.day.d,t:Date.now()});
+    const rows=r.members.filter(m=>uidOfM(m)!==meUid()).map(m=>{
+      const p=xPicks(r,uidOfM(m))[e.id];
+      const was=!p?'noch kein Tipp':p.type==='exact'?p.side:xSideLabel(e,p.side);
+      return `<div class="xspy"><span>${esc(m.name)}</span><b>${esc(was)}</b></div>`;}).join('');
+    const c2=xModal(`<div class="xm-h">🔍 ${esc(xEvLabel(e))}</div>${rows||'<p class="hint">Keine Mitspieler.</p>'}
+      <button class="btn" style="margin-top:14px" data-xclose>Verstanden</button>`);
+    c2.querySelector('[data-xclose]').onclick=()=>{xClose();xRefresh();};
+  });
+}
+
+/* ─── Roulette: europäischer Kessel, 18 Rot, 18 Schwarz, 1 Grün. */
+const XG_WHEEL=[0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,33,1,20,14,31,9,22,18,29,7,28,12,35,3,26];
+function xRlFlow(r,a){
+  const custom=r.custom||r.modus!=='regler';
+  const seg=360/XG_WHEEL.length;
+  const grad=XG_WHEEL.map((n,i)=>`${n===0?'#1f9d55':XG_RED.has(n)?'#c0392b':'#15171b'} ${i*seg}deg ${(i+1)*seg}deg`).join(',');
+  const card=xModal(`<div class="xm-h">🎡 Roulette</div>
+    <p class="hint" style="margin:0 0 12px">Einsatz: deine ${fmtPts(a.base,custom)} Punkte vom ${esc(a.day.label)}. Richtige Farbe verdoppelt sie, falsche Farbe oder Grün nimmt sie dir. Du musst nicht drehen.</p>
+    <div class="xwheel-wrap"><div class="xptr"></div><div class="xwheel" id="xw" style="background:conic-gradient(${grad})"><div class="xhub" id="xn"></div></div></div>
+    <div class="xopts" style="margin-top:14px">
+      <button class="xopt xred" data-c="rot">Rot</button><button class="xopt xblk" data-c="schwarz">Schwarz</button></div>
+    <button class="btn" style="margin-top:10px;background:var(--raise);color:var(--text)" data-xclose>Lieber nicht</button>`);
+  card.querySelector('[data-xclose]').onclick=xClose;
+  card.querySelectorAll('[data-c]').forEach(b=>b.onclick=async()=>{
+    card.querySelectorAll('button').forEach(x=>x.disabled=true);
+    const buf=new Uint32Array(1);crypto.getRandomValues(buf);
+    const n=buf[0]%37,color=b.dataset.c,win=n!==0&&(color==='rot')===XG_RED.has(n);
+    const idx=XG_WHEEL.indexOf(n);
+    /* Zeiger steht oben: Rad so drehen, dass die Mitte des Zielfelds oben landet. */
+    const deg=360*6+(360-(idx*seg+seg/2));
+    const w=card.querySelector('#xw');
+    w.style.transition='transform 4.2s cubic-bezier(.12,.72,.14,1)';
+    requestAnimationFrame(()=>w.style.transform=`rotate(${deg}deg)`);
+    await new Promise(res=>setTimeout(res,4400));
+    const hub=card.querySelector('#xn');hub.textContent=n;
+    hub.style.background=n===0?'#1f9d55':XG_RED.has(n)?'#c0392b':'#15171b';
+    await xSave(r,xNewId(),{type:'rl',by:meUid(),day:a.day.d,color,n,win,base:a.base,t:Date.now()});
+    const res=document.createElement('div');res.className='xrl-res '+(win?'w':'l');
+    res.textContent=win?`${n} – gewonnen! +${fmtPts(a.base,custom)} Punkte`:`${n} – leider verloren. −${fmtPts(a.base,custom)} Punkte`;
+    card.appendChild(res);
+    const ok=document.createElement('button');ok.className='btn';ok.style.marginTop='12px';ok.textContent='Weiter';
+    ok.onclick=()=>{xClose();xRefresh();};card.appendChild(ok);
+  });
+}
+
+/* Buttons direkt im Chat-Protokoll (Duell annehmen/ablehnen, in Pott einsteigen). */
+function bindChatActions(r){
+  document.querySelectorAll('[data-xacc]').forEach(b=>b.onclick=()=>xDuelAccept(r,b.dataset.xacc));
+  document.querySelectorAll('[data-xdec]').forEach(b=>b.onclick=async()=>{
+    await xPatch(r,b.dataset.xdec,{status:'no',ta:Date.now()});toast('Abgelehnt');xRefresh();});
+  document.querySelectorAll('[data-xjoin]').forEach(b=>b.onclick=async()=>{
+    await xPatch(r,b.dataset.xjoin,{['players.'+meUid()]:Date.now()});toast('Du bist im Pott');xRefresh();});
+}
+
+/* Live-Abgleich der Runde (Chat, Zwischenspiele, Tipps der anderen) — solange
+   man in der Runde ist, nicht nur im Chat-Tab. */
+function ensureRoundSync(r){
+  if(!r.fsId||!FB||chatUnsubRoundId===r.id) return;
+  stopChatSync();
+  chatUnsubRoundId=r.id;
+  chatUnsub=FB.onSnapshot(FB.doc(FB.db,'rounds',r.fsId),snap=>{
+    const d=snap.data(); if(!d) return;
+    r.chat=d.chat||[]; r.games=d.games||{}; if(d.picks) r.memberPicks=d.picks;
+    if(S.screen!=='round'||S.roundId!==r.id||document.querySelector('.xmodal')) return;
+    if(S.tab==='chat'){
+      const list=document.getElementById('chatList');
+      if(list){ list.innerHTML=chatHtml(r); bindChatActions(r); window.scrollTo(0,1e6); }
+    }else if(S.tab==='tabelle') tabTable();
+  },e=>console.warn('Runden-Live-Sync:',e));
+}
+
 function tabChat(){
   const r=R(),b=app.querySelector('#body');
-  if(!S.premium){S.tab='tippen';return render();}
   b.style.paddingBottom='160px';
   b.innerHTML=`<div class="chat" id="chatList">${chatHtml(r)}</div>`;
-
-  /* Live-Listener nur einmal pro Runde aufsetzen, nicht bei jedem Tastenanschlag neu —
-     sonst würden sich mit der Zeit mehrere Listener stapeln. Er aktualisiert NUR die
-     Nachrichtenliste, nicht das Eingabefeld, damit man beim Tippen nicht unterbrochen wird. */
-  if(r.fsId&&FB&&chatUnsubRoundId!==r.id){
-    stopChatSync();
-    chatUnsubRoundId=r.id;
-    chatUnsub=FB.onSnapshot(FB.doc(FB.db,'rounds',r.fsId),snap=>{
-      const d=snap.data(); if(!d) return;
-      r.chat=d.chat||[];
-      if(S.screen==='round'&&S.tab==='chat'&&S.roundId===r.id){
-        const list=document.getElementById('chatList');
-        if(list){ list.innerHTML=chatHtml(r); window.scrollTo(0,1e6); }
-      }
-    },e=>console.warn('Chat-Live-Sync:',e));
-  }
+  bindChatActions(r);
+  ensureRoundSync(r);
 
   app.querySelector('#foot').innerHTML=`
     ${S.picker?`<div class="picker">${STICKERS.map(s=>
       `<button data-s="${s.id}" class="${s.w?'w':''}">${s.w||s.e}</button>`).join('')}</div>`:''}
     <div class="composer">
+      ${xOn(r)?'<button class="gh xplus" id="cx" aria-label="Zwischenspiele">+</button>':''}
       <input type="text" id="ci" placeholder="Nachricht an die Runde …" maxlength="240">
       <button class="gh" id="cs" aria-label="Sticker">😀</button>
       <button id="cb" aria-label="Senden">➤</button>
     </div>`;
   const inp=app.querySelector('#ci'),down=()=>setTimeout(()=>window.scrollTo(0,1e6),40);
-  const refreshList=()=>{const list=document.getElementById('chatList');if(list)list.innerHTML=chatHtml(r);};
+  const refreshList=()=>{const list=document.getElementById('chatList');if(list){list.innerHTML=chatHtml(r);bindChatActions(r);}};
   const send=()=>{const v=inp.value.trim();if(!v)return;
-    const msg={who:myUid()||'me',name:S.user?.displayName||'Du',text:v,t:Date.now()};
+    const msg={who:meUid(),name:S.user?.displayName||'Du',text:v,t:Date.now()};
     r.chat.push(msg);inp.value='';S.picker=false;
     refreshList();down();syncChatMsg(r,msg);};
   app.querySelector('#cb').onclick=send;
   inp.onkeydown=e=>{if(e.key==='Enter')send();};
   app.querySelector('#cs').onclick=()=>{S.picker=!S.picker;render();};
+  const cx=app.querySelector('#cx'); if(cx) cx.onclick=xMenu;
   app.querySelectorAll('[data-s]').forEach(x=>x.onclick=()=>{
-    const msg={who:myUid()||'me',name:S.user?.displayName||'Du',sticker:x.dataset.s,t:Date.now()};
+    const msg={who:meUid(),name:S.user?.displayName||'Du',sticker:x.dataset.s,t:Date.now()};
     r.chat.push(msg);S.picker=false;
     refreshList();down();syncChatMsg(r,msg);});
   down();
@@ -3793,7 +4310,7 @@ function autoSettle(){
 function rollUp(gain){
   const custom=R().custom||R().modus!=='regler';
   app.querySelectorAll('[data-p]').forEach(el=>{
-    const id=el.dataset.p,to=R().members.find(m=>m.id===id).pts,g=gain[id]||0,from=to-g;
+    const id=el.dataset.p,to=totalPts(R(),R().members.find(m=>m.id===id)),g=gain[id]||0,from=to-g;
     const dl=app.querySelector(`[data-d="${id}"]`),t0=performance.now();
     (function step(t){
       const k=Math.min(1,(t-t0)/950),e=1-(1-k)**3;
@@ -3833,7 +4350,7 @@ function vProfile(){
     ${mine.map(r=>`<button class="round" data-r="${r.id}">
       <div class="top"><span class="pill b">${compTag(r,true)}</span>
         <span class="nm">${esc(r.name)}</span><span class="arw">›</span></div>
-      <div class="row"><div>Punkte<b class="hot">${fmtPts(r.members.find(m=>m.id==='me').pts,r.custom||r.modus!=='regler')}</b></div>
+      <div class="row"><div>Punkte<b class="hot">${fmtPts(totalPts(r,r.members.find(m=>m.id==='me')),r.custom||r.modus!=='regler')}</b></div>
         <div>Mitglieder<b>${r.members.length}</b></div></div>
     </button>`).join('')}
   </main>`;

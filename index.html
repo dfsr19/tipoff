@@ -756,6 +756,11 @@ async function loadData(){
         ev.ufc=d.fights.map(f=>({...f,sport:'mma',day:1,start:new Date(f.start)}));
     }
     if(!Object.keys(ev).length) throw 0;
+    /* Quote unbekannt (Kampf ist vorbei, Original nie gesehen): intern 1.01, damit
+       keine Rechnung an null scheitert — angezeigt wird aber ein Strich bzw. die
+       Quote, die beim eigenen Tipp eingefroren wurde. */
+    Object.values(ev).forEach(list=>list.forEach(m=>(m.sides||[]).forEach(sd=>{
+      if(sd.q==null||!isFinite(sd.q)){ sd.q=1.01; sd.qx=true; } })));
     net.data='live'; net.updated=d.updated?new Date(d.updated):null;
     net.comps=Object.keys(ev);
     return ev;
@@ -1072,6 +1077,7 @@ function fireToLocal(id,d,uid){
   r.picks=(d.picks&&d.picks[uid])||{};
   r.settled=d.settled||{};
   r.settledEvents=d.settledEvents||{};
+  r.bk=d.bk||{};
   r.memberPicks=d.picks||{};
   r.fsId=id;r.ownerUid=d.ownerUid;r.memberUids=d.memberUids||[];
   return r;
@@ -1146,7 +1152,7 @@ async function fsSyncResults(r){
 async function fsSyncSettle(r){
   if(!r.fsId||!FB) return;
   try{
-    const updates={settledEvents:r.settledEvents||{}};
+    const updates={settledEvents:r.settledEvents||{},bk:r.bk||{}};
     r.members.forEach(m=>{ const uid=m.id==='me'?myUid():m.id;
       if(uid) updates[`members.${uid}.pts`]=m.pts; });
     await FB.updateDoc(FB.doc(FB.db,'rounds',r.fsId),updates);
@@ -3068,7 +3074,8 @@ function matchCard(ev,isMain){
     if(ev.noOdds) b.classList.add('big');
     b.innerHTML=(ev.noOdds
       ?`<span class="q" style="font-size:13.5px;line-height:1.25${istSieger?';color:var(--win)':''}">${esc(bez)}</span>`
-      :`<span class="sd">${esc(s.label)}</span><span class="q"${istSieger?' style="color:var(--win)"':''}>${fq(s.q)}</span>`)
+      :`<span class="sd">${esc(s.label)}</span><span class="q"${istSieger?' style="color:var(--win)"':''}>${
+        s.qx?((R().picks[ev.id]&&R().picks[ev.id].side===s.key)?fq(R().picks[ev.id].q):'–'):fq(s.q)}</span>`)
       +(istSieger?'<span class="siegtag">Sieg</span>':'');
     if(!zu) b.onclick=()=>pick(ev,s,'tendency');
     else b.style.opacity=warMeinTipp?'1':'.5';
@@ -3173,10 +3180,11 @@ function matchCard(ev,isMain){
 function pick(ev,s,type){
   const r=R(),cur=r.picks[ev.id];
   if(cur&&cur.type===type&&cur.side===s.key) delete r.picks[ev.id];
-  else if(cur) Object.assign(cur,{side:s.key,q:s.q,type});
+  else if(cur) Object.assign(cur,{side:s.key,q:s.q,type},ev.sport==='mma'?{n:s.key==='A'?ev.home:ev.away}:{});
   else{
     if(!ev.noStake&&left()<5) return toast('Budget aufgebraucht');
     r.picks[ev.id]={side:s.key,q:s.q,type,stake:ev.noStake?0:Math.min(10,left())};
+    if(ev.sport==='mma') r.picks[ev.id].n=s.key==='A'?ev.home:ev.away;
   }
   r.pendingSync=r.pendingSync||{};r.pendingSync[ev.id]=true;
   render();
@@ -3940,6 +3948,11 @@ function ensureRoundSync(r){
   chatUnsub=FB.onSnapshot(FB.doc(FB.db,'rounds',r.fsId),snap=>{
     const d=snap.data(); if(!d) return;
     r.chat=d.chat||[]; r.games=d.games||{}; if(d.picks) r.memberPicks=d.picks;
+    if(d.bk) r.bk=d.bk;
+    if(d.members) r.members.forEach(m=>{const uid=m.id==='me'?myUid():m.id;
+      if(uid&&d.members[uid]&&typeof d.members[uid].pts==='number') m.pts=d.members[uid].pts;});
+    if(d.settledEvents) r.settledEvents=d.settledEvents;
+    try{ rekeyPicks(r); reconcileRound(r); }catch(e){}
     if(S.screen!=='round'||S.roundId!==r.id||document.querySelector('.xmodal')) return;
     if(S.tab==='chat'){
       const list=document.getElementById('chatList');
@@ -4241,10 +4254,15 @@ function applySettle(r,evsToSettle,real){
       theirs=m.id==='me'?r.picks:botPicks(evsToSettle);
     }
     let sum=0;
+    const uidB=m.id==='me'?(myUid()||'me'):m.id;
     evsToSettle.forEach(ev=>{
-      const p=theirs[ev.id]; if(!p) return;
+      const p=theirs[ev.id];
       const res=ev._simRes||eventResult(ev,r);
-      if(res) sum+=ptsFor(p,res,ev);
+      const v=(p&&res)?(ptsFor(p,res,ev)||0):0;
+      sum+=v;
+      /* Echte Ergebnisse werden pro Kampf/Spiel und Person festgehalten, damit
+         eine spätere Korrektur genau diesen Betrag ersetzen kann. */
+      if(res&&!ev._simRes){ r.bk=r.bk||{}; (r.bk[ev.id]=r.bk[ev.id]||{})[uidB]=v; }
     });
     gain[m.id]=sum;
   });
@@ -4280,6 +4298,73 @@ function probelaufZuruecksetzen(){
   render();
 }
 
+
+/* ══════════ TIPPS AN DEN NAMEN BINDEN ══════════
+   Bei UFC hieß "A"/"B" früher nur "erster/zweiter Kämpfer in der Liste" — und die
+   Liste konnte sich nach dem Kampf umdrehen. Ab jetzt trägt jeder UFC-Tipp den
+   Namen des Kämpfers (n). Vor jeder Auswertung wird die Seite aus dem Namen neu
+   bestimmt, egal wie herum die Daten gerade geliefert werden. */
+const nmNorm=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z]/g,'');
+const nmGleich=(a,b)=>{a=nmNorm(a);b=nmNorm(b);return !!a&&!!b&&(a===b||a.endsWith(b)||b.endsWith(a));};
+function rekeyPicks(r){
+  if(!r||r.sport!=='mma'||r.custom) return;
+  const byId={}; evOf(r.compId).forEach(e=>byId[e.id]=e);
+  const fix=(picks,eigen)=>Object.entries(picks||{}).forEach(([id,p])=>{
+    const e=byId[id]; if(!e||!p||p.type==='exact') return;
+    if(p.n){
+      const k=nmGleich(p.n,e.home)?'A':nmGleich(p.n,e.away)?'B':null;
+      if(k&&k!==p.side) p.side=k;
+    }else if(eigen&&(e.fest||!e.finished)){
+      /* Alte eigene Tipps nachträglich mit Namen versehen — aber nur, wenn die
+         Reihenfolge gesichert ist (laufend gelistet oder vom Server festgehalten). */
+      p.n=p.side==='A'?e.home:e.away;
+      fsSyncPick(r,id);
+    }
+  });
+  fix(r.picks,true);
+  Object.values(r.memberPicks||{}).forEach(mp=>fix(mp,false));
+}
+
+/* ══════════ SELBSTKORREKTUR DER PUNKTE ══════════
+   Früher wurden Punkte einmal aufaddiert und nie wieder angefasst. Änderte sich
+   danach ein Ergebnis oder seine Zuordnung, liefen Anzeige ("+234") und
+   Gesamtstand ("216,1") für immer auseinander. Jetzt gilt: Für jedes gewertete
+   Spiel ist pro Person der gebuchte Betrag gespeichert (r.bk). Weicht die
+   aktuelle, korrekte Wertung davon ab, wird genau die Differenz nachgebucht. */
+function reconcileRound(r){
+  if(!r||!r.joined||(r._probelauf&&Object.keys(r._probelauf).length)) return 0;
+  r.settledEvents=r.settledEvents||{}; r.bk=r.bk||{};
+  const list=withModus(r, r.custom?(r.events||[]):evOf(r.compId));
+  const byId={}; list.forEach(e=>byId[e.id]=e);
+  const ids=Object.keys(r.settledEvents).filter(id=>r.settledEvents[id]);
+  if(!ids.length) return 0;
+  /* Sind ALLE jemals gewerteten Spiele dieser Runde noch mit Ergebnis in den Daten,
+     wird der Stand einfach vollständig neu ausgerechnet — ohne Annahmen darüber,
+     was früher gebucht wurde. Nur wenn ältere Spiele schon aus den Daten gefallen
+     sind (z.B. frühere UFC-Karten), wird über die gespeicherten Einzelbuchungen
+     (r.bk) korrigiert — und zwar nur dort, wo eine Buchung wirklich bekannt ist. */
+  const alleDa=ids.every(id=>byId[id]&&eventResult(byId[id],r));
+  let geaendert=0,bkNeu=false;
+  r.members.forEach(m=>{
+    if(!r.fsId&&m.id!=='me') return;             // Demo-Bots nicht nachrechnen
+    const uid=m.id==='me'?(myUid()||'me'):m.id;
+    const picks=m.id==='me'?r.picks:((r.memberPicks&&r.memberPicks[uid])||{});
+    let summe=0;
+    ids.forEach(id=>{
+      const ev=byId[id]; if(!ev) return;
+      const res=eventResult(ev,r); if(!res) return;
+      const p=picks[id], richtig=p?(ptsFor(p,res,ev)||0):0;
+      summe+=richtig;
+      const gebucht=r.bk[id]&&r.bk[id][uid];
+      if(!alleDa&&gebucht!==undefined&&Math.abs(richtig-gebucht)>1e-9){ m.pts+=richtig-gebucht; geaendert++; }
+      if(!r.bk[id]||r.bk[id][uid]!==richtig){ (r.bk[id]=r.bk[id]||{})[uid]=richtig; bkNeu=true; }
+    });
+    if(alleDa&&Math.abs(m.pts-summe)>1e-6){ m.pts=summe; geaendert++; }
+  });
+  if(geaendert||bkNeu) fsSyncSettle(r);
+  return geaendert;
+}
+
 /* ══════════ AUTOMATISCHE AUSWERTUNG ══════════
    Läuft nach jedem Datenabruf: Sobald für ein einzelnes Spiel/einen Kampf ein
    echtes Ergebnis vorliegt und irgendwer darauf getippt hat, werden die Punkte
@@ -4295,14 +4380,15 @@ function autoSettle(){
        eigenen Versuch; schlägt einer fehl, probiert es der nächste Aufruf erneut. */
     try{
       r.settledEvents=r.settledEvents||{};
+      rekeyPicks(r);
       const list=withModus(r, r.custom?(r.events||[]):evOf(r.compId));
       const getippteIds=new Set([
         ...Object.keys(r.picks||{}),
         ...(r.memberPicks?Object.values(r.memberPicks).flatMap(mp=>mp?Object.keys(mp):[]):[])
       ]);
       const neu=list.filter(e=>getippteIds.has(e.id)&&!r.settledEvents[e.id]&&eventResult(e,r));
-      if(!neu.length) return;
-      applySettle(r,neu,true); n++;
+      if(neu.length){ applySettle(r,neu,true); n++; }
+      if(reconcileRound(r)) n++;
     }catch(e){ console.warn('Auswertung fehlgeschlagen für Runde',r.id,e); }
   });
   return n;

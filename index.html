@@ -462,6 +462,8 @@ textarea{min-height:88px;resize:vertical;line-height:1.55}
 
 /* ═══════ ZWISCHENSPIELE ═══════ */
 .composer button.xplus{font-size:24px;font-weight:400;line-height:1}
+.qfolgt{margin-top:10px;padding:11px 13px;border-radius:12px;background:var(--raise);border:1px dashed var(--line-2);
+  color:var(--muted);font-size:12.5px;line-height:1.45;text-align:center}
 .xsep{display:flex;justify-content:center;margin:10px 0 2px}
 .xsep span{background:var(--raise);border:1px solid var(--line-2);color:var(--muted);font-size:11px;font-weight:700;
   text-transform:uppercase;letter-spacing:.06em;padding:5px 12px;border-radius:20px}
@@ -759,8 +761,11 @@ async function loadData(){
     /* Quote unbekannt (Kampf ist vorbei, Original nie gesehen): intern 1.01, damit
        keine Rechnung an null scheitert — angezeigt wird aber ein Strich bzw. die
        Quote, die beim eigenen Tipp eingefroren wurde. */
-    Object.values(ev).forEach(list=>list.forEach(m=>(m.sides||[]).forEach(sd=>{
-      if(sd.q==null||!isFinite(sd.q)){ sd.q=1.01; sd.qx=true; } })));
+    Object.values(ev).forEach(list=>list.forEach(m=>{
+      (m.sides||[]).forEach(sd=>{ if(sd.q==null||!isFinite(sd.q)){ sd.q=1.01; sd.qx=true; } });
+      /* Noch keine Marktquote: Spiel ist (noch) nicht tippbar — "Quote folgt". */
+      if(m.sides&&m.sides.length&&m.sides.every(sd=>sd.qx)) m.noQuote=true;
+    }));
     net.data='live'; net.updated=d.updated?new Date(d.updated):null;
     net.comps=Object.keys(ev);
     return ev;
@@ -1404,7 +1409,7 @@ function nextUpOf(r){
 function openPicksOf(r){
   const n=nextUpOf(r); if(!n) return 0;
   r.picks=r.picks||{};
-  return n.events.filter(e=>!r.picks[e.id]).length;
+  return n.events.filter(e=>!r.picks[e.id]&&!e.noQuote).length;
 }
 
 const fmt=n=>n.toLocaleString('de-DE',{minimumFractionDigits:1,maximumFractionDigits:1});
@@ -1432,7 +1437,7 @@ function ptsFor(pick,res,ev){
     if(parts.length!==2||parts.some(n=>isNaN(n))) return 0;
     const[h,a]=parts;
     const tend=h>a?'1':h<a?'2':'X';
-    if(tend===res.side) return einsatz*(ev?.sides.find(s=>s.key===tend)?.q||1);
+    if(tend===res.side) return einsatz*(pick.qt||ev?.sides.find(s=>s.key===tend)?.q||1);
     return 0;
   }
   return res.side===pick.side?einsatz*pick.q:0;
@@ -1462,11 +1467,11 @@ function simulate(evs){
 }
 function botPicks(evs){
   const p={};let rest=CFG.budget;
-  const sel=[...evs].sort(()=>Math.random()-.5).slice(0,3+Math.floor(Math.random()*4));
+  const sel=[...evs].filter(ev=>!ev.noQuote).sort(()=>Math.random()-.5).slice(0,3+Math.floor(Math.random()*4));
   sel.forEach((ev,i)=>{
     const st=i===sel.length-1?rest:Math.max(5,Math.round(rest/(sel.length-i)*(.6+Math.random()*.7)/5)*5);
     if(st>rest||st<=0)return;
-    const ex=ev.exact&&Math.random()<.28;
+    const ex=ev.exact&&ev.exact.length&&Math.random()<.28;
     const o=ex?ev.exact:ev.sides,s=o[Math.floor(Math.random()*o.length)];
     p[ev.id]={side:s.key,q:s.q,stake:ev.noStake?0:st,type:ex?'exact':'tendency'};
     rest-=ev.noStake?0:st;
@@ -3048,13 +3053,19 @@ function matchCard(ev,isMain){
      Quotenfix/Einzel), der weiterhin bestimmt, wie die Punkte berechnet werden. */
   const nurExakt=!!r.exactOnly&&!ev.noOdds;
   el.innerHTML=`<div class="mtop">${ev.sport==='mma'?(isMain?'<span class="src headtag">Hauptkampf</span>':''):(ev.start?when(ev.start):'')}
-    ${ev.noOdds||ev.source==='mkt'?'':'<span class="src">Modell</span>'}</div>
+    ${ev.noOdds||ev.source==='mkt'?'':ev.noQuote?'<span class="src">Quote folgt</span>':'<span class="src">Modell</span>'}</div>
     <div class="who">${esc(nm[0])} <em>${ev.sport==='mma'?'vs':'—'}</em> ${esc(nm[1])}</div>
     ${nurExakt?'':'<div class="odds"></div>'}`;
   if(zu&&!st) el.querySelector('.mtop').insertAdjacentHTML('beforeend',
     `<span class="src" style="margin-left:0">${res?'Beendet':(ev.sport==='mma'||ev.noOdds?'Läuft':'Gestartet')}</span>`);
 
-  if(!nurExakt){
+  if(ev.noQuote&&!zu&&!ev.noOdds){
+    /* Ohne Marktquote wird nichts angeboten — getippt wird, sobald die Quote da ist. */
+    const ziel=el.querySelector('.odds')||el;
+    ziel.insertAdjacentHTML(nurExakt?'beforeend':'afterend',`<div class="qfolgt">Quote folgt · getippt werden kann, sobald die Buchmacher
+      ihre Quoten veröffentlichen (meist zu Beginn der Woche vor dem Spiel)</div>`);
+    const od=el.querySelector('.odds'); if(od) od.remove();
+  }else if(!nurExakt){
   const od=el.querySelector('.odds');
   ev.sides.forEach(s=>{
     const b=document.createElement('button');
@@ -3177,13 +3188,24 @@ function matchCard(ev,isMain){
   return el;
 }
 function pick(ev,s,type){
+  if(ev.noQuote||s.qx) return toast('Für dieses Spiel gibt es noch keine Quote');
   const r=R(),cur=r.picks[ev.id];
+  /* Beim genauen Ergebnis zählt bei richtiger Tendenz die Siegquote — auch sie wird
+     jetzt beim Tippen festgehalten, nicht erst bei der Auswertung nachgeschlagen. */
+  let qt=null;
+  if(type==='exact'){
+    const [h,a]=String(s.key).split(':').map(Number);
+    const sd=ev.sides&&ev.sides.find(x=>x.key===(h>a?'1':h<a?'2':'X'));
+    if(sd&&!sd.qx) qt=sd.q;
+  }
   if(cur&&cur.type===type&&cur.side===s.key) delete r.picks[ev.id];
-  else if(cur) Object.assign(cur,{side:s.key,q:s.q,type},ev.sport==='mma'?{n:s.key==='A'?ev.home:ev.away}:{});
+  else if(cur){ Object.assign(cur,{side:s.key,q:s.q,type},ev.sport==='mma'?{n:s.key==='A'?ev.home:ev.away}:{});
+    if(qt) cur.qt=qt; else delete cur.qt; }
   else{
     if(!ev.noStake&&left()<5) return toast('Budget aufgebraucht');
     r.picks[ev.id]={side:s.key,q:s.q,type,stake:ev.noStake?0:Math.min(10,left())};
     if(ev.sport==='mma') r.picks[ev.id].n=s.key==='A'?ev.home:ev.away;
+    if(qt) r.picks[ev.id].qt=qt;
   }
   r.pendingSync=r.pendingSync||{};r.pendingSync[ev.id]=true;
   render();

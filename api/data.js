@@ -142,6 +142,18 @@ async function reihenfolgeNachholen(order, fehlend){
   }catch(e){ /* Notnagel greift, nächster Versuch in 12h */ }
   return geaendert;
 }
+function quotenMerken(order, fights){
+  let geaendert = false;
+  for(const f of fights){
+    if(f.finished && !f.live && f.sides.some(s => s.q==null || s.q<=1.01)) continue;
+    const o = reihenfolgeFinden(order, f.home, f.away);
+    if(!o) continue;
+    const neu = {[f.home]: f.sides[0].q, [f.away]: f.sides[1].q};
+    if(!neu[f.home] || !neu[f.away] || neu[f.home]<=1.01) continue;
+    if(JSON.stringify(o.q) !== JSON.stringify(neu)){ o.q = neu; geaendert = true; }
+  }
+  return geaendert;
+}
 async function reihenfolgeLaden(oddsEvents, rohKaempfe){
   const order = (await kvGet(ORDER_KEY)) || {};
   let geaendert = false;
@@ -644,12 +656,21 @@ function buildUFC(oddsEvents, rohKaempfe, order){
       away = home===f.a ? f.b : f.a;
       winner = sameFighter(home, sieger) ? 'A' : 'B';
     }
+    /* Letzte echte Quoten, die der Kampf hatte, bevor er bei der Odds API aus der
+       Liste fiel — statt der früheren Platzhalter-Quote 1.01. Unbekannt → null,
+       die App zeigt dann einen Strich bzw. die beim Tippen eingefrorene Quote. */
+    const qVon = name => {
+      if(!o || !o.q) return null;
+      const k = Object.keys(o.q).find(n => sameFighter(n, name));
+      return k ? o.q[k] : null;
+    };
     built.push({
       id:mmaId(f.a,f.b), day:1, sport:'mma', source:'mkt',
       start:f.date||null, home, away, finished:true, winner,
+      fest: !!o,
       sides:[
-        {key:'A', label:home.split(' ').pop(), q:1.01},
-        {key:'B', label:away.split(' ').pop(), q:1.01}
+        {key:'A', label:home.split(' ').pop(), q:qVon(home)},
+        {key:'B', label:away.split(' ').pop(), q:qVon(away)}
       ]
     });
   }
@@ -759,6 +780,9 @@ export default async function handler(req, res) {
       catch(e){ /* ohne Register läuft alles wie bisher weiter */ }
       const oddsStabil = oddsGefiltert.map(ev => reihenfolgeAnpassen(ev, order));
       fights = buildUFC(oddsStabil, rohKaempfe, order);
+      /* Gelistete Kämpfe sind immer "fest" (Reihenfolge kommt direkt von der Odds API). */
+      fights.forEach(f => { if(f.fest===undefined) f.fest = true; });
+      try{ if(quotenMerken(order, fights)) await kvSet(ORDER_KEY, order); }catch(e){}
       if(fights.length) competitions.push({id:'ufc', name:'UFC', sport:'mma', matches:fights});
     }
   }catch(e){ /* UFC fehlt in diesem Aufruf, Rest bleibt trotzdem nutzbar */ }

@@ -1077,7 +1077,6 @@ function fireToLocal(id,d,uid){
   r.picks=(d.picks&&d.picks[uid])||{};
   r.settled=d.settled||{};
   r.settledEvents=d.settledEvents||{};
-  r.bk=d.bk||{};
   r.memberPicks=d.picks||{};
   r.fsId=id;r.ownerUid=d.ownerUid;r.memberUids=d.memberUids||[];
   return r;
@@ -1152,7 +1151,7 @@ async function fsSyncResults(r){
 async function fsSyncSettle(r){
   if(!r.fsId||!FB) return;
   try{
-    const updates={settledEvents:r.settledEvents||{},bk:r.bk||{}};
+    const updates={settledEvents:r.settledEvents||{}};
     r.members.forEach(m=>{ const uid=m.id==='me'?myUid():m.id;
       if(uid) updates[`members.${uid}.pts`]=m.pts; });
     await FB.updateDoc(FB.doc(FB.db,'rounds',r.fsId),updates);
@@ -3706,19 +3705,29 @@ async function xSave(r,id,rec){
   r.games=r.games||{}; r.games[id]=rec;
   if(!r.fsId||!FB) return true;
   try{ await FB.updateDoc(FB.doc(FB.db,'rounds',r.fsId),{[`games.${id}`]:rec}); return true; }
-  catch(e){ console.warn('Zwischenspiel speichern:',e); toast('Konnte nicht gespeichert werden'); return false; }
+  catch(e){
+    /* Abgelehnt oder offline: den Eintrag wieder zurücknehmen, damit hier nichts
+       steht, was bei den anderen nie angekommen ist. */
+    console.warn('Zwischenspiel speichern:',e);
+    delete r.games[id]; toast('Konnte nicht gespeichert werden');
+    return false;
+  }
 }
 async function xPatch(r,id,patch){
-  const g=r.games[id]; if(!g) return;
-  const upd={};
+  const g=r.games[id]; if(!g) return false;
+  const alt=JSON.parse(JSON.stringify(g)), upd={};
   Object.entries(patch).forEach(([k,v])=>{
     if(k.includes('.')){ const [a,b]=k.split('.'); g[a]=g[a]||{}; g[a][b]=v; }
     else g[k]=v;
     upd[`games.${id}.${k}`]=v;
   });
-  if(!r.fsId||!FB) return;
-  try{ await FB.updateDoc(FB.doc(FB.db,'rounds',r.fsId),upd); }
-  catch(e){ console.warn('Zwischenspiel aktualisieren:',e); toast('Konnte nicht gespeichert werden'); }
+  if(!r.fsId||!FB) return true;
+  try{ await FB.updateDoc(FB.doc(FB.db,'rounds',r.fsId),upd); return true; }
+  catch(e){
+    console.warn('Zwischenspiel aktualisieren:',e);
+    r.games[id]=alt; toast('Konnte nicht gespeichert werden');
+    return false;
+  }
 }
 
 /* ─── Chat als Protokoll: Nachrichten + abgeleitete Spiel-Ereignisse, zeitlich
@@ -3823,8 +3832,8 @@ function xDuelFlow(r,a,av){
     card.querySelectorAll('[data-stake]').forEach(b=>b.onclick=()=>{st.stake=+b.dataset.stake;draw();});
     card.querySelector('#xgo').onclick=async()=>{
       const f=xEvById(xDays(r),st.ev);
-      await xSave(r,xNewId(),{type:'duel',by:me,to:st.to,ev:st.ev,day:f?f.x.d:0,stake:st.stake,sideA:st.side,sideB:null,status:'open',t:Date.now(),ta:null});
-      xClose();toast('Herausforderung gesendet');xRefresh();
+      const okk=await xSave(r,xNewId(),{type:'duel',by:me,to:st.to,ev:st.ev,day:f?f.x.d:0,stake:st.stake,sideA:st.side,sideB:null,status:'open',t:Date.now(),ta:null});
+      xClose();if(okk) toast('Herausforderung gesendet');xRefresh();
     };
   };
   draw();
@@ -3836,8 +3845,8 @@ function xDuelAccept(r,id){
     <p class="hint" style="margin:0 0 10px">${esc(xName(r,g.by))} tippt bei ${esc(xEvLabel(e))} auf ${esc(xSideLabel(e,g.sideA))}, Einsatz ${g.stake} Punkte. Wähle deine Seite:</p>
     <div class="xopts">${e.sides.filter(s=>s.key!==g.sideA).map(s=>xOpt('data-side',s.key,esc(xSideLabel(e,s.key)))).join('')}</div>`);
   card.querySelectorAll('[data-side]').forEach(b=>b.onclick=async()=>{
-    await xPatch(r,id,{status:'on',sideB:b.dataset.side,ta:Date.now()});
-    xClose();toast('Duell angenommen');xRefresh();
+    const okk=await xPatch(r,id,{status:'on',sideB:b.dataset.side,ta:Date.now()});
+    xClose();if(okk) toast('Duell angenommen');xRefresh();
   });
 }
 
@@ -3847,8 +3856,8 @@ function xDblFlow(r,a){
     <p class="hint" style="margin:0 0 10px">Welchen deiner Tipps setzt du? Richtig: Punkte doppelt. Falsch: −${XG_DBL_LOSS} Punkte.</p>
     <div class="xopts">${a.evs.map(e=>xOpt('data-ev',e.id,esc(xEvLabel(e)))).join('')}</div>`);
   card.querySelectorAll('[data-ev]').forEach(b=>b.onclick=async()=>{
-    await xSave(r,xNewId(),{type:'dbl',by:meUid(),ev:b.dataset.ev,day:a.day.d,t:Date.now()});
-    xClose();toast('Gesetzt');xRefresh();
+    const okk=await xSave(r,xNewId(),{type:'dbl',by:meUid(),ev:b.dataset.ev,day:a.day.d,t:Date.now()});
+    xClose();if(okk) toast('Gesetzt');xRefresh();
   });
 }
 
@@ -3858,7 +3867,7 @@ function xPotFlow(r,a){
     const card=xModal(`<div class="xm-h">💰 Pott</div>
       <p class="hint" style="margin:0 0 12px">${esc(xName(r,a.pot.by))} hat einen Pott für den ${esc(a.day.label)} eröffnet. Einsatz: ${a.pot.stake} Punkte. Wer am Spieltag die meisten Punkte holt, bekommt alles.</p>
       <button class="btn" id="xgo">Einsteigen</button>`);
-    card.querySelector('#xgo').onclick=async()=>{ await xPatch(r,a.join,{['players.'+meUid()]:Date.now()}); xClose();toast('Du bist im Pott');xRefresh(); };
+    card.querySelector('#xgo').onclick=async()=>{ const okk=await xPatch(r,a.join,{['players.'+meUid()]:Date.now()}); xClose();if(okk) toast('Du bist im Pott');xRefresh(); };
     return;
   }
   let stake=10;
@@ -3870,8 +3879,8 @@ function xPotFlow(r,a){
     card.querySelectorAll('[data-stake]').forEach(b=>b.onclick=()=>{stake=+b.dataset.stake;draw();});
     card.querySelector('#xgo').onclick=async()=>{
       const t=Date.now();
-      await xSave(r,xNewId(),{type:'pot',by:meUid(),day:a.day.d,stake,players:{[meUid()]:t},t});
-      xClose();toast('Pott eröffnet');xRefresh();
+      const okk=await xSave(r,xNewId(),{type:'pot',by:meUid(),day:a.day.d,stake,players:{[meUid()]:t},t});
+      xClose();if(okk) toast('Pott eröffnet');xRefresh();
     };
   };
   draw();
@@ -3884,7 +3893,9 @@ function xSpyFlow(r,a){
     <div class="xopts">${a.evs.map(e=>xOpt('data-ev',e.id,esc(xEvLabel(e)))).join('')}</div>`);
   card.querySelectorAll('[data-ev]').forEach(b=>b.onclick=async()=>{
     const e=a.evs.find(v=>v.id===b.dataset.ev);
-    await xSave(r,xNewId(),{type:'spy',by:meUid(),ev:e.id,day:a.day.d,t:Date.now()});
+    /* Erst speichern, dann aufdecken — sonst könnte man die Tipps sehen, ohne dass der
+       Versuch verbraucht ist. */
+    if(!await xSave(r,xNewId(),{type:'spy',by:meUid(),ev:e.id,day:a.day.d,t:Date.now()})){ xClose(); return; }
     const rows=r.members.filter(m=>uidOfM(m)!==meUid()).map(m=>{
       const p=xPicks(r,uidOfM(m))[e.id];
       const was=!p?'noch kein Tipp':p.type==='exact'?p.side:xSideLabel(e,p.side);
@@ -3921,9 +3932,10 @@ function xRlFlow(r,a){
     await new Promise(res=>setTimeout(res,4400));
     const hub=card.querySelector('#xn');hub.textContent=n;
     hub.style.background=n===0?'#1f9d55':XG_RED.has(n)?'#c0392b':'#15171b';
-    await xSave(r,xNewId(),{type:'rl',by:meUid(),day:a.day.d,color,n,win,base:a.base,t:Date.now()});
-    const res=document.createElement('div');res.className='xrl-res '+(win?'w':'l');
-    res.textContent=win?`${n} – gewonnen! +${fmtPts(a.base,custom)} Punkte`:`${n} – leider verloren. −${fmtPts(a.base,custom)} Punkte`;
+    const gespeichert=await xSave(r,xNewId(),{type:'rl',by:meUid(),day:a.day.d,color,n,win,base:a.base,t:Date.now()});
+    const res=document.createElement('div');res.className='xrl-res '+(!gespeichert?'l':win?'w':'l');
+    res.textContent=!gespeichert?'Das Ergebnis konnte nicht gespeichert werden und zählt deshalb nicht. Versuch es später nochmal.'
+      :win?`${n} – gewonnen! +${fmtPts(a.base,custom)} Punkte`:`${n} – leider verloren. −${fmtPts(a.base,custom)} Punkte`;
     card.appendChild(res);
     const ok=document.createElement('button');ok.className='btn';ok.style.marginTop='12px';ok.textContent='Weiter';
     ok.onclick=()=>{xClose();xRefresh();};card.appendChild(ok);
@@ -3934,9 +3946,9 @@ function xRlFlow(r,a){
 function bindChatActions(r){
   document.querySelectorAll('[data-xacc]').forEach(b=>b.onclick=()=>xDuelAccept(r,b.dataset.xacc));
   document.querySelectorAll('[data-xdec]').forEach(b=>b.onclick=async()=>{
-    await xPatch(r,b.dataset.xdec,{status:'no',ta:Date.now()});toast('Abgelehnt');xRefresh();});
+    const okk=await xPatch(r,b.dataset.xdec,{status:'no',ta:Date.now()});if(okk) toast('Abgelehnt');xRefresh();});
   document.querySelectorAll('[data-xjoin]').forEach(b=>b.onclick=async()=>{
-    await xPatch(r,b.dataset.xjoin,{['players.'+meUid()]:Date.now()});toast('Du bist im Pott');xRefresh();});
+    const okk=await xPatch(r,b.dataset.xjoin,{['players.'+meUid()]:Date.now()});if(okk) toast('Du bist im Pott');xRefresh();});
 }
 
 /* Live-Abgleich der Runde (Chat, Zwischenspiele, Tipps der anderen) — solange
@@ -3944,19 +3956,28 @@ function bindChatActions(r){
 function ensureRoundSync(r){
   if(!r.fsId||!FB||chatUnsubRoundId===r.id) return;
   stopChatSync();
-  chatUnsubRoundId=r.id;
+  const rid=r.id, uid0=myUid();
+  chatUnsubRoundId=rid;
   chatUnsub=FB.onSnapshot(FB.doc(FB.db,'rounds',r.fsId),snap=>{
     const d=snap.data(); if(!d) return;
-    r.chat=d.chat||[]; r.games=d.games||{}; if(d.picks) r.memberPicks=d.picks;
-    if(d.bk) r.bk=d.bk;
-    if(d.members) r.members.forEach(m=>{const uid=m.id==='me'?myUid():m.id;
-      if(uid&&d.members[uid]&&typeof d.members[uid].pts==='number') m.pts=d.members[uid].pts;});
-    if(d.settledEvents) r.settledEvents=d.settledEvents;
-    try{ rekeyPicks(r); reconcileRound(r); }catch(e){}
-    if(S.screen!=='round'||S.roundId!==r.id||document.querySelector('.xmodal')) return;
+    /* Immer das AKTUELLE Runden-Objekt nehmen: wird die Runde irgendwo neu geladen,
+       würde ein festgehaltenes altes Objekt keine Änderungen mehr mitbekommen. */
+    const cur=ROUNDS[rid]; if(!cur) return;
+    cur.chat=d.chat||[]; cur.games=d.games||{}; if(d.picks) cur.memberPicks=d.picks;
+    if(d.members){
+      /* Punkte der anderen übernehmen und neue Mitglieder sofort aufnehmen. */
+      Object.entries(d.members).forEach(([mid,mm])=>{
+        const id=mid===uid0?'me':mid, m=cur.members.find(x=>x.id===id);
+        if(m){ if(typeof mm.pts==='number') m.pts=mm.pts; }
+        else cur.members.push({id,name:mm.name,pts:mm.pts||0});
+      });
+    }
+    if(d.settledEvents) cur.settledEvents=d.settledEvents;
+    try{ rekeyPicks(cur); }catch(e){}
+    if(S.screen!=='round'||S.roundId!==rid||document.querySelector('.xmodal')) return;
     if(S.tab==='chat'){
       const list=document.getElementById('chatList');
-      if(list){ list.innerHTML=chatHtml(r); bindChatActions(r); window.scrollTo(0,1e6); }
+      if(list){ list.innerHTML=chatHtml(cur); bindChatActions(cur); window.scrollTo(0,1e6); }
     }else if(S.tab==='tabelle') tabTable();
   },e=>console.warn('Runden-Live-Sync:',e));
 }
@@ -4254,15 +4275,10 @@ function applySettle(r,evsToSettle,real){
       theirs=m.id==='me'?r.picks:botPicks(evsToSettle);
     }
     let sum=0;
-    const uidB=m.id==='me'?(myUid()||'me'):m.id;
     evsToSettle.forEach(ev=>{
-      const p=theirs[ev.id];
+      const p=theirs[ev.id]; if(!p) return;
       const res=ev._simRes||eventResult(ev,r);
-      const v=(p&&res)?(ptsFor(p,res,ev)||0):0;
-      sum+=v;
-      /* Echte Ergebnisse werden pro Kampf/Spiel und Person festgehalten, damit
-         eine spätere Korrektur genau diesen Betrag ersetzen kann. */
-      if(res&&!ev._simRes){ r.bk=r.bk||{}; (r.bk[ev.id]=r.bk[ev.id]||{})[uidB]=v; }
+      if(res) sum+=ptsFor(p,res,ev);
     });
     gain[m.id]=sum;
   });
@@ -4325,46 +4341,6 @@ function rekeyPicks(r){
   Object.values(r.memberPicks||{}).forEach(mp=>fix(mp,false));
 }
 
-/* ══════════ SELBSTKORREKTUR DER PUNKTE ══════════
-   Früher wurden Punkte einmal aufaddiert und nie wieder angefasst. Änderte sich
-   danach ein Ergebnis oder seine Zuordnung, liefen Anzeige ("+234") und
-   Gesamtstand ("216,1") für immer auseinander. Jetzt gilt: Für jedes gewertete
-   Spiel ist pro Person der gebuchte Betrag gespeichert (r.bk). Weicht die
-   aktuelle, korrekte Wertung davon ab, wird genau die Differenz nachgebucht. */
-function reconcileRound(r){
-  if(!r||!r.joined||(r._probelauf&&Object.keys(r._probelauf).length)) return 0;
-  r.settledEvents=r.settledEvents||{}; r.bk=r.bk||{};
-  const list=withModus(r, r.custom?(r.events||[]):evOf(r.compId));
-  const byId={}; list.forEach(e=>byId[e.id]=e);
-  const ids=Object.keys(r.settledEvents).filter(id=>r.settledEvents[id]);
-  if(!ids.length) return 0;
-  /* Sind ALLE jemals gewerteten Spiele dieser Runde noch mit Ergebnis in den Daten,
-     wird der Stand einfach vollständig neu ausgerechnet — ohne Annahmen darüber,
-     was früher gebucht wurde. Nur wenn ältere Spiele schon aus den Daten gefallen
-     sind (z.B. frühere UFC-Karten), wird über die gespeicherten Einzelbuchungen
-     (r.bk) korrigiert — und zwar nur dort, wo eine Buchung wirklich bekannt ist. */
-  const alleDa=ids.every(id=>byId[id]&&eventResult(byId[id],r));
-  let geaendert=0,bkNeu=false;
-  r.members.forEach(m=>{
-    if(!r.fsId&&m.id!=='me') return;             // Demo-Bots nicht nachrechnen
-    const uid=m.id==='me'?(myUid()||'me'):m.id;
-    const picks=m.id==='me'?r.picks:((r.memberPicks&&r.memberPicks[uid])||{});
-    let summe=0;
-    ids.forEach(id=>{
-      const ev=byId[id]; if(!ev) return;
-      const res=eventResult(ev,r); if(!res) return;
-      const p=picks[id], richtig=p?(ptsFor(p,res,ev)||0):0;
-      summe+=richtig;
-      const gebucht=r.bk[id]&&r.bk[id][uid];
-      if(!alleDa&&gebucht!==undefined&&Math.abs(richtig-gebucht)>1e-9){ m.pts+=richtig-gebucht; geaendert++; }
-      if(!r.bk[id]||r.bk[id][uid]!==richtig){ (r.bk[id]=r.bk[id]||{})[uid]=richtig; bkNeu=true; }
-    });
-    if(alleDa&&Math.abs(m.pts-summe)>1e-6){ m.pts=summe; geaendert++; }
-  });
-  if(geaendert||bkNeu) fsSyncSettle(r);
-  return geaendert;
-}
-
 /* ══════════ AUTOMATISCHE AUSWERTUNG ══════════
    Läuft nach jedem Datenabruf: Sobald für ein einzelnes Spiel/einen Kampf ein
    echtes Ergebnis vorliegt und irgendwer darauf getippt hat, werden die Punkte
@@ -4388,7 +4364,6 @@ function autoSettle(){
       ]);
       const neu=list.filter(e=>getippteIds.has(e.id)&&!r.settledEvents[e.id]&&eventResult(e,r));
       if(neu.length){ applySettle(r,neu,true); n++; }
-      if(reconcileRound(r)) n++;
     }catch(e){ console.warn('Auswertung fehlgeschlagen für Runde',r.id,e); }
   });
   return n;

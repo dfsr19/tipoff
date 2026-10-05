@@ -91,65 +91,51 @@ async function kvSet(key, value){
 
    Lösung: Die Reihenfolge wird beim ersten Sehen des Kampfes dauerhaft im KV
    gemerkt und danach nie mehr aus dem Ergebnis abgeleitet. */
-const ORDER_KEY     = 'ufc-order-v1';
-const ORDER_TRY_KEY = 'ufc-order-try-v1';
-const ORDER_RETRY_MS = 12*3600e3;
-/* Notnagel für Kämpfe, deren ursprüngliche Reihenfolge nicht mehr zu beschaffen
-   ist (Odds-API-Scores gibt es nur 3 Tage rückwirkend). h = Seite A, a = Seite B,
-   so wie die Odds API den Kampf beim Tippen geführt hat. Wird nur benutzt, wenn
-   das Register nichts weiß. */
-const REIHENFOLGE_KORREKTUR = [
-  {h:'Ateba Gautier', a:'Roman Kopylov'}   // Fight Night 03.10.2026 — laut Tipp-Ersteller war Kopylov Seite B
-];
-
-function reihenfolgeFinden(order, a, b, mitKorrektur){
-  const liste = [...Object.values(order||{}), ...(mitKorrektur ? REIHENFOLGE_KORREKTUR : [])];
-  return liste.find(e =>
-    (sameFighter(e.h,a)&&sameFighter(e.a,b)) || (sameFighter(e.h,b)&&sameFighter(e.a,a))) || null;
+const ORDER_KEY = 'ufc-order-v1';
+const MEET_WINDOW = 10*864e5;     // gleiches Paar innerhalb von 10 Tagen = derselbe Kampf
+const pairEntries = (order, a, b) => Object.entries(order||{}).filter(([,e]) =>
+  (sameFighter(e.h,a)&&sameFighter(e.a,b)) || (sameFighter(e.h,b)&&sameFighter(e.a,a)));
+const sameMeeting = (x, y) => {
+  const p=Date.parse(x), q=Date.parse(y);
+  return !isFinite(p) || !isFinite(q) || Math.abs(p-q) < MEET_WINDOW;
+};
+/* Welcher Register-Eintrag gehört zu GENAU diesem Kampf (Paar + Zeitraum)?
+   Ein noch nicht ausgetragener Eintrag mit anderem Datum gilt als verschobener
+   Kampf (gleiche ID, damit die Tipps erhalten bleiben). Ein bereits beendeter
+   Eintrag dagegen als frühere Begegnung — taucht das Paar danach wieder auf, ist
+   es ein Rückkampf mit eigener ID. */
+function reihenfolgeFinden(order, a, b, dMs){
+  const list = pairEntries(order, a, b);
+  if(!list.length) return null;
+  const hit = list.find(([,e]) => e.d==null || !isFinite(dMs) || Math.abs(e.d-dMs) < MEET_WINDOW)
+           || list.find(([,e]) => !e.fin);
+  return hit ? {id:hit[0], e:hit[1]} : null;
+}
+/* ID für einen neuen Kampf: der erste einer Paarung behält die bisherige ID (damit
+   bestehende Tipps passen), jede weitere Begegnung bekommt das Datum angehängt. */
+function neueId(order, a, b, dMs){
+  const base = mmaId(a,b);
+  if(!order[base]) return base;
+  return base+'-'+new Date(isFinite(dMs)?dMs:Date.now()).toISOString().slice(0,10).replace(/-/g,'');
 }
 /* Dreht ein Odds-API-Ereignis, falls die Odds API die Seiten inzwischen anders
-   herum liefert als beim ersten Mal. */
+   herum liefert als beim ersten Mal, und hängt die feste ID an. */
 function reihenfolgeAnpassen(ev, order){
-  const o = reihenfolgeFinden(order, ev.home_team, ev.away_team);
-  if(!o) return ev;
-  if(sameFighter(o.h, ev.home_team)) return ev;
-  return {...ev, home_team:ev.away_team, away_team:ev.home_team};
+  const f = reihenfolgeFinden(order, ev.home_team, ev.away_team, Date.parse(ev.commence_time));
+  if(!f) return ev;
+  const dreh = !sameFighter(f.e.h, ev.home_team);
+  return {...ev, _id:f.id, ...(dreh ? {home_team:ev.away_team, away_team:ev.home_team} : {})};
 }
-/* Nachträgliche Beschaffung für bereits beendete Kämpfe, die das Register noch
-   nicht kennt. Kostet 2 Credits pro Versuch, höchstens alle 12 Stunden und nur,
-   wenn solche Kämpfe in den letzten 3 Tagen lagen (länger reicht die Odds API
-   nicht zurück). */
-async function reihenfolgeNachholen(order, fehlend){
-  if(!ODDS_KEY || !fehlend.length) return false;
-  const letzter = await kvGet(ORDER_TRY_KEY);
-  if(letzter && Date.now()-letzter < ORDER_RETRY_MS) return false;
-  await kvSet(ORDER_TRY_KEY, Date.now());
-  let geaendert = false;
-  try{
-    const u = new URLSearchParams({apiKey:ODDS_KEY, daysFrom:'3'});
-    const r = await fetch(`https://api.the-odds-api.com/v4/sports/mma_mixed_martial_arts/scores/?${u}`);
-    if(!r.ok) return false;
-    const liste = await r.json();
-    for(const g of (Array.isArray(liste)?liste:[])){
-      if(!g.home_team || !g.away_team) continue;
-      const passt = fehlend.some(f =>
-        (sameFighter(f.a,g.home_team)&&sameFighter(f.b,g.away_team)) ||
-        (sameFighter(f.a,g.away_team)&&sameFighter(f.b,g.home_team)));
-      if(!passt || reihenfolgeFinden(order,g.home_team,g.away_team)) continue;
-      order[mmaId(g.home_team,g.away_team)] = {h:g.home_team, a:g.away_team};
-      geaendert = true;
-    }
-  }catch(e){ /* Notnagel greift, nächster Versuch in 12h */ }
-  return geaendert;
-}
+/* Merkt sich die zuletzt gesehenen echten Quoten jedes Kampfes im Register, damit
+   sie nach dem Kampf (wenn die Odds API ihn nicht mehr listet) erhalten bleiben. */
 function quotenMerken(order, fights){
   let geaendert = false;
   for(const f of fights){
-    if(f.finished && !f.live && f.sides.some(s => s.q==null || s.q<=1.01)) continue;
-    const o = reihenfolgeFinden(order, f.home, f.away);
-    if(!o) continue;
-    const neu = {[f.home]: f.sides[0].q, [f.away]: f.sides[1].q};
-    if(!neu[f.home] || !neu[f.away] || neu[f.home]<=1.01) continue;
+    const o = order[f.id];
+    if(!o || f.finished && f.fest===false) continue;
+    const qh = f.sides[0].q, qa = f.sides[1].q;
+    if(!qh || !qa || qh<=1.01 && qa<=1.01) continue;
+    const neu = {[f.home]: qh, [f.away]: qa};
     if(JSON.stringify(o.q) !== JSON.stringify(neu)){ o.q = neu; geaendert = true; }
   }
   return geaendert;
@@ -159,15 +145,22 @@ async function reihenfolgeLaden(oddsEvents, rohKaempfe){
   let geaendert = false;
   /* Jeden gelisteten Kampf beim ersten Sehen festhalten (kostet nichts). */
   for(const ev of oddsEvents){
-    if(reihenfolgeFinden(order, ev.home_team, ev.away_team)) continue;
-    order[mmaId(ev.home_team,ev.away_team)] = {h:ev.home_team, a:ev.away_team};
+    const d = Date.parse(ev.commence_time);
+    const f = reihenfolgeFinden(order, ev.home_team, ev.away_team, d);
+    if(f){
+      if(isFinite(d) && f.e.d!==d && !f.e.fin){ f.e.d = d; geaendert = true; }   // Kampf verschoben
+      continue;
+    }
+    order[neueId(order, ev.home_team, ev.away_team, d)] = {h:ev.home_team, a:ev.away_team, d};
     geaendert = true;
   }
-  const dreiTage = 3*864e5;
-  const fehlend = rohKaempfe.filter(f => f.finished && f.date &&
-    Date.now()-new Date(f.date).getTime() < dreiTage &&
-    !reihenfolgeFinden(order, f.a, f.b));
-  if(await reihenfolgeNachholen(order, fehlend)) geaendert = true;
+  /* Ausgetragene Kämpfe als beendet markieren — ab dann zählt dasselbe Paar
+     in der Zukunft als Rückkampf. */
+  for(const f of rohKaempfe){
+    if(!f.finished) continue;
+    for(const [,e] of pairEntries(order, f.a, f.b))
+      if(!e.fin && (e.d==null || sameMeeting(e.d, f.date))){ e.fin = true; geaendert = true; }
+  }
   if(geaendert) await kvSet(ORDER_KEY, order);
   return order;
 }
@@ -614,9 +607,9 @@ function buildUFC(oddsEvents, rohKaempfe, order){
     const best = bestPrices(ev);
     const qa = best[ev.home_team], qb = best[ev.away_team];
     if(!qa || !qb) return null;
-    const hit = rohKaempfe.find(f =>
+    const hit = rohKaempfe.find(f => sameMeeting(f.date, ev.commence_time) && (
       (sameFighter(f.a, ev.home_team) && sameFighter(f.b, ev.away_team)) ||
-      (sameFighter(f.a, ev.away_team) && sameFighter(f.b, ev.home_team)));
+      (sameFighter(f.a, ev.away_team) && sameFighter(f.b, ev.home_team))));
     let finished=false, winner=null;
     if(hit?.finished){
       finished = true;
@@ -624,7 +617,7 @@ function buildUFC(oddsEvents, rohKaempfe, order){
       winner = (aIstHeim ? hit.winner==='A' : hit.winner==='B') ? 'A' : 'B';
     }
     return {
-      id:mmaId(ev.home_team,ev.away_team), day:1, sport:'mma', source:'mkt',
+      id:ev._id || mmaId(ev.home_team,ev.away_team), day:1, sport:'mma', source:'mkt',
       start:ev.commence_time, home:ev.home_team, away:ev.away_team, finished,
       ...(winner ? {winner} : {}),
       sides:[
@@ -640,16 +633,17 @@ function buildUFC(oddsEvents, rohKaempfe, order){
      Tippen, deshalb reicht ein neutraler Platzhalter statt einer echten Quote. */
   for(const f of rohKaempfe){
     if(!f.finished) continue;
-    const already = built.some(b =>
+    const already = built.some(b => sameMeeting(f.date, b.start) && (
       (sameFighter(f.a,b.home) && sameFighter(f.b,b.away)) ||
-      (sameFighter(f.a,b.away) && sameFighter(f.b,b.home)));
+      (sameFighter(f.a,b.away) && sameFighter(f.b,b.home))));
     if(already) continue;
     const sieger = f.winner==='A' ? f.a : f.b;
     const verlierer = f.winner==='A' ? f.b : f.a;
     /* Seiten so setzen, wie der Kampf beim Tippen geführt wurde — NICHT nach
        Sieger sortieren, sonst drehen sich gespeicherte A/B-Tipps um. Nur wenn
        die ursprüngliche Reihenfolge unbekannt ist, bleibt der alte Notbehelf. */
-    const o = reihenfolgeFinden(order, f.a, f.b, true);
+    const dF = Date.parse(f.date);
+    const gef = reihenfolgeFinden(order, f.a, f.b, dF), o = gef && gef.e;
     let home = sieger, away = verlierer, winner = 'A';
     if(o){
       home = sameFighter(o.h, f.a) ? f.a : f.b;
@@ -665,7 +659,7 @@ function buildUFC(oddsEvents, rohKaempfe, order){
       return k ? o.q[k] : null;
     };
     built.push({
-      id:mmaId(f.a,f.b), day:1, sport:'mma', source:'mkt',
+      id: gef ? gef.id : neueId(order, f.a, f.b, dF), day:1, sport:'mma', source:'mkt',
       start:f.date||null, home, away, finished:true, winner,
       fest: !!o,
       sides:[

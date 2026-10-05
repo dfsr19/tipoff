@@ -18,6 +18,17 @@
  */
 
 const SEASON = process.env.SEASON || '2026';
+const KV_URL   = process.env.KV_REST_API_URL;
+const KV_TOKEN = process.env.KV_REST_API_TOKEN;
+async function kvGet(key){
+  if(!KV_URL || !KV_TOKEN) return null;
+  try{
+    const r = await fetch(`${KV_URL}/get/${key}`, {headers:{Authorization:`Bearer ${KV_TOKEN}`}});
+    if(!r.ok) return null;
+    const j = await r.json();
+    return j.result == null ? null : JSON.parse(j.result);
+  }catch(e){ return null; }
+}
 
 /**
  * ESPN-Anbindung — direkt in dieser Datei statt als Import (siehe data.js
@@ -169,6 +180,42 @@ const LEAGUES = ['bl1', 'bl2', 'bl3'];
    während des Spiels deutlich verlässlicher; das Endergebnis nach Abpfiff
    bleibt bei OpenLigaDB (dort seit Jahren zuverlässig). */
 const ESPN_SLUG = {bl1:'ger.1', bl2:'ger.2', bl3:'ger.3'};
+
+/* Premier League, La Liga und Serie A: Spielplan kommt von football-data.org
+   (api/data.js legt ihn 5 Minuten lang im KV ab, hier wird er nur gelesen —
+   keine eigene Abfrage, damit das Limit von 10 pro Minute nie eine Rolle spielt).
+   Live-Stand und Abpfiff kommen von ESPN. */
+const INTL = [
+  {id:'eng1', fd:'PL', espn:'eng.1'},
+  {id:'esp1', fd:'PD', espn:'esp.1'},
+  {id:'ita1', fd:'SA', espn:'ita.1'}
+];
+/* Vereinsnamen international — Kopie aus api/data.js (jede Funktion trägt ihre
+   Hilfen selbst, ein fehlender Import hat früher alles lahmgelegt). */
+const INTL_STOP = new Set(['fc','cf','afc','ac','as','ss','ssc','us','acf','bc','cfc','sc','cd','ud','rcd','rc','ca',
+  'calcio','club','de','del','di','the','and','balompie','futbol']);
+const INTL_ALIAS = {
+  internazionalemilano:'intermilan', internazionale:'intermilan', inter:'intermilan',
+  athleticbilbao:'athletic', athleticclub:'athletic',
+  rayovallecanomadrid:'rayovallecano', espanyolbarcelona:'espanyol', deportivoalaves:'alaves',
+  wolves:'wolverhamptonwanderers', spurs:'tottenhamhotspur', manunited:'manchesterunited', mancity:'manchestercity',
+  verona:'hellasverona', celta:'celtavigo', betis:'realbetis', atleticomadrid:'atleticomadrid', atletico:'atleticomadrid',
+  newcastle:'newcastleunited', westham:'westhamunited', leeds:'leedsunited', nottmforest:'nottinghamforest',
+  brighton:'brightonhovealbion', sociedad:'realsociedad', oviedo:'realoviedo', valladolid:'realvalladolid'
+};
+function canonIntl(name){
+  const t = String(name).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/&/g,' and ').replace(/[^a-z0-9 ]/g,' ').split(/\s+/)
+    .filter(w => w && !INTL_STOP.has(w) && !/^\d+$/.test(w));
+  const k = t.join('');
+  return INTL_ALIAS[k] || k;
+}
+function sameTeamIntl(a,b){
+  const x = canonIntl(a), y = canonIntl(b);
+  if(!x || !y) return false;
+  if(x===y) return true;
+  return x.length>=8 && y.length>=8 && (x.includes(y) || y.includes(x));
+}
 const normTeam = s => String(s).toLowerCase().normalize('NFD')
   .replace(/[\u0300-\u036f]/g,'').replace(/[^a-z]/g,'');
 /* ESPN übersetzt manche Städtenamen ins Englische, OpenLigaDB nicht — bei
@@ -252,6 +299,31 @@ export default async function handler(req, res) {
         live[m.id] = {score:m.liveScore, minute:m.minute ?? null, finished:false};
     }
   }catch(e){ /* CL fehlt in diesem Aufruf, Bundesligen laufen weiter */ }
+
+  /* Premier League, La Liga, Serie A: Spiele, die gerade laufen (angepfiffen,
+     höchstens 6 Stunden her) mit ESPN abgleichen. Fehlt der Spielplan im KV
+     (noch nie geladen), gibt es für diese Liga einfach keinen Live-Stand — die
+     Ergebnisse kommen dann nach dem Spiel regulär über api/data.js. */
+  await Promise.all(INTL.map(async L => {
+    try{
+      const sched = await kvGet('fd-sched-v1-'+L.fd);
+      const spiele = sched && Array.isArray(sched.matches) ? sched.matches : [];
+      const laufend = spiele.filter(m => {
+        const t = Date.parse(m.start);
+        return !m.finished && isFinite(t) && t <= jetzt && jetzt - t <= 6*3600e3;
+      });
+      if(!laufend.length) return;                       // nichts zu tun, ESPN gar nicht erst fragen
+      const espn = await loadEspnSoccer(L.espn, [espnDay(jetzt-864e5), espnDay(jetzt)]);
+      for(const m of laufend){
+        const t0 = Date.parse(m.start);
+        const e = espn.find(x => sameTeamIntl(x.home, m.home) && sameTeamIntl(x.away, m.away) &&
+          Math.abs(Date.parse(x.start) - t0) < 2*864e5);
+        if(!e) continue;
+        if(e.finished && e.score) live[m.id] = {score:e.score, finished:true};
+        else if(e.live && e.liveScore) live[m.id] = {score:e.liveScore, minute:e.minute ?? null, finished:false};
+      }
+    }catch(e){ /* eine ausgefallene Liga reißt die anderen nicht mit */ }
+  }));
 
   await Promise.all(LEAGUES.map(async L => {
     try{

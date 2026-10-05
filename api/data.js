@@ -36,6 +36,7 @@
 
 const SEASON = process.env.SEASON || '2026';
 const ODDS_KEY = process.env.ODDS_API_KEY;
+const FD_KEY   = process.env.FOOTBALL_DATA_KEY;
 
 /* ══════════ ZWISCHENSPEICHER FÜR ODDS-API (Vercel KV) ══════════
    Ohne das würde jeder einzelne Seitenaufruf live bei The Odds API anfragen
@@ -330,6 +331,12 @@ function fensterTage(zurueck = 4, vor = 4){
 
 
 /* Wettbewerbe aus OpenLigaDB — dort seit Jahren zuverlässig gepflegt. */
+/* Ligen, deren Spielplan von football-data.org kommt (kostenlos, 10 Abfragen/Min.). */
+const INTL = [
+  {id:'eng1', name:'Premier League', fd:'PL', odds:'soccer_epl'},
+  {id:'esp1', name:'La Liga',        fd:'PD', odds:'soccer_spain_la_liga'},
+  {id:'ita1', name:'Serie A',        fd:'SA', odds:'soccer_italy_serie_a'}
+];
 const LEAGUES = [
   {id:'bl1', name:'Bundesliga',    ol:'bl1', odds:'soccer_germany_bundesliga'},
   {id:'bl2', name:'2. Bundesliga', ol:'bl2', odds:'soccer_germany_bundesliga2'},
@@ -463,6 +470,45 @@ async function loadSchedule(league){
   });
 }
 
+/* ── Spielplan von football-data.org ──
+   Liefert den kompletten Saison-Spielplan mit Spieltagsnummer, Anstoßzeit und
+   Endergebnis. Im Gratis-Tarif kommen Ergebnisse leicht verzögert — der Live-
+   Stand und das schnelle Abpfiff-Signal kommen deshalb aus ESPN (api/live.js).
+   5 Minuten Zwischenspeicher: bei 3 Ligen sind das höchstens 36 Abfragen pro
+   Stunde, weit unter dem Limit. Antwortet die Quelle nicht, gilt der letzte
+   gespeicherte Stand weiter, statt dass die Liga verschwindet. */
+const FD_TTL = 5*60e3;
+function fdMatch(m){
+  if(!m || !m.id || !m.homeTeam || !m.awayTeam) return null;
+  if(m.status === 'CANCELLED') return null;
+  const ft = m.score && m.score.fullTime;
+  const fertig = (m.status==='FINISHED' || m.status==='AWARDED') && ft && Number.isFinite(ft.home) && Number.isFinite(ft.away);
+  return {
+    id:'fd'+m.id, day:m.matchday||1, start:m.utcDate,
+    home:m.homeTeam.name||m.homeTeam.shortName, away:m.awayTeam.name||m.awayTeam.shortName,
+    ...(m.homeTeam.tla ? {homeTla:m.homeTeam.tla} : {}), ...(m.awayTeam.tla ? {awayTla:m.awayTeam.tla} : {}),
+    finished:!!fertig, ...(fertig ? {score:{h:ft.home,a:ft.away}} : {})
+  };
+}
+async function loadScheduleFD(code){
+  const key = 'fd-sched-v1-'+code, jetzt = Date.now();
+  const cached = await kvGet(key);
+  if(cached && jetzt-cached.zeit < FD_TTL) return cached.matches;
+  try{
+    if(!FD_KEY) throw new Error('FOOTBALL_DATA_KEY fehlt');
+    const r = await fetch(`https://api.football-data.org/v4/competitions/${code}/matches`, {headers:{'X-Auth-Token':FD_KEY}});
+    if(!r.ok) throw new Error(`football-data ${code}: HTTP ${r.status}`);
+    const d = await r.json();
+    const matches = (Array.isArray(d.matches)?d.matches:[]).map(fdMatch).filter(Boolean);
+    if(!matches.length) throw new Error(`football-data ${code}: keine Spiele`);
+    await kvSet(key, {zeit:jetzt, matches});
+    return matches;
+  }catch(e){
+    if(cached) return cached.matches;        // alter Stand ist besser als keine Liga
+    throw e;
+  }
+}
+
 const espnDate = ts => {
   const d = new Date(ts);
   return d.getUTCFullYear()+String(d.getUTCMonth()+1).padStart(2,'0')+String(d.getUTCDate()).padStart(2,'0');
@@ -542,19 +588,20 @@ function kompakteQuoten(events){
     return (q1&&qx&&q2) ? {home:ev.home_team, away:ev.away_team, commence:ev.commence_time, q1, qx, q2} : null;
   }).filter(Boolean);
 }
-function findeQuote(match, events){
+function findeQuote(match, events, intl){
+  const gleich = intl ? sameTeamIntl : sameTeam;
   const t = Date.parse(match.start);
-  return events.find(e => sameTeam(match.home, e.home) && sameTeam(match.away, e.away) &&
+  return events.find(e => gleich(match.home, e.home) && gleich(match.away, e.away) &&
     (!isFinite(t) || Math.abs(Date.parse(e.commence) - t) < 2*DAY)) || null;
 }
-async function loadLeagueOdds(sportKey, schedule){
+async function loadLeagueOdds(sportKey, schedule, intl){
   const key = 'fb-odds-'+sportKey, jetzt = Date.now();
   const cached = await kvGet(key);
   const daten = cached ? cached.daten : [];
   const alter = cached ? jetzt - cached.zeit : Infinity;
   const luecke = schedule.some(m => {
     const t = Date.parse(m.start);
-    return !m.finished && t > jetzt && t - jetzt < 6*DAY && !findeQuote(m, daten);
+    return !m.finished && t > jetzt && t - jetzt < 6*DAY && !findeQuote(m, daten, intl);
   });
   if(alter < FB_ODDS_TTL && !(luecke && alter > DAY)) return daten;
   const frisch = kompakteQuoten(await loadOddsRoh(sportKey));
@@ -581,6 +628,41 @@ const norm = s => String(s).toLowerCase()
   .replace('monchengladbach','gladbach').replace('mgladbach','gladbach')
   .replace('nurnberg','nuremberg').replace('hannover','hanover')
   .replace('braunschweig','brunswick');
+/* ── Vereinsnamen international ──
+   football-data.org, die Odds API und ESPN schreiben dieselben Vereine
+   unterschiedlich ("Manchester United FC" / "Manchester United", "FC
+   Internazionale Milano" / "Inter Milan", "Club Atlético de Madrid" /
+   "Atlético Madrid"). Zuerst werden Allerweltswörter (FC, CF, AC, "de", Jahres-
+   zahlen …) entfernt, danach bekannte Sonderfälle auf eine gemeinsame Schreib-
+   weise gebracht. Verglichen wird dann auf exakte Gleichheit — "Inter" darf
+   nie als Teil von "Milan" gelten oder umgekehrt. */
+const INTL_STOP = new Set(['fc','cf','afc','ac','as','ss','ssc','us','acf','bc','cfc','sc','cd','ud','rcd','rc','ca',
+  'calcio','club','de','del','di','the','and','balompie','futbol']);
+const INTL_ALIAS = {
+  internazionalemilano:'intermilan', internazionale:'intermilan', inter:'intermilan',
+  athleticbilbao:'athletic', athleticclub:'athletic',
+  rayovallecanomadrid:'rayovallecano', espanyolbarcelona:'espanyol', deportivoalaves:'alaves',
+  wolves:'wolverhamptonwanderers', spurs:'tottenhamhotspur', manunited:'manchesterunited', mancity:'manchestercity',
+  verona:'hellasverona', celta:'celtavigo', betis:'realbetis', atleticomadrid:'atleticomadrid', atletico:'atleticomadrid',
+  newcastle:'newcastleunited', westham:'westhamunited', leeds:'leedsunited', nottmforest:'nottinghamforest',
+  brighton:'brightonhovealbion', sociedad:'realsociedad', oviedo:'realoviedo', valladolid:'realvalladolid'
+};
+function canonIntl(name){
+  const t = String(name).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/&/g,' and ').replace(/[^a-z0-9 ]/g,' ').split(/\s+/)
+    .filter(w => w && !INTL_STOP.has(w) && !/^\d+$/.test(w));
+  const k = t.join('');
+  return INTL_ALIAS[k] || k;
+}
+function sameTeamIntl(a,b){
+  const x = canonIntl(a), y = canonIntl(b);
+  if(!x || !y) return false;
+  if(x===y) return true;
+  /* Rückfall für unbekannte Schreibweisen: einer enthält den anderen, aber nur bei
+     längeren Namen, damit kurze wie "inter"/"milan" nie vermischt werden. */
+  return x.length>=8 && y.length>=8 && (x.includes(y) || y.includes(x));
+}
+
 const TEAM_GLEICH = {herthabsc:'hertha', herthaberlin:'hertha'};
 function sameTeam(a,b){
   const x=TEAM_GLEICH[norm(a)]||norm(a), y=TEAM_GLEICH[norm(b)]||norm(b);
@@ -605,8 +687,8 @@ function mitMarktquoten(match, q){
 }
 /* gemerkt = letzte bekannte Marktquote dieses Spiels (bleibt nach dem Anpfiff
    erhalten, auch wenn die Odds API das Spiel dann nicht mehr listet). */
-function buildFootball(match, events, gemerkt){
-  const e = findeQuote(match, events);
+function buildFootball(match, events, gemerkt, intl){
+  const e = findeQuote(match, events, intl);
   const q = e ? [e.q1, e.qx, e.q2] : (gemerkt ? gemerkt.q : null);
   if(!q) return {...match, sport:'fb', source:'none', sides:OHNE_QUOTE.map(x=>({...x})), exact:[]};
   const out = mitMarktquoten(match, q);
@@ -756,15 +838,19 @@ export default async function handler(req, res) {
   try{ memo = (await kvGet(FB_QUOTES_KEY)) || {}; }catch(e){}
   const merke = (key, out) => { if(out._merken){ memo[key]=out._merken; memoGeaendert=true; } delete out._merken; return out; };
 
-  for(const L of LEAGUES){
+  /* Alle Fußball-Ligen gleichzeitig laden — nacheinander würde das Zeitlimit der
+     Funktion bei sechs Ligen schnell knapp. Die Reihenfolge der Antwort bleibt. */
+  const fussball = [...LEAGUES.map(L=>({L,intl:false})), ...INTL.map(L=>({L,intl:true}))];
+  const fertig = await Promise.all(fussball.map(async ({L,intl}) => {
     try{
-      const schedule = await loadSchedule(L.ol);
+      const schedule = intl ? await loadScheduleFD(L.fd) : await loadSchedule(L.ol);
       let events = [];
-      try{ events = await loadLeagueOdds(L.odds, schedule); }catch(e){ /* ohne Quoten weiter: "Quote folgt" */ }
-      const matches = schedule.map(m => merke(L.id+':'+m.id, buildFootball(m, events, memo[L.id+':'+m.id])));
-      competitions.push({id:L.id, name:L.name, sport:'fb', matches});
-    }catch(e){ /* ein ausgefallener Wettbewerb reißt die anderen nicht mit */ }
-  }
+      try{ events = await loadLeagueOdds(L.odds, schedule, intl); }catch(e){ /* ohne Quoten weiter: "Quote folgt" */ }
+      const matches = schedule.map(m => merke(L.id+':'+m.id, buildFootball(m, events, memo[L.id+':'+m.id], intl)));
+      return {id:L.id, name:L.name, sport:'fb', matches};
+    }catch(e){ return null; }        // ein ausgefallener Wettbewerb reißt die anderen nicht mit
+  }));
+  fertig.forEach(c => { if(c) competitions.push(c); });
 
   /* Wettbewerbe aus ESPN (aktuell: Champions League). ESPN liefert Ansetzung,
      Zwischenstand UND Quoten in einem Rutsch — es braucht also weder

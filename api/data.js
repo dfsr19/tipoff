@@ -331,9 +331,9 @@ function fensterTage(zurueck = 4, vor = 4){
 
 /* Wettbewerbe aus OpenLigaDB — dort seit Jahren zuverlässig gepflegt. */
 const LEAGUES = [
-  {id:'bl1', name:'Bundesliga',    ol:'bl1'},
-  {id:'bl2', name:'2. Bundesliga', ol:'bl2'},
-  {id:'bl3', name:'3. Liga',       ol:'bl3'}
+  {id:'bl1', name:'Bundesliga',    ol:'bl1', odds:'soccer_germany_bundesliga'},
+  {id:'bl2', name:'2. Bundesliga', ol:'bl2', odds:'soccer_germany_bundesliga2'},
+  {id:'bl3', name:'3. Liga',       ol:'bl3', odds:'soccer_germany_liga3'}
 ];
 /* Die Champions League kommt NICHT aus OpenLigaDB: der dortige Eintrag für
    2026/27 ist nur ein Platzhalter-Gerüst (identische Anstoßzeiten, identische
@@ -511,6 +511,58 @@ async function loadEspnData(dateStrs){
   }
   return [...proId.values()];
 }
+/* Marktnahe Quote = MEDIAN der Anbieter (ein typischer Buchmacher), nicht der
+   höchste Preis — der läge systematisch über dem, was ein normaler Anbieter zahlt. */
+function medianPrices(ev){
+  const alle={};
+  for(const bm of ev.bookmakers||[]){
+    const h2h = bm.markets?.find(m=>m.key==='h2h');
+    for(const o of h2h?.outcomes||[]) if(o.price>1) (alle[o.name]=alle[o.name]||[]).push(o.price);
+  }
+  const out={};
+  for(const [k,v] of Object.entries(alle)){
+    v.sort((a,b)=>a-b); const m=v.length>>1;
+    out[k]=Math.round((v.length%2?v[m]:(v[m-1]+v[m])/2)*100)/100;
+  }
+  return out;
+}
+
+/* ── Fußball-Quoten: einmal pro Woche, bei Lücken höchstens einmal täglich ──
+   Pro Liga wird die Odds API grundsätzlich nur einmal pro Woche gefragt. Fehlt
+   bei einem Spiel der nächsten 6 Tage noch eine Quote (Anbieter listen manche
+   Spiele erst später), wird höchstens einmal am Tag nachgesehen. Gespeichert
+   wird nur das Nötige (Teams, Anstoß, Median-Quote), nicht die Rohantwort. */
+const DAY = 864e5;
+const FB_ODDS_TTL = 7*DAY;
+const FB_QUOTES_KEY = 'fb-quotes-v1';
+function kompakteQuoten(events){
+  return events.map(ev => {
+    const p = medianPrices(ev);
+    const q1=p[ev.home_team], qx=p['Draw'], q2=p[ev.away_team];
+    return (q1&&qx&&q2) ? {home:ev.home_team, away:ev.away_team, commence:ev.commence_time, q1, qx, q2} : null;
+  }).filter(Boolean);
+}
+function findeQuote(match, events){
+  const t = Date.parse(match.start);
+  return events.find(e => sameTeam(match.home, e.home) && sameTeam(match.away, e.away) &&
+    (!isFinite(t) || Math.abs(Date.parse(e.commence) - t) < 2*DAY)) || null;
+}
+async function loadLeagueOdds(sportKey, schedule){
+  const key = 'fb-odds-'+sportKey, jetzt = Date.now();
+  const cached = await kvGet(key);
+  const daten = cached ? cached.daten : [];
+  const alter = cached ? jetzt - cached.zeit : Infinity;
+  const luecke = schedule.some(m => {
+    const t = Date.parse(m.start);
+    return !m.finished && t > jetzt && t - jetzt < 6*DAY && !findeQuote(m, daten);
+  });
+  if(alter < FB_ODDS_TTL && !(luecke && alter > DAY)) return daten;
+  const frisch = kompakteQuoten(await loadOddsRoh(sportKey));
+  const neu = frisch.length ? frisch : daten;      // Fehler/leer: alte Daten behalten
+  await kvSet(key, {zeit:jetzt, daten:neu});        // Zeitstempel trotzdem setzen → kein Dauerfeuern
+  return neu;
+}
+
 function bestPrices(ev){
   const best={};
   for(const bm of ev.bookmakers||[]){
@@ -529,40 +581,41 @@ const norm = s => String(s).toLowerCase()
   .replace('monchengladbach','gladbach').replace('mgladbach','gladbach')
   .replace('nurnberg','nuremberg').replace('hannover','hanover')
   .replace('braunschweig','brunswick');
+const TEAM_GLEICH = {herthabsc:'hertha', herthaberlin:'hertha'};
 function sameTeam(a,b){
-  const x=norm(a), y=norm(b);
+  const x=TEAM_GLEICH[norm(a)]||norm(a), y=TEAM_GLEICH[norm(b)]||norm(b);
   if(!x || !y || x.length<3 || y.length<3) return false;
   return x===y || x.includes(y) || y.includes(x);
 }
 
-function buildFootball(match, oddsEvents, table){
-  const ev = oddsEvents.find(e =>
-    sameTeam(match.home, e.home_team) && sameTeam(match.away, e.away_team));
-  let lh, la, sides, source;
-  if(ev){
-    const best = bestPrices(ev);
-    const h=best[ev.home_team], d=best['Draw'], a=best[ev.away_team];
-    if(h && d && a){
-      sides = [{key:'1',label:'1',q:h},{key:'X',label:'X',q:d},{key:'2',label:'2',q:a}];
-      [lh,la] = fitLambdas(...devig([h,d,a]));
-      source = 'mkt';
-    }
-  }
-  if(!sides){
-    [lh,la] = modelLambdas(match.home, match.away, table);
-    const p = probs1X2(scoreMatrix(lh,la,6));
-    sides = [
-      {key:'1',label:'1',q:price(p.h,VIG_1X2)},
-      {key:'X',label:'X',q:price(p.d,VIG_1X2)},
-      {key:'2',label:'2',q:price(p.a,VIG_1X2)}
-    ];
-    source = 'mdl';
-  }
+/* Aus Marktquoten (1/X/2) ein Tipp-Spiel bauen. Die Quoten fürs genaue Ergebnis
+   werden aus genau diesen Marktquoten abgeleitet (Torerwartung → Poisson), damit
+   jedes Ergebnis seine eigene, zur Marktlage passende Quote hat. Gibt es noch
+   keine Marktquote, bekommt das Spiel KEINE Quote ("Quote folgt") — es wird
+   bewusst nichts selbst errechnet. */
+const OHNE_QUOTE = [{key:'1',label:'1',q:null},{key:'X',label:'X',q:null},{key:'2',label:'2',q:null}];
+function mitMarktquoten(match, q){
+  const [lh,la] = fitLambdas(...devig(q));
   const m = scoreMatrix(lh,la,6), exact=[];
   for(let i=0;i<=3;i++)
     for(let j=0;j<=3;j++)
       exact.push({key:`${i}:${j}`, label:`${i}:${j}`, q:price(m[i][j],VIG_EXACT)});
-  return {...match, sport:'fb', source, sides, exact};
+  return {...match, sport:'fb', source:'mkt',
+    sides:[{key:'1',label:'1',q:q[0]},{key:'X',label:'X',q:q[1]},{key:'2',label:'2',q:q[2]}], exact};
+}
+/* gemerkt = letzte bekannte Marktquote dieses Spiels (bleibt nach dem Anpfiff
+   erhalten, auch wenn die Odds API das Spiel dann nicht mehr listet). */
+function buildFootball(match, events, gemerkt){
+  const e = findeQuote(match, events);
+  const q = e ? [e.q1, e.qx, e.q2] : (gemerkt ? gemerkt.q : null);
+  if(!q) return {...match, sport:'fb', source:'none', sides:OHNE_QUOTE.map(x=>({...x})), exact:[]};
+  const out = mitMarktquoten(match, q);
+  if(e && (!gemerkt || JSON.stringify(gemerkt.q)!==JSON.stringify(q))) out._merken = {q, t:Date.now()};
+  return out;
+}
+function quotenGedaechtnisAufraeumen(memo){
+  const grenze = Date.now() - 150*DAY;
+  for(const [k,v] of Object.entries(memo)) if(!v || v.t < grenze) delete memo[k];
 }
 
 /* Ein ESPN-Spiel in ein fertiges Tipp-Spiel verwandeln.
@@ -572,31 +625,13 @@ function buildFootball(match, oddsEvents, table){
    fehleranfälligste Stelle wäre.
    Alle CL-Spiele bekommen day:1 — die Ligaphase kennt keine "Spieltage" im
    Bundesliga-Sinn, und die App zeigt dann schlicht den laufenden Spieltag. */
-function buildEspnFootball(m){
+function buildEspnFootball(m, gemerkt){
   const {marktQuoten, ...rest} = m;
-  let lh, la, sides, source;
-  if(marktQuoten){
-    const {q1, qx, q2} = marktQuoten;
-    sides = [{key:'1',label:'1',q:q1},{key:'X',label:'X',q:qx},{key:'2',label:'2',q:q2}];
-    [lh,la] = fitLambdas(...devig([q1,qx,q2]));
-    source = 'mkt';
-  }else{
-    /* Ohne Quoten: neutrales Modell mit leichtem Heimvorteil. Für die
-       Champions League gibt es keine Liga-Tabelle als Stärke-Maß. */
-    [lh,la] = [1.45, 1.15];
-    const p = probs1X2(scoreMatrix(lh,la,6));
-    sides = [
-      {key:'1',label:'1',q:price(p.h,VIG_1X2)},
-      {key:'X',label:'X',q:price(p.d,VIG_1X2)},
-      {key:'2',label:'2',q:price(p.a,VIG_1X2)}
-    ];
-    source = 'mdl';
-  }
-  const mtx = scoreMatrix(lh,la,6), exact=[];
-  for(let i=0;i<=3;i++)
-    for(let j=0;j<=3;j++)
-      exact.push({key:`${i}:${j}`, label:`${i}:${j}`, q:price(mtx[i][j],VIG_EXACT)});
-  return {...rest, day:1, sport:'fb', source, sides, exact};
+  const q = marktQuoten ? [marktQuoten.q1, marktQuoten.qx, marktQuoten.q2] : (gemerkt ? gemerkt.q : null);
+  if(!q) return {...rest, day:1, sport:'fb', source:'none', sides:OHNE_QUOTE.map(x=>({...x})), exact:[]};
+  const out = {...mitMarktquoten(rest, q), day:1};
+  if(marktQuoten && (!gemerkt || JSON.stringify(gemerkt.q)!==JSON.stringify(q))) out._merken = {q, t:Date.now()};
+  return out;
 }
 
 const isWeekend = ts => { const d = new Date(ts).getUTCDay(); return d===0 || d===6; };
@@ -604,7 +639,7 @@ const mmaId = (a,b) => 'mma-'+[normName(a),normName(b)].sort().join('-');
 
 function buildUFC(oddsEvents, rohKaempfe, order){
   const built = oddsEvents.map(ev => {
-    const best = bestPrices(ev);
+    const best = medianPrices(ev);
     const qa = best[ev.home_team], qb = best[ev.away_team];
     if(!qa || !qb) return null;
     const hit = rohKaempfe.find(f => sameMeeting(f.date, ev.commence_time) && (
@@ -715,13 +750,18 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   const competitions = [];
 
+  /* Gedächtnis der letzten Marktquote je Spiel — damit nach dem Anpfiff die
+     echte Quote stehen bleibt statt zu verschwinden. */
+  let memo = {}, memoGeaendert = false;
+  try{ memo = (await kvGet(FB_QUOTES_KEY)) || {}; }catch(e){}
+  const merke = (key, out) => { if(out._merken){ memo[key]=out._merken; memoGeaendert=true; } delete out._merken; return out; };
+
   for(const L of LEAGUES){
     try{
-      const [schedule, table] = await Promise.all([loadSchedule(L.ol), loadRatings(L.ol)]);
-      /* Kein Odds-API-Aufruf mehr — buildFootball hat für genau diesen Fall
-         schon ein eingebautes Modell (echte Tabellenwerte aus OpenLigaDB statt
-         Marktquote). Damit hängt nichts mehr an einem begrenzten Kontingent. */
-      const matches = schedule.map(m => buildFootball(m, [], table));
+      const schedule = await loadSchedule(L.ol);
+      let events = [];
+      try{ events = await loadLeagueOdds(L.odds, schedule); }catch(e){ /* ohne Quoten weiter: "Quote folgt" */ }
+      const matches = schedule.map(m => merke(L.id+':'+m.id, buildFootball(m, events, memo[L.id+':'+m.id])));
       competitions.push({id:L.id, name:L.name, sport:'fb', matches});
     }catch(e){ /* ein ausgefallener Wettbewerb reißt die anderen nicht mit */ }
   }
@@ -733,10 +773,12 @@ export default async function handler(req, res) {
     try{
       const spiele = await loadEspnSoccer(L.slug, fensterTage());
       if(!spiele.length) continue;
-      const matches = spiele.map(m => buildEspnFootball(m));
+      const matches = spiele.map(m => merke(L.id+':'+m.id, buildEspnFootball(m, memo[L.id+':'+m.id])));
       competitions.push({id:L.id, name:L.name, sport:'fb', matches});
     }catch(e){ /* Champions League fehlt in diesem Aufruf, Rest bleibt nutzbar */ }
   }
+
+  if(memoGeaendert){ try{ quotenGedaechtnisAufraeumen(memo); await kvSet(FB_QUOTES_KEY, memo); }catch(e){} }
 
   let fights = [];
   try{

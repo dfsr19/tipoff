@@ -625,6 +625,9 @@ const COMPS={
   bl2:{name:'2. Bundesliga',    kurz:'BL2', sport:'fb', em:'⚽'},
   bl3:{name:'3. Liga',          kurz:'BL3', sport:'fb', em:'⚽', prem:true},
   ucl:{name:'Champions League', kurz:'CL',  sport:'fb', em:'🏆', prem:true},
+  eng1:{name:'Premier League',   kurz:'PL',  sport:'fb', em:'⚽', prem:true},
+  esp1:{name:'La Liga',          kurz:'LL',  sport:'fb', em:'⚽', prem:true},
+  ita1:{name:'Serie A',          kurz:'SA',  sport:'fb', em:'⚽', prem:true},
   ufc:{name:'UFC',              kurz:'UFC', sport:'mma',em:'🥊'}
 };
 /* Steht dieser Wettbewerb gerade offen? */
@@ -710,9 +713,10 @@ const RATING={'FC Bayern München':[2.15,.72],'Bayer 04 Leverkusen':[1.72,.98],
  'SpVgg Greuther Fürth':[1.22,1.44],'1. FC Magdeburg':[1.36,1.38],'FC St. Pauli':[1.28,1.20],
  'Arminia Bielefeld':[1.20,1.34],'Dynamo Dresden':[1.18,1.42],'VfL Osnabrück':[1.06,1.52],
  'SSV Ulm 1846':[1.04,1.50]};
-const short=n=>n.replace(/^(1\.|SV 07|SC|FC|VfB|VfL|TSG)\s+/,'').replace(' München','')
+const short=n=>n.replace(/^(1\.|SV 07|SC|FC|VfB|VfL|TSG|AC|AS|SS|SSC|US|ACF|RCD|RC|CA|UD|CD|AFC)\s+/,'').replace(/\s+(FC|AFC|CF|BC|CFC|Calcio)$/,'').replace(' München','')
   .replace('Borussia ','').replace(' 04','').replace(' 05','').replace(' 07','');
-const abbr=n=>short(n).replace(/[^A-Za-zÄÖÜäöüß]/g,'').slice(0,3).toUpperCase();
+const TLA={};
+const abbr=n=>TLA[n]||short(n).replace(/[^A-Za-zÄÖÜäöüß]/g,'').slice(0,3).toUpperCase();
 
 /* ══════════ POISSON (Ersatzquoten + Simulation) ══════════ */
 const pois=(k,l)=>{let f=1;for(let i=2;i<=k;i++)f*=i;return Math.exp(-l)*l**k/f;};
@@ -762,6 +766,8 @@ async function loadData(){
        keine Rechnung an null scheitert — angezeigt wird aber ein Strich bzw. die
        Quote, die beim eigenen Tipp eingefroren wurde. */
     Object.values(ev).forEach(list=>list.forEach(m=>{
+      if(m.homeTla) TLA[m.home]=m.homeTla;
+      if(m.awayTla) TLA[m.away]=m.awayTla;
       (m.sides||[]).forEach(sd=>{ if(sd.q==null||!isFinite(sd.q)){ sd.q=1.01; sd.qx=true; } });
       /* Noch keine Marktquote: Spiel ist (noch) nicht tippbar — "Quote folgt". */
       if(m.sides&&m.sides.length&&m.sides.every(sd=>sd.qx)) m.noQuote=true;
@@ -1737,7 +1743,7 @@ function vHome(){
 
     <div class="sec">Worauf tippen?<span class="ln"></span></div>
     <div class="complist">
-      ${['bl1','bl2','ufc','bl3','ucl'].map(id=>{
+      ${['bl1','bl2','ufc','bl3','ucl','eng1','esp1','ita1'].map(id=>{
         const c=COMPS[id],locked=c.prem&&!S.premium;
         /* Jedes Motiv hat seinen "Blickfang" (Ball, Logo, Actionmoment) an einer anderen
            Stelle im hochformatigen Bild — eine einzige Position für alle Karten hätte bei
@@ -1745,8 +1751,9 @@ function vHome(){
         const posY={bl1:'48%',bl2:'62%',bl3:'44%',ucl:'30%',ufc:'38%'}[id]||'center';
         const posX={bl2:'78%'}[id]||'center';
         return `<button class="compbar ${id}${locked?' locked':''}" data-comp="${id}"
-          style="background-image:linear-gradient(100deg,rgba(4,7,16,.6) 28%,rgba(4,7,16,.32) 78%),url('${TOPBG[id]}');
-          background-position:${posX} ${posY}">
+          style="${TOPBG[id]
+            ?`background-image:linear-gradient(100deg,rgba(4,7,16,.6) 28%,rgba(4,7,16,.32) 78%),url('${TOPBG[id]}');background-position:${posX} ${posY}`
+            :'background-image:linear-gradient(110deg,#0e1b2e 0%,#17314f 55%,#1d3a5e 100%)'}">
           <span class="ctxt"><b>${esc(c.name)}</b></span>
           ${locked?`<span class="ctag">${ICONS.lock}Premium</span>`:'<span class="arw">›</span>'}
         </button>`;}).join('')}
@@ -4199,6 +4206,10 @@ function tabInfo(){
     delete ROUNDS[r.id];
     toast('Runde verlassen');go('home');
   };
+  /* Quellenhinweis — der kostenlose Tarif von football-data.org verlangt die Nennung. */
+  if(['eng1','esp1','ita1'].includes(r.compId))
+    app.querySelector('#body').insertAdjacentHTML('beforeend',
+      '<p class="hint" style="text-align:center;margin-top:18px">Spielpläne und Ergebnisse: football-data.org</p>');
 }
 
 function drawDock(){

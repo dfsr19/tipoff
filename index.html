@@ -242,9 +242,12 @@ textarea{min-height:88px;resize:vertical;line-height:1.55}
 .compbar .arw{color:#fff;font-size:19px;flex-shrink:0}
 .compbar{box-shadow:inset 0 1px 0 rgba(255,255,255,.07),0 6px 16px -10px rgba(0,0,0,.8)}
 .compbar .ctxt b{text-shadow:2px 2px 0 rgba(0,0,0,.55),0 1px 8px rgba(0,0,0,.5);letter-spacing:.005em}
-.compbar .cflag{position:absolute;top:-9px;right:-14px;width:78px;height:54px;transform:rotate(14deg);opacity:.55;filter:saturate(.4) brightness(.6);pointer-events:none;
-  -webkit-mask-image:linear-gradient(225deg,#000 30%,transparent 80%);mask-image:linear-gradient(225deg,#000 30%,transparent 80%)}
-.compbar .cflag svg{width:100%;height:100%;display:block}
+.edgeflag{position:absolute;top:0;right:0;bottom:0;width:30%;pointer-events:none;opacity:.5;filter:saturate(.55) brightness(.5);
+  -webkit-mask-image:linear-gradient(270deg,#000 0%,transparent 100%);mask-image:linear-gradient(270deg,#000 0%,transparent 100%)}
+.edgeflag svg{width:100%;height:100%;display:block}
+.opt{position:relative;overflow:hidden}
+.opt>*{position:relative;z-index:1}
+.opt>.edgeflag{position:absolute;z-index:0}
 .compbar .ctxt,.compbar .arw,.compbar .ctag{position:relative;z-index:1}
 .morecomps{width:100%;margin:2px 0 0;padding:11px;border-radius:14px;background:rgba(255,255,255,.04);border:1px solid var(--line);
   color:var(--ink-2,#9aa4b2);font-weight:700;font-size:13px;display:flex;justify-content:center;gap:7px;align-items:center}
@@ -651,6 +654,8 @@ const CFLAG_SVG={"de": "<svg viewBox=\"0 0 64 48\" xmlns=\"http://www.w3.org/200
 const CFLAG={bl1:'de',bl2:'de',bl3:'de',eng1:'en',esp1:'es',ita1:'it',ucl:'eu',ufc:'globe'};
 /* Eigenes Symbol in bestimmter Größe — ersetzt die iOS-Emojis (⚽ 🔒 🌍 🥊 🏆). */
 const cIco=(key,h=18)=>`<span class="cico" style="height:${h}px;width:${Math.round(h*(key==='lock'||key==='globe'?1:1.33))}px">${CFLAG_SVG[key]||''}</span>`;
+const EDGE_SVG={de:'<svg viewBox="0 0 30 21" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"><rect width="30" height="7" fill="#111"/><rect y="7" width="30" height="7" fill="#d4201c"/><rect y="14" width="30" height="7" fill="#f2b705"/></svg>',en:'<svg viewBox="0 0 30 21" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"><rect width="30" height="21" fill="#f3f0e8"/><rect x="12" width="6" height="21" fill="#d4201c"/><rect y="7.5" width="30" height="6" fill="#d4201c"/></svg>',es:'<svg viewBox="0 0 30 21" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"><rect width="30" height="21" fill="#c8201c"/><rect y="5" width="30" height="11" fill="#f2b705"/></svg>',it:'<svg viewBox="0 0 30 21" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"><rect width="10" height="21" fill="#1b8a4a"/><rect x="10" width="10" height="21" fill="#f3f0e8"/><rect x="20" width="10" height="21" fill="#c8201c"/></svg>',eu:'<svg viewBox="0 0 30 21" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"><rect width="30" height="21" fill="#1f45b5"/><circle cx="15" cy="10.5" r="6" fill="none" stroke="#ffd23c" stroke-width="1.6" stroke-dasharray="1.6 2.2"/></svg>',globe:'<svg viewBox="0 0 30 21" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"><rect width="30" height="21" fill="#1f5fae"/><ellipse cx="15" cy="10.5" rx="8" ry="8" fill="#3c9a55"/><path d="M7 10.5H23M15 2.5V18.5" stroke="#06101c" stroke-width="1" opacity=".5"/></svg>'};
+const edgeFlag=id=>`<span class="edgeflag">${EDGE_SVG[CFLAG[id]]||''}</span>`;
 const compIco=(id,h)=>cIco(CFLAG[id]||'globe',h);
 /* Steht dieser Wettbewerb gerade offen? */
 const compFrei=id=>!COMPS[id]?.prem||S.premium;
@@ -1777,7 +1782,7 @@ function vHome(){
             ?`background-image:linear-gradient(100deg,rgba(3,5,12,.84) 30%,rgba(3,5,12,.66) 80%),url('${TOPBG[id]}');background-position:${posX} ${posY}`
             :'background-image:linear-gradient(110deg,#0e1b2e 0%,#17314f 55%,#1d3a5e 100%)'}">
           <span class="ctxt"><b>${esc(c.name)}</b></span>
-          <span class="cflag">${CFLAG_SVG[CFLAG[id]]||''}</span>
+          ${edgeFlag(id)}
           ${locked?`<span class="ctag">${ICONS.lock}Premium</span>`:'<span class="arw">›</span>'}
         </button>`;}).join('')}
       <button class="morecomps${S.allComps?' open':''}" id="morecomps">${S.allComps?'Weniger anzeigen':'Alle anzeigen'} <i>⌄</i></button>
@@ -2153,7 +2158,7 @@ function vCreate(){
         return `<button class="opt" data-c="${id}" ${n||zu?'':'disabled style="opacity:.45"'}
           style="${bg?`background-image:linear-gradient(rgba(6,7,10,.68),rgba(6,7,10,.93)),url('${bg}');
             background-size:cover;background-position:center`:''}">
-          ${zu?`<span class="pill b">★ Premium</span>`:''}
+          ${edgeFlag(id)}${zu?`<span class="pill b">★ Premium</span>`:''}
           <b style="font-size:20px">${esc(c.name)}</b>
           <p>${zu?'Mit Premium freigeschaltet.'
                 :n?`${n} ${c.sport==='mma'?(n===1?'Kampf':'Kämpfe'):(n===1?'Spiel':'Spiele')} geladen, inklusive Liveticker — Ergebnisse und Punkte tragen sich von selbst ein.`
@@ -2209,9 +2214,9 @@ function vCreate(){
       <div class="sec">Sichtbarkeit<span class="ln"></span></div>
       <div class="toggle">
         <button data-v="private" aria-pressed="${d.visibility==='private'}">
-          <span class="t">${cIco('lock',23)} Privat</span><span class="d">Nur per Link oder Anfrage</span></button>
+          <span class="t">🔒 Privat</span><span class="d">Nur per Link oder Anfrage</span></button>
         <button data-v="public" aria-pressed="${d.visibility==='public'}">
-          <span class="t">${cIco('globe',23)} Öffentlich</span><span class="d">Jeder kann beitreten</span></button>
+          <span class="t">🌍 Öffentlich</span><span class="d">Jeder kann beitreten</span></button>
       </div>
 
       <div class="sec" style="margin-top:22px">Spielmodus<span class="ln"></span></div>
@@ -2373,9 +2378,9 @@ function vCreate(){
       <label>Sichtbarkeit</label>
       <div class="toggle">
         <button data-v="private" aria-pressed="${d.visibility==='private'}">
-          <span class="t">${cIco('lock',23)} Privat</span><span class="d">Nur per Link oder Anfrage</span></button>
+          <span class="t">🔒 Privat</span><span class="d">Nur per Link oder Anfrage</span></button>
         <button data-v="public" aria-pressed="${d.visibility==='public'}">
-          <span class="t">${cIco('globe',23)} Öffentlich</span><span class="d">Jeder kann beitreten</span></button>
+          <span class="t">🌍 Öffentlich</span><span class="d">Jeder kann beitreten</span></button>
       </div>
 
       <label for="tm">Teams</label>
@@ -4079,7 +4084,7 @@ function tabInfo(){
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:11px;flex-wrap:wrap">
         <span class="pill b">${compTag(r)}</span>
         <span class="pill ${r.visibility==='public'?'g':''}">${
-          r.visibility==='public'?cIco('globe',15)+' Öffentlich':cIco('lock',15)+' Privat'}</span>
+          r.visibility==='public'?'🌍 Öffentlich':'🔒 Privat'}</span>
         ${own?'<span class="pill b">Du bist Ersteller</span>':''}
       </div>
       <div style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">
@@ -4131,9 +4136,9 @@ function tabInfo(){
       <label>Sichtbarkeit</label>
       <div class="toggle">
         <button data-vis="private" aria-pressed="${r.visibility==='private'}">
-          <span class="t">${cIco('lock',23)} Privat</span><span class="d">Nur per Link oder Anfrage</span></button>
+          <span class="t">🔒 Privat</span><span class="d">Nur per Link oder Anfrage</span></button>
         <button data-vis="public" aria-pressed="${r.visibility==='public'}">
-          <span class="t">${cIco('globe',23)} Öffentlich</span><span class="d">Jeder kann beitreten</span></button>
+          <span class="t">🌍 Öffentlich</span><span class="d">Jeder kann beitreten</span></button>
       </div>
     </div>
 

@@ -242,11 +242,14 @@ textarea{min-height:88px;resize:vertical;line-height:1.55}
 .compbar .arw{color:#fff;font-size:19px;flex-shrink:0}
 .compbar{box-shadow:inset 0 1px 0 rgba(255,255,255,.07),0 6px 16px -10px rgba(0,0,0,.8)}
 .compbar .ctxt b{text-shadow:2px 2px 0 rgba(0,0,0,.55),0 1px 8px rgba(0,0,0,.5);letter-spacing:.005em}
-.compbar .cflag{width:46px;height:35px;flex-shrink:0;transform:rotate(-7deg);transition:transform .2s}
+.compbar .cflag{position:absolute;top:-9px;right:-14px;width:78px;height:54px;transform:rotate(14deg);opacity:.55;filter:saturate(.4) brightness(.6);pointer-events:none;
+  -webkit-mask-image:linear-gradient(225deg,#000 30%,transparent 80%);mask-image:linear-gradient(225deg,#000 30%,transparent 80%)}
 .compbar .cflag svg{width:100%;height:100%;display:block}
-.compbar:active .cflag{transform:rotate(-2deg) scale(1.06)}
-.cico{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;vertical-align:middle}
-.cico svg{width:100%;height:100%;display:block}
+.compbar .ctxt,.compbar .arw,.compbar .ctag{position:relative;z-index:1}
+.morecomps{width:100%;margin:2px 0 0;padding:11px;border-radius:14px;background:rgba(255,255,255,.04);border:1px solid var(--line);
+  color:var(--ink-2,#9aa4b2);font-weight:700;font-size:13px;display:flex;justify-content:center;gap:7px;align-items:center}
+.morecomps i{font-style:normal;display:inline-block;transition:transform .2s}
+.morecomps.open i{transform:rotate(180deg)}
 .compbar .ctag{font-size:10.5px;font-weight:700;color:#F0D9A8;text-transform:uppercase;
   letter-spacing:.04em;display:flex;align-items:center;gap:5px;flex-shrink:0;
   text-shadow:0 1px 4px rgba(0,0,0,.6)}
@@ -1762,7 +1765,7 @@ function vHome(){
 
     <div class="sec">Worauf tippen?<span class="ln"></span></div>
     <div class="complist">
-      ${['bl1','bl2','ufc','bl3','ucl','eng1','esp1','ita1'].map(id=>{
+      ${(S.allComps?['bl1','bl2','ufc','bl3','ucl','eng1','esp1','ita1']:['bl1','bl2','ufc','bl3','ucl']).map(id=>{
         const c=COMPS[id],locked=c.prem&&!S.premium;
         /* Jedes Motiv hat seinen "Blickfang" (Ball, Logo, Actionmoment) an einer anderen
            Stelle im hochformatigen Bild — eine einzige Position für alle Karten hätte bei
@@ -1771,12 +1774,13 @@ function vHome(){
         const posX='center';
         return `<button class="compbar ${id}${locked?' locked':''}" data-comp="${id}"
           style="${TOPBG[id]
-            ?`background-image:linear-gradient(100deg,rgba(4,7,16,.6) 28%,rgba(4,7,16,.32) 78%),url('${TOPBG[id]}');background-position:${posX} ${posY}`
+            ?`background-image:linear-gradient(100deg,rgba(3,5,12,.84) 30%,rgba(3,5,12,.66) 80%),url('${TOPBG[id]}');background-position:${posX} ${posY}`
             :'background-image:linear-gradient(110deg,#0e1b2e 0%,#17314f 55%,#1d3a5e 100%)'}">
           <span class="ctxt"><b>${esc(c.name)}</b></span>
           <span class="cflag">${CFLAG_SVG[CFLAG[id]]||''}</span>
           ${locked?`<span class="ctag">${ICONS.lock}Premium</span>`:'<span class="arw">›</span>'}
         </button>`;}).join('')}
+      <button class="morecomps${S.allComps?' open':''}" id="morecomps">${S.allComps?'Weniger anzeigen':'Alle anzeigen'} <i>⌄</i></button>
     </div>
 
     <button class="share" id="share">
@@ -1879,6 +1883,7 @@ function vHome(){
     if(needRoom()) go('create',{flow:'comp',draft:{teams:[],visibility:'private',compId:'bl1'}});};
   app.querySelector('#newbtn').onclick=openCreate;
   app.querySelector('#quicknew').onclick=openCreate;
+  const mc=app.querySelector('#morecomps');if(mc)mc.onclick=()=>{S.allComps=!S.allComps;render();};
   app.querySelectorAll('[data-comp]').forEach(b=>b.onclick=()=>{
     const id=b.dataset.comp;
     if(!compFrei(id)){ toast(COMPS[id].name+' gibt es mit Premium'); return go('premium'); }
@@ -2142,18 +2147,19 @@ function vCreate(){
     <main>
       <p class="hint" style="margin:0 3px 18px">Worauf soll in deiner Runde getippt werden?</p>
       <div class="sec">Offizielle Wettbewerbe<span class="ln"></span></div>
-      ${Object.entries(COMPS).map(([id,c])=>{
+      ${Object.entries(COMPS).filter(([id])=>S.allComps||['bl1','bl2','bl3','ucl','ufc'].includes(id)).map(([id,c])=>{
         const n=evOf(id).length, zu=!compFrei(id);
         const bg=STEP1BG[id];
         return `<button class="opt" data-c="${id}" ${n||zu?'':'disabled style="opacity:.45"'}
-          style="${bg?`background-image:linear-gradient(rgba(8,9,11,.45),rgba(8,9,11,.88)),url('${bg}');
+          style="${bg?`background-image:linear-gradient(rgba(6,7,10,.68),rgba(6,7,10,.93)),url('${bg}');
             background-size:cover;background-position:center`:''}">
-          ${zu?`<span class="pill b">★ Premium</span>`:(id==='bl1'||id==='bl2')?'':`<span class="pill">${compIco(id,14)} ${esc(c.kurz)}</span>`}
+          ${zu?`<span class="pill b">★ Premium</span>`:''}
           <b style="font-size:20px">${esc(c.name)}</b>
           <p>${zu?'Mit Premium freigeschaltet.'
                 :n?`${n} ${c.sport==='mma'?(n===1?'Kampf':'Kämpfe'):(n===1?'Spiel':'Spiele')} geladen, inklusive Liveticker — Ergebnisse und Punkte tragen sich von selbst ein.`
                   :'Für diesen Wettbewerb sind gerade keine Daten geladen.'}</p>
         </button>`;}).join('')}
+      <button class="morecomps${S.allComps?' open':''}" id="morecomps2">${S.allComps?'Weniger anzeigen':'Alle anzeigen'} <i>⌄</i></button>
       <div class="sec">Ohne Datenquelle<span class="ln"></span></div>
       <button class="opt" data-c="custom">
         <span class="pill">🏟 Eigene Mannschaften</span>
@@ -2163,6 +2169,7 @@ function vCreate(){
       </button>
     </main>`;
     bindBack();
+    app.querySelector('#morecomps2').onclick=()=>{S.allComps=!S.allComps;render();};
     app.querySelectorAll('[data-c]').forEach(b=>b.onclick=()=>{
       const c=b.dataset.c;
       if(c==='custom') return go('create',{flow:'choice',draft:{...d,compId:null}});
@@ -2191,7 +2198,7 @@ function vCreate(){
       <div style="border-radius:var(--r);overflow:hidden;margin-bottom:14px;position:relative;
         height:100px;background-image:linear-gradient(rgba(8,9,11,.15),rgba(8,9,11,.75)),url('${banner}');
         background-size:cover;background-position:center;display:flex;align-items:flex-end;padding:12px 14px">
-        <span class="pill b" style="backdrop-filter:blur(6px);gap:7px">${compIco(d.compId,15)}${esc(c.name)}</span>
+        <span class="pill b" style="backdrop-filter:blur(6px);gap:7px">${esc(c.name)}</span>
       </div>
       <p class="hint" style="margin:0 3px 18px">Spielplan, Quoten und Ergebnisse kommen automatisch.
         Du musst nichts nachtragen.</p>

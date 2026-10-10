@@ -814,6 +814,59 @@ async function loadData(){
    bleibt dabei unangetastet — sonst wäre das Monatskontingent nach zwei
    Spielen leer, weil jeder Aufruf von api/data Guthaben kostet.
    Die Zwischenstände werden in die schon geladenen Spiele hineingemischt.   */
+/* ── Direkter ESPN-Abruf für Premier League, La Liga, Serie A ──
+   Zusätzlicher Weg neben api/live: ESPN erlaubt Browser-Abfragen, der Live-Stand
+   kommt dadurch auch dann an, wenn der Server-Teil mal nichts liefert. */
+const ESPN_INTL={eng1:'eng.1',esp1:'esp.1',ita1:'ita.1'};
+const INTL_STOP_W=new Set(['fc','cf','afc','ac','as','ss','ssc','us','acf','bc','cfc','sc','cd','ud','rcd','rc','ca','calcio','club','de','del','di','the','and','balompie','futbol']);
+const INTL_ALIAS_W={internazionalemilano:'intermilan',internazionale:'intermilan',inter:'intermilan',athleticbilbao:'athletic',athleticclub:'athletic',
+  rayovallecanomadrid:'rayovallecano',espanyolbarcelona:'espanyol',deportivoalaves:'alaves',wolves:'wolverhamptonwanderers',spurs:'tottenhamhotspur',
+  manunited:'manchesterunited',mancity:'manchestercity',verona:'hellasverona',celta:'celtavigo',betis:'realbetis',atletico:'atleticomadrid',
+  newcastle:'newcastleunited',westham:'westhamunited',leeds:'leedsunited',nottmforest:'nottinghamforest',brighton:'brightonhovealbion',
+  sociedad:'realsociedad',oviedo:'realoviedo',valladolid:'realvalladolid'};
+function canonW(n){
+  const k=String(n||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/&/g,' and ').replace(/[^a-z0-9 ]/g,' ')
+    .split(/\s+/).filter(w=>w&&!INTL_STOP_W.has(w)&&!/^\d+$/.test(w)).join('');
+  return INTL_ALIAS_W[k]||k;
+}
+function sameW(a,b){const x=canonW(a),y=canonW(b);if(!x||!y)return false;return x===y||(x.length>=6&&y.length>=6&&(x.includes(y)||y.includes(x)));}
+async function loadLiveEspnDirect(){
+  let neu=false;
+  const jetzt=Date.now();
+  const tag=t=>{const d=new Date(t);return d.getUTCFullYear()+String(d.getUTCMonth()+1).padStart(2,'0')+String(d.getUTCDate()).padStart(2,'0');};
+  for(const [comp,slug] of Object.entries(ESPN_INTL)){
+    const evs=evOf(comp);
+    const offen=evs.filter(ev=>ev.start&&!ev.finished&&ev.start.getTime()<=jetzt+5*60e3&&jetzt-ev.start.getTime()<=4*3600e3);
+    const hing=evs.filter(ev=>ev.live&&!offen.includes(ev));
+    if(!offen.length&&!hing.length) continue;
+    try{
+      const tage=[...new Set([tag(jetzt-864e5),tag(jetzt)])];
+      const lists=await Promise.all(tage.map(d=>fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${slug}/scoreboard?dates=${d}`,{cache:'no-store'}).then(r=>r.ok?r.json():{events:[]}).catch(()=>({events:[]}))));
+      const rows=[];
+      lists.forEach(d=>(d.events||[]).forEach(e=>{
+        const c=e.competitions&&e.competitions[0]; if(!c) return;
+        const h=(c.competitors||[]).find(x=>x.homeAway==='home'),a=(c.competitors||[]).find(x=>x.homeAway==='away');
+        if(!h||!a||!h.team||!a.team) return;
+        const st=c.status&&c.status.type&&c.status.type.state;
+        const mm=String((c.status&&c.status.displayClock)||'').match(/\d+/);
+        rows.push({home:h.team.displayName,away:a.team.displayName,state:st,h:Number(h.score),a:Number(a.score),minute:mm?Number(mm[0]):null,start:Date.parse(c.date||e.date)});
+      }));
+      [...offen,...hing].forEach(ev=>{
+        const x=rows.find(r=>sameW(r.home,ev.home)&&sameW(r.away,ev.away)&&Math.abs(r.start-ev.start.getTime())<2*864e5);
+        if(!x||!isFinite(x.h)||!isFinite(x.a)){ return; }
+        if(x.state==='in'){
+          const alt=ev.liveScore;
+          if(!alt||alt.h!==x.h||alt.a!==x.a||ev.minute!==x.minute) neu=true;
+          ev.live=true;ev.liveScore={h:x.h,a:x.a};ev.minute=x.minute;
+        }else if(x.state==='post'){
+          if(!ev.finished){ev.finished=true;ev.score={h:x.h,a:x.a};neu=true;}
+          delete ev.live;delete ev.liveScore;delete ev.minute;
+        }
+      });
+    }catch(e){}
+  }
+  return neu;
+}
 async function loadLive(){
   try{
     const r=await fetch(CFG.liveUrl+'?t='+Date.now(),{cache:'no-store'});
@@ -841,6 +894,7 @@ async function loadLive(){
         }
       });
     });
+    if(await loadLiveEspnDirect()) neu=true;
     return neu;
   }catch(e){ return false; }
 }
@@ -1334,6 +1388,23 @@ function livePtsOf(r,m){
     const p=theirs[ev.id]; if(!p) return;
     const res=liveResult(ev,r); if(!res) return;
     sum+=ptsFor(p,res,ev);
+  });
+  return sum;
+}
+/* Beendete, aber noch nicht endgültig verbuchte Spiele (Verbuchung läuft einen
+   Moment später) — zählen im Gesamtstand schon mit, damit rechts und links
+   dasselbe steht. Nach dem Verbuchen (settledEvents) fallen sie hier raus. */
+function unsettledPtsOf(r,m){
+  if(!r||r.custom) return 0;
+  const list=withModus(r, evOf(r.compId));
+  r.settledEvents=r.settledEvents||{};
+  const theirs=m.id==='me'?r.picks:((r.memberPicks&&r.memberPicks[m.id])||{});
+  let sum=0;
+  list.forEach(ev=>{
+    if(r.settledEvents[ev.id]) return;
+    const p=theirs[ev.id]; if(!p) return;
+    const res=eventResult(ev,r); if(!res||!res.real) return;
+    const v=ptsFor(p,res,ev); if(isFinite(v)) sum+=v;
   });
   return sum;
 }
@@ -3388,7 +3459,7 @@ function tabTable(){
      und Einsätze, die gerade in Duellen/Pott stecken ("offen"). */
   const XL=xOn(r)?xLedger(r):null, XD=XL?XL.days:xDays(r), actX=XD.length?xActiveDay(XD):null;
   const cst=r.custom||r.modus!=='regler';
-  const totalOf=m=>totalPts(r,m,XL)+(liveOf[m.id]||0);
+  const totalOf=m=>totalPts(r,m,XL)+unsettledPtsOf(r,m)+(liveOf[m.id]||0);
   const dayOf=m=>(actX?xDayPts(r,uidOfM(m),actX):0)+(liveOf[m.id]||0);
   const pendOf=m=>XL?(XL.pending[uidOfM(m)]||0):0;
   const rows=[...r.members].sort((a,b)=>totalOf(b)-totalOf(a));

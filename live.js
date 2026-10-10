@@ -1,0 +1,409 @@
+/**
+ * api/live.js — Vercel Serverless Function (Live-Zwischenstände)
+ *
+ * WARUM ES DIESE ZWEITE FUNKTION GIBT:
+ * api/data.js fragt bei jedem Aufruf auch die Odds API nach Quoten — und die
+ * kostet Guthaben (5 Credits pro Aufruf, bei 500 im Monat also nur 100 Aufrufe).
+ * Während eines laufenden Spiels soll die App aber im Minutentakt nachschauen,
+ * ob ein Tor gefallen ist. Über api/data.js wäre das Monatsguthaben nach zwei
+ * Spielen aufgebraucht.
+ *
+ * Diese Funktion fragt deshalb AUSSCHLIESSLICH OpenLigaDB ab — kostenlos und
+ * ohne Schlüssel. Sie liefert nur das, was sich während eines Spiels ändert:
+ * Zwischenstand, Spielminute und ob das Spiel vorbei ist. Quoten braucht es
+ * dafür nicht, die stehen beim Tippen ohnehin schon fest.
+ *
+ * Antwort:
+ *   { updated: "...", live: { "ol12345": {score:{h,a}, minute, finished}, ... } }
+ */
+
+const SEASON = process.env.SEASON || '2026';
+const KV_URL   = process.env.KV_REST_API_URL;
+const KV_TOKEN = process.env.KV_REST_API_TOKEN;
+async function kvGet(key){
+  if(!KV_URL || !KV_TOKEN) return null;
+  try{
+    const r = await fetch(`${KV_URL}/get/${key}`, {headers:{Authorization:`Bearer ${KV_TOKEN}`}});
+    if(!r.ok) return null;
+    const j = await r.json();
+    return j.result == null ? null : JSON.parse(j.result);
+  }catch(e){ return null; }
+}
+
+/**
+ * ESPN-Anbindung — direkt in dieser Datei statt als Import (siehe data.js
+ * für den Grund: ein fehlgeschlagener Import einer Hilfsdatei hat die
+ * gesamte Funktion mit FUNCTION_INVOCATION_FAILED abstürzen lassen)
+ *
+ * WARUM ESPN UND NICHT OpenLigaDB:
+ * Für die Bundesligen ist OpenLigaDB zuverlässig — dort seit Jahren gepflegt.
+ * Für die Champions League ist sie es NICHT: der Eintrag für 2026/27 enthält
+ * nur ein Platzhalter-Gerüst (alle Spiele mit identischem Anstoß, identischen
+ * Quoten, falsche Paarungen wie "RB Leipzig gegen Real Madrid UND Manchester
+ * City am selben Tag"). ESPN liefert dagegen die echte Auslosung, dazu
+ * Live-Zwischenstände MIT Spielminute und sogar Quoten — kostenlos und ohne
+ * Schlüssel. Damit kostet die Champions League auch kein Odds-API-Guthaben.
+ *
+ * */
+
+/* Amerikanische Quoten (-150 / +350) in dezimale umrechnen (1,67 / 4,50). */
+/* OpenLigaDB liefert matchDateTime in deutscher Ortszeit OHNE Zeitzonen-Angabe
+   — naiv geparst hält JavaScript das für UTC und verschiebt die Zeit um 1-2
+   Stunden. matchDateTimeUTC ist das richtige Feld, aber auch das kommt ohne
+   "Z" — das hängen wir hier explizit an, damit es eindeutig als UTC erkannt
+   wird. Fehlt matchDateTimeUTC ausnahmsweise, bleibt nur der unsichere
+   Rückfall auf matchDateTime. */
+function utcZeit(m){
+  if(m.matchDateTimeUTC)
+    return /[Zz]|[+-]\d\d:\d\d$/.test(m.matchDateTimeUTC) ? m.matchDateTimeUTC : m.matchDateTimeUTC+'Z';
+  return m.matchDateTime || null;
+}
+function americanToDecimal(v){
+  const n = Number(String(v).replace('+',''));
+  if(!Number.isFinite(n) || n === 0) return null;
+  return n > 0 ? n/100 + 1 : 100/Math.abs(n) + 1;
+}
+
+/* YYYYMMDD in UTC — das Format, das ESPN im dates-Parameter erwartet. */
+const espnDay = ts => {
+  const d = new Date(ts);
+  return d.getUTCFullYear()
+    + String(d.getUTCMonth()+1).padStart(2,'0')
+    + String(d.getUTCDate()).padStart(2,'0');
+};
+
+/* Ein einzelnes ESPN-Spiel in unser Format übersetzen.
+   ESPN kennt drei Zustände: "pre" (noch nicht angepfiffen), "in" (läuft
+   gerade) und "post" (abgepfiffen). Daraus ergibt sich direkt, ob wir ein
+   endgültiges Ergebnis oder einen vorläufigen Zwischenstand vor uns haben. */
+function parseEvent(ev){
+  const comp = ev.competitions?.[0];
+  if(!comp) return null;
+  const cs = comp.competitors || [];
+  const home = cs.find(c => c.homeAway === 'home');
+  const away = cs.find(c => c.homeAway === 'away');
+  if(!home?.team?.displayName || !away?.team?.displayName) return null;
+
+  const state = comp.status?.type?.state;          // pre | in | post
+  const h = Number(home.score), a = Number(away.score);
+  const gueltig = Number.isFinite(h) && Number.isFinite(a);
+
+  /* Spielminute nur bei laufendem Spiel — ESPN liefert sie als "23'". */
+  let minute = null;
+  if(state === 'in'){
+    const m = String(comp.status?.displayClock || '').match(/\d+/);
+    if(m) minute = Number(m[0]);
+  }
+
+  const out = {
+    id: 'es' + ev.id,
+    start: comp.date || ev.date,
+    home: home.team.displayName,
+    away: away.team.displayName,
+    finished: state === 'post' && gueltig
+  };
+  if(out.finished) out.score = {h, a};
+  else if(state === 'in' && gueltig){
+    out.live = true;
+    out.liveScore = {h, a};
+    out.minute = minute;
+  }
+
+  /* Quoten: ESPN gibt amerikanische Moneyline-Quoten von DraftKings mit.
+     "close" ist der aktuelle Stand, "open" der Eröffnungskurs. */
+  const ml = comp.odds?.[0]?.moneyline;
+  if(ml){
+    const q1 = americanToDecimal(ml.home?.close?.odds ?? ml.home?.open?.odds);
+    const qx = americanToDecimal(ml.draw?.close?.odds ?? ml.draw?.open?.odds);
+    const q2 = americanToDecimal(ml.away?.close?.odds ?? ml.away?.open?.odds);
+    if(q1 && qx && q2) out.marktQuoten = {q1, qx, q2};
+  }
+  return out;
+}
+
+/**
+ * Spiele eines ESPN-Wettbewerbs für mehrere Tage holen.
+ *
+ * ESPN akzeptiert im dates-Parameter KEINE Zeitspanne (ein Bereich liefert
+ * trotzdem nur einen Tag zurück) — deshalb wird pro Tag einzeln abgefragt und
+ * anschließend zusammengeführt. Die Abfragen laufen parallel, damit die
+ * Funktion nicht in ihr Zeitlimit läuft. Doppelte Spiele (ein Tag kann in
+ * zwei Zeitzonen fallen) werden über die ESPN-Id entfernt.
+ */
+async function loadEspnSoccer(slug, dateStrs){
+  const base = `https://site.api.espn.com/apis/site/v2/sports/soccer/${slug}/scoreboard`;
+  const urls = dateStrs.length ? dateStrs.map(d => `${base}?dates=${d}`) : [base];
+
+  const listen = await Promise.all(urls.map(async u => {
+    try{
+      const r = await fetch(u);
+      if(!r.ok) return [];
+      const d = await r.json();
+      return Array.isArray(d.events) ? d.events : [];
+    }catch(e){ return []; }   // ein ausgefallener Tag kippt die anderen nicht
+  }));
+
+  const proId = new Map();
+  for(const evs of listen)
+    for(const ev of evs){
+      const m = parseEvent(ev);
+      if(m) proId.set(m.id, m);
+    }
+  return [...proId.values()].sort((x,y) => new Date(x.start) - new Date(y.start));
+}
+
+/**
+ * Die Tage rund um den aktuellen Champions-League-Spieltag.
+ *
+ * Ein CL-Spieltag verteilt sich auf Dienstag bis Donnerstag, gelegentlich
+ * auch Montag. Ein Fenster von 4 Tagen zurück und 4 nach vorn deckt den
+ * laufenden Spieltag samt frisch beendeter Spiele sicher ab, ohne dass für
+ * jeden einzelnen Tag der Saison eine Abfrage nötig wäre.
+ */
+function fensterTage(zurueck = 4, vor = 4){
+  const tage = [];
+  for(let i = -zurueck; i <= vor; i++)
+    tage.push(espnDay(Date.now() + i*864e5));
+  return tage;
+}
+
+/* Nur die Bundesligen kommen aus OpenLigaDB. Die Champions League wird weiter
+   unten über ESPN geholt — der OpenLigaDB-Eintrag für 2026/27 enthält nur
+   Platzhalter-Daten (identische Anstoßzeiten, falsche Paarungen) und wäre für
+   einen Live-Ticker unbrauchbar. */
+const LEAGUES = ['bl1', 'bl2', 'bl3'];
+
+/* ESPN als bevorzugte Live-Quelle auch für die drei deutschen Ligen (siehe
+   handler unten): OpenLigaDB ist community-gepflegt — Zwischenstände tragen
+   dort Freiwillige von Hand ein, was während des Spiels unzuverlässig sein
+   kann. ESPN bezieht seine Live-Daten von einem professionellen Feed und ist
+   während des Spiels deutlich verlässlicher; das Endergebnis nach Abpfiff
+   bleibt bei OpenLigaDB (dort seit Jahren zuverlässig). */
+const ESPN_SLUG = {bl1:'ger.1', bl2:'ger.2', bl3:'ger.3'};
+
+/* Premier League, La Liga und Serie A: Spielplan kommt von football-data.org
+   (api/data.js legt ihn 5 Minuten lang im KV ab, hier wird er nur gelesen —
+   keine eigene Abfrage, damit das Limit von 10 pro Minute nie eine Rolle spielt).
+   Live-Stand und Abpfiff kommen von ESPN. */
+const INTL = [
+  {id:'eng1', fd:'PL', espn:'eng.1'},
+  {id:'esp1', fd:'PD', espn:'esp.1'},
+  {id:'ita1', fd:'SA', espn:'ita.1'}
+];
+/* Vereinsnamen international — Kopie aus api/data.js (jede Funktion trägt ihre
+   Hilfen selbst, ein fehlender Import hat früher alles lahmgelegt). */
+const INTL_STOP = new Set(['fc','cf','afc','ac','as','ss','ssc','us','acf','bc','cfc','sc','cd','ud','rcd','rc','ca',
+  'calcio','club','de','del','di','the','and','balompie','futbol']);
+const INTL_ALIAS = {
+  internazionalemilano:'intermilan', internazionale:'intermilan', inter:'intermilan',
+  athleticbilbao:'athletic', athleticclub:'athletic',
+  rayovallecanomadrid:'rayovallecano', espanyolbarcelona:'espanyol', deportivoalaves:'alaves',
+  wolves:'wolverhamptonwanderers', spurs:'tottenhamhotspur', manunited:'manchesterunited', mancity:'manchestercity',
+  verona:'hellasverona', celta:'celtavigo', betis:'realbetis', atleticomadrid:'atleticomadrid', atletico:'atleticomadrid',
+  newcastle:'newcastleunited', westham:'westhamunited', leeds:'leedsunited', nottmforest:'nottinghamforest',
+  brighton:'brightonhovealbion', sociedad:'realsociedad', oviedo:'realoviedo', valladolid:'realvalladolid'
+};
+function canonIntl(name){
+  const t = String(name).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/&/g,' and ').replace(/[^a-z0-9 ]/g,' ').split(/\s+/)
+    .filter(w => w && !INTL_STOP.has(w) && !/^\d+$/.test(w));
+  const k = t.join('');
+  return INTL_ALIAS[k] || k;
+}
+function sameTeamIntl(a,b){
+  const x = canonIntl(a), y = canonIntl(b);
+  if(!x || !y) return false;
+  if(x===y) return true;
+  return x.length>=8 && y.length>=8 && (x.includes(y) || y.includes(x));
+}
+const normTeam = s => String(s).toLowerCase().normalize('NFD')
+  .replace(/[\u0300-\u036f]/g,'').replace(/[^a-z]/g,'');
+/* ESPN übersetzt manche Städtenamen ins Englische, OpenLigaDB nicht — bei
+   reiner Buchstaben-Normalisierung (Umlaute entfernen) bleiben "Köln" und
+   "Cologne" trotzdem zwei komplett verschiedene Wörter. Bekannte Fälle hier
+   ergänzen, falls in Zukunft noch ein Verein nicht erkannt wird. */
+const TEAM_ALIASE = {
+  koln: ['cologne'],
+  munchen: ['munich'],
+  nurnberg: ['nuremberg'],
+};
+function sameTeam(a,b){
+  const x=normTeam(a), y=normTeam(b);
+  if(!x || !y) return false;
+  if(x===y || x.includes(y) || y.includes(x)) return true;
+  for(const [de, alts] of Object.entries(TEAM_ALIASE)){
+    const xHatDe = x.includes(de), yHatDe = y.includes(de);
+    for(const en of alts){
+      if((xHatDe && y.includes(en)) || (yHatDe && x.includes(en))) return true;
+    }
+  }
+  return false;
+}
+
+/* Endstand — nur wenn das Spiel wirklich abgeschlossen ist. */
+function endResult(m){
+  if(!m.matchIsFinished) return null;
+  const rs = m.matchResults || [];
+  const r = rs.find(x => x.resultTypeID === 2) || rs[rs.length-1];
+  if(!r) return null;
+  const h = Number(r.pointsTeam1), a = Number(r.pointsTeam2);
+  if(!Number.isFinite(h) || !Number.isFinite(a)) return null;
+  return {h, a};
+}
+
+/* Zwischenstand eines gerade laufenden Spiels. OpenLigaDB trägt Tore einzeln
+   ein — der aktuelle Stand ist der Stand nach dem zuletzt gefallenen Tor.
+   Kein Tor eingetragen, aber angepfiffen: dann steht es 0:0.
+   Zeitfenster (angepfiffen, höchstens 3,5 Std. her) verhindert, dass ein Spiel
+   ewig als "läuft" gilt, falls es niemand als beendet markiert. */
+function liveInfo(m){
+  if(m.matchIsFinished) return null;
+  const start = new Date(utcZeit(m)).getTime();
+  const now = Date.now();
+  if(!Number.isFinite(start)) return null;
+  if(start > now || now - start > 3.5*3600e3) return null;
+  const goals = Array.isArray(m.goals) ? m.goals : [];
+  let h = 0, a = 0, minute = null;
+  if(goals.length){
+    /* Nicht auf die Reihenfolge im Array verlassen — das Tor mit der höchsten
+       Gesamt-Torzahl ist das zuletzt gefallene. */
+    let best = null, bestSum = -1;
+    for(const g of goals){
+      const gh = Number(g.scoreTeam1), ga = Number(g.scoreTeam2);
+      if(!Number.isFinite(gh) || !Number.isFinite(ga)) continue;
+      if(gh + ga > bestSum){ bestSum = gh + ga; best = g; }
+    }
+    if(best){
+      h = Number(best.scoreTeam1); a = Number(best.scoreTeam2);
+      minute = Number(best.matchMinute) || null;
+    }
+  }
+  return {score:{h, a}, minute};
+}
+
+export default async function handler(req, res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+
+  const live = {};
+  const jetzt = Date.now();
+
+  /* Champions League über ESPN — dieselbe Quelle wie in api/data.js, damit
+     die Spiel-Ids zusammenpassen. Nur der heutige und der gestrige Tag: mehr
+     braucht ein Live-Ticker nicht, und es hält die Antwort schnell. */
+  try{
+    const clSpiele = await loadEspnSoccer('uefa.champions',
+      [espnDay(jetzt - 864e5), espnDay(jetzt)]);
+    for(const m of clSpiele){
+      if(m.finished && m.score) live[m.id] = {score:m.score, finished:true};
+      else if(m.live && m.liveScore)
+        live[m.id] = {score:m.liveScore, minute:m.minute ?? null, finished:false};
+    }
+  }catch(e){ /* CL fehlt in diesem Aufruf, Bundesligen laufen weiter */ }
+
+  /* Premier League, La Liga, Serie A: Spiele, die gerade laufen (angepfiffen,
+     höchstens 6 Stunden her) mit ESPN abgleichen. Fehlt der Spielplan im KV
+     (noch nie geladen), gibt es für diese Liga einfach keinen Live-Stand — die
+     Ergebnisse kommen dann nach dem Spiel regulär über api/data.js. */
+  const debug = {};
+  await Promise.all(INTL.map(async L => {
+    const dbg = debug[L.id] = {};
+    try{
+      let sched = await kvGet('fd-sched-v1-'+L.fd);
+      let spiele = sched && Array.isArray(sched.matches) ? sched.matches : [];
+      dbg.kv = spiele.length;
+      /* Spielplan fehlt im Zwischenspeicher (z. B. frisch gelöscht oder noch nie
+         geladen): direkt bei football-data.org nur die letzten Tage holen. */
+      if(!spiele.length && process.env.FOOTBALL_DATA_KEY){
+        try{
+          const von = espnDay(jetzt-2*864e5), bis = espnDay(jetzt+864e5);
+          const iso = d => d.slice(0,4)+'-'+d.slice(4,6)+'-'+d.slice(6,8);
+          const r = await fetch(`https://api.football-data.org/v4/competitions/${L.fd}/matches?dateFrom=${iso(von)}&dateTo=${iso(bis)}`,
+            {headers:{'X-Auth-Token':process.env.FOOTBALL_DATA_KEY}});
+          dbg.fdHttp = r.status;
+          if(r.ok){
+            const d = await r.json();
+            spiele = (d.matches||[]).filter(m => m.homeTeam && m.awayTeam).map(m => ({
+              id:'fd'+m.id, start:m.utcDate, home:m.homeTeam.name||m.homeTeam.shortName,
+              away:m.awayTeam.name||m.awayTeam.shortName,
+              finished:(m.status==='FINISHED'||m.status==='AWARDED')}));
+          }
+        }catch(e){ dbg.fdFehler = String(e.message||e); }
+      }
+      const laufend = spiele.filter(m => {
+        const t = Date.parse(m.start);
+        return !m.finished && isFinite(t) && t <= jetzt && jetzt - t <= 6*3600e3;
+      });
+      dbg.laufend = laufend.length;
+      if(!laufend.length) return;                       // nichts zu tun, ESPN gar nicht erst fragen
+      const espn = await loadEspnSoccer(L.espn, [espnDay(jetzt-864e5), espnDay(jetzt)]);
+      dbg.espn = espn.length;
+      dbg.espnLive = espn.filter(x => x.live).length;
+      dbg.treffer = 0;
+      for(const m of laufend){
+        const t0 = Date.parse(m.start);
+        const e = espn.find(x => sameTeamIntl(x.home, m.home) && sameTeamIntl(x.away, m.away) &&
+          Math.abs(Date.parse(x.start) - t0) < 2*864e5);
+        if(!e){ (dbg.ohneTreffer = dbg.ohneTreffer || []).push(m.home+' – '+m.away); continue; }
+        dbg.treffer++;
+        if(e.finished && e.score) live[m.id] = {score:e.score, finished:true};
+        else if(e.live && e.liveScore) live[m.id] = {score:e.liveScore, minute:e.minute ?? null, finished:false};
+      }
+    }catch(e){ dbg.fehler = String(e.message||e); }
+  }));
+
+  await Promise.all(LEAGUES.map(async L => {
+    try{
+      /* ESPN-Live-Daten für diese Liga vorab laden — heute + gestern reicht,
+         weil unten ohnehin nur Spiele der letzten 6 Stunden verwendet werden.
+         (Vorher: ±3 Tage = 7 Anfragen pro Liga, das hat die Funktion beim
+         Vercel-Zeitlimit ins Stolpern gebracht und ALLES leer zurückgegeben,
+         auch die OpenLigaDB-Rückfallebene.) */
+      let espnSpiele = [];
+      try{ espnSpiele = await loadEspnSoccer(ESPN_SLUG[L], [espnDay(jetzt-864e5), espnDay(jetzt)]); }
+      catch(e){ /* ESPN nicht erreichbar — unten greift die OpenLigaDB-Rückfallebene */ }
+
+      const r = await fetch(`https://api.openligadb.de/getmatchdata/${L}/${SEASON}`);
+      if(!r.ok) return;
+      const rows = await r.json();
+      if(!Array.isArray(rows)) return;
+      for(const m of rows){
+        /* matchDateTimeUTC statt matchDateTime: Letzteres liefert OpenLigaDB
+           in deutscher Ortszeit ohne Zeitzonen-Angabe — naiv als UTC geparst
+           lag ein laufendes Spiel dadurch bis zu 2 Stunden "in der Zukunft"
+           und wurde fälschlich als "noch nicht angepfiffen" übersprungen. */
+        const start = new Date(utcZeit(m)).getTime();
+        /* Nur Spiele im relevanten Zeitfenster mitschicken — alles andere
+           ändert sich gerade ohnehin nicht und würde die Antwort aufblähen. */
+        if(!Number.isFinite(start)) continue;
+        if(start > jetzt || jetzt - start > 6*3600e3) continue;
+
+        /* ESPN bevorzugt: verlässlicherer Live-Feed als OpenLigaDBs von Hand
+           gepflegte Einträge. Abgleich per Teamnamen, da die IDs der beiden
+           Quellen nichts miteinander zu tun haben. */
+        const treffer = espnSpiele.find(e =>
+          sameTeam(e.home, m.team1?.teamName) && sameTeam(e.away, m.team2?.teamName));
+        if(treffer){
+          if(treffer.finished){ live['ol'+m.matchID] = {score:treffer.score, finished:true}; continue; }
+          if(treffer.live){ live['ol'+m.matchID] = {score:treffer.liveScore, minute:treffer.minute, finished:false}; continue; }
+        }
+
+        /* Kein ESPN-Treffer (Team-Namen zu unterschiedlich, oder ESPN gerade
+           nicht erreichbar) — OpenLigaDB als Rückfallebene, besser als gar
+           nichts anzuzeigen. */
+        const score = endResult(m);
+        if(score){
+          live['ol'+m.matchID] = {score, finished:true};
+          continue;
+        }
+        const lv = liveInfo(m);
+        if(lv) live['ol'+m.matchID] = {score:lv.score, minute:lv.minute, finished:false};
+      }
+    }catch(e){ /* eine ausgefallene Liga reißt die anderen nicht mit */ }
+  }));
+
+  /* Kurz zwischengespeichert: schauen mehrere Leute gleichzeitig zu, fragt
+     trotzdem nur einer wirklich bei OpenLigaDB nach. 25 Sekunden sind kurz
+     genug, dass ein Tor spürbar schnell ankommt. */
+  res.setHeader('Cache-Control', 'public, s-maxage=25, stale-while-revalidate=15');
+  res.status(200).json({updated:new Date().toISOString(), live, ...(req && req.query && req.query.debug ? {debug} : {})});
+}

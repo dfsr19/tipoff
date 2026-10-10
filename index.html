@@ -1782,7 +1782,6 @@ function vHome(){
             ?`background-image:linear-gradient(100deg,rgba(3,5,12,.84) 30%,rgba(3,5,12,.66) 80%),url('${TOPBG[id]}');background-position:${posX} ${posY}`
             :'background-image:linear-gradient(110deg,#0e1b2e 0%,#17314f 55%,#1d3a5e 100%)'}">
           <span class="ctxt"><b>${esc(c.name)}</b></span>
-          ${edgeFlag(id)}
           ${locked?`<span class="ctag">${ICONS.lock}Premium</span>`:'<span class="arw">›</span>'}
         </button>`;}).join('')}
       <button class="morecomps${S.allComps?' open':''}" id="morecomps">${S.allComps?'Weniger anzeigen':'Alle anzeigen'} <i>⌄</i></button>
@@ -2158,7 +2157,7 @@ function vCreate(){
         return `<button class="opt" data-c="${id}" ${n||zu?'':'disabled style="opacity:.45"'}
           style="${bg?`background-image:linear-gradient(rgba(6,7,10,.68),rgba(6,7,10,.93)),url('${bg}');
             background-size:cover;background-position:center`:''}">
-          ${edgeFlag(id)}${zu?`<span class="pill b">★ Premium</span>`:''}
+          ${zu?`<span class="pill b">★ Premium</span>`:''}
           <b style="font-size:20px">${esc(c.name)}</b>
           <p>${zu?'Mit Premium freigeschaltet.'
                 :n?`${n} ${c.sport==='mma'?(n===1?'Kampf':'Kämpfe'):(n===1?'Spiel':'Spiele')} geladen, inklusive Liveticker — Ergebnisse und Punkte tragen sich von selbst ein.`

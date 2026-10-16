@@ -528,11 +528,12 @@ function sameFighter(a,b){
    gleichen Tag auch kennt (Abgleich passiert im handler). */
 async function loadEspnData(dateStrs){
   const roh = [];
-  for(const ds of dateStrs){
+  const tage = await Promise.all([...dateStrs].map(async ds => {
     try{
       const r = await fetch(`https://site.api.espn.com/apis/site/v2/sports/mma/ufc/scoreboard?dates=${ds}`);
-      if(!r.ok) continue;
+      if(!r.ok) return [];
       const data = await r.json();
+      const out = [];
       for(const ev of data.events||[])
         for(const comp of ev.competitions||[]){
           const cs = comp.competitors||[];
@@ -543,10 +544,12 @@ async function loadEspnData(dateStrs){
             const w = cs.find(c=>c.winner===true);
             if(w===cs[0]) winner='A'; else if(w===cs[1]) winner='B';
           }
-          roh.push({a:cs[0].athlete.fullName, b:cs[1].athlete.fullName, date:comp.date, finished, winner});
+          out.push({a:cs[0].athlete.fullName, b:cs[1].athlete.fullName, date:comp.date, finished, winner});
         }
-    }catch(e){ /* dieser Tag wird übersprungen, Rest läuft weiter */ }
-  }
+      return out;
+    }catch(e){ return []; }   // dieser Tag wird übersprungen, Rest läuft weiter
+  }));
+  tage.forEach(l => roh.push(...l));
   /* ESPN kann denselben Kampf über zwei Datums-Buckets doppelt liefern (Zeitzonen) —
      per Namens-Id entdoppeln, die Version mit Ergebnis gewinnt. */
   const proId = new Map();
@@ -877,7 +880,7 @@ export default async function handler(req, res) {
     const odds = await loadOddsCached('mma_mixed_martial_arts');
     if(odds.length){
       const dateSet = new Set();
-      odds.forEach(ev => dateSet.add(espnDate(ev.commence_time)));
+      odds.forEach(ev => { const t=new Date(ev.commence_time).getTime(); [-1,0,1].forEach(k => dateSet.add(espnDate(t+k*864e5))); });
       for(let i=0;i<21;i++) dateSet.add(espnDate(Date.now()-i*864e5));
       const rohKaempfe = await loadEspnData(dateSet);
 
@@ -885,17 +888,18 @@ export default async function handler(req, res) {
          exklusiv — Abgleich gegen ESPNs echte UFC-Paarungen filtert fremde
          Promotions raus, ohne einzelne, noch nicht in ESPNs Kalender
          eingetragene UFC-Kämpfe fälschlich mit rauszuwerfen. */
+      /* STRENG: nur Kämpfe, die ESPN als UFC kennt — entweder die genaue Paarung
+         oder (bei kurzfristigem Gegnerwechsel) ein Kämpfer am selben Tag. Alles
+         andere ist eine fremde Promotion und fliegt raus. Vorher blieb ein ganzer
+         Tag ungefiltert, wenn ESPN weniger als die Hälfte seiner Kämpfe kannte —
+         genau dadurch rutschten fremde Kämpfe in die Karte. */
       const istEchtesUFC = ev => rohKaempfe.some(p =>
-        (sameFighter(p.a,ev.home_team)&&sameFighter(p.b,ev.away_team)) ||
-        (sameFighter(p.a,ev.away_team)&&sameFighter(p.b,ev.home_team)));
-      const proTag = {};
-      odds.forEach(ev => { const d=espnDate(ev.commence_time); (proTag[d]=proTag[d]||[]).push(ev); });
-      let oddsGefiltert = [];
-      Object.values(proTag).forEach(evsAmTag => {
-        const treffer = evsAmTag.filter(istEchtesUFC);
-        if(treffer.length/evsAmTag.length >= 0.5) oddsGefiltert.push(...treffer);
-        else oddsGefiltert.push(...evsAmTag);
-      });
+        ((sameFighter(p.a,ev.home_team)&&sameFighter(p.b,ev.away_team)) ||
+         (sameFighter(p.a,ev.away_team)&&sameFighter(p.b,ev.home_team))) ||
+        (sameMeeting(p.date, ev.commence_time) &&
+         (sameFighter(p.a,ev.home_team)||sameFighter(p.b,ev.home_team)||
+          sameFighter(p.a,ev.away_team)||sameFighter(p.b,ev.away_team))));
+      const oddsGefiltert = odds.filter(istEchtesUFC);
 
       let order = {};
       try{ order = await reihenfolgeLaden(oddsGefiltert, rohKaempfe); }

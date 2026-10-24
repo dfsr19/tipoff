@@ -440,19 +440,21 @@ textarea{min-height:88px;resize:vertical;line-height:1.55}
 .reqrow{display:flex;align-items:center;gap:11px;background:var(--card);border:1px solid var(--line);
   border-radius:13px;padding:12px;margin-bottom:9px}
 .reqrow .nm{flex:1;font-size:14px;font-weight:500}
-.livebox{background:linear-gradient(180deg,rgba(239,68,68,.07),rgba(255,255,255,.02));border:1px solid rgba(239,68,68,.22);
-  border-radius:16px;padding:10px 12px 6px;margin:0 0 18px}
-.lvhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
-.lvtag{display:inline-flex;align-items:center;gap:7px;font-size:11px;font-weight:800;letter-spacing:.12em;color:#F87171}
-.lvtag i{width:8px;height:8px;border-radius:50%;background:#EF4444;box-shadow:0 0 0 0 rgba(239,68,68,.6);animation:lvpulse 1.6s infinite}
-@keyframes lvpulse{0%{box-shadow:0 0 0 0 rgba(239,68,68,.55)}70%{box-shadow:0 0 0 7px rgba(239,68,68,0)}100%{box-shadow:0 0 0 0 rgba(239,68,68,0)}}
-.lvtip{font-size:12px;font-weight:700;color:var(--blue);padding:6px 4px}
-.lvrow{width:100%;display:grid;grid-template-columns:34px 1fr auto 34px;align-items:center;gap:8px;padding:9px 0;
-  border-top:1px solid var(--line);text-align:left;color:var(--text)}
-.lvrow .lg{font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.04em}
-.lvrow .tm{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.lvrow .sc{font-family:'Poppins';font-weight:800;font-size:15px;color:var(--live)}
-.lvrow .mn{font-size:11px;color:#F87171;font-weight:700;text-align:right}
+.livebox{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:8px 12px 4px;margin:0 0 18px}
+.lvhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:2px}
+.lvtag{display:inline-flex;align-items:center;gap:6px;font-size:10.5px;font-weight:700;letter-spacing:.12em;color:var(--muted)}
+.lvtag i{width:6px;height:6px;border-radius:50%;background:#d9534f;opacity:.85;animation:lvpulse 2s ease-in-out infinite}
+@keyframes lvpulse{50%{opacity:.35}}
+.lvtip{font-size:12px;font-weight:600;color:var(--blue);padding:6px 2px}
+.lvrow{width:100%;display:grid;grid-template-columns:26px 1fr auto 1fr 28px;align-items:center;gap:8px;padding:9px 0;
+  border-top:1px solid var(--line);color:var(--text)}
+.lvrow .lg{font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.04em;text-align:left}
+.lvrow .tm{font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lvrow .tm.h{text-align:right}
+.lvrow .tm.a{text-align:left}
+.lvrow .sc{font-family:'Poppins';font-weight:700;font-size:14.5px;min-width:44px;text-align:center;padding:2px 8px;
+  border-radius:8px;background:var(--raise)}
+.lvrow .mn{font-size:11px;color:var(--muted);font-weight:600;text-align:right}
 .lvsheet{display:flex;flex-direction:column;gap:8px;margin-bottom:6px}
 .lvopt{display:flex;justify-content:space-between;align-items:center;padding:13px 14px;border-radius:12px;background:var(--raise);
   border:1px solid var(--line-2);color:var(--text);font-size:14px;text-align:left}
@@ -1875,8 +1877,9 @@ function liveBoxHtml(){
       <button class="lvtip" data-livetip="">Jetzt tippen ›</button></div>
     ${list.map(({comp,ev})=>`<button class="lvrow" data-livetip="${comp}">
       <span class="lg">${esc(COMPS[comp]?.kurz||'')}</span>
-      <span class="tm">${esc(short(ev.home))} – ${esc(short(ev.away))}</span>
-      <span class="sc">${ev.liveScore.h}:${ev.liveScore.a}</span>
+      <span class="tm h">${esc(short(ev.home))}</span>
+      <span class="sc">${ev.liveScore.h} : ${ev.liveScore.a}</span>
+      <span class="tm a">${esc(short(ev.away))}</span>
       <span class="mn">${ev.minute?ev.minute+"'":''}</span></button>`).join('')}
   </div>`;
 }
@@ -3253,8 +3256,7 @@ function matchCard(ev,isMain){
   const nurExakt=!!r.exactOnly&&!ev.noOdds;
   /* Abgegebener Tipp ist gesperrt — erst "Tipp bearbeiten" macht ihn wieder
      änderbar. So verstellt man nichts aus Versehen beim Durchscrollen. */
-  const editKey=r.id+':'+ev.id;
-  const gesperrt=!!(p&&!zu&&!(r.pendingSync&&r.pendingSync[ev.id])&&!(S.editTips&&S.editTips[editKey]));
+  const gesperrt=!!(p&&!zu&&!(r.pendingSync&&r.pendingSync[ev.id])&&!(S.editTips&&S.editTips[r.id]));
   el.innerHTML=`<div class="mtop">${ev.sport==='mma'?(isMain?'<span class="src headtag">Hauptkampf</span>':''):(ev.start?when(ev.start):'')}
     ${ev.noOdds||ev.source==='mkt'||ev.noQuote?'':'<span class="src">Modell</span>'}</div>
     <div class="who">${esc(nm[0])} <em>${ev.sport==='mma'?'vs':'—'}</em> ${esc(nm[1])}</div>
@@ -3349,9 +3351,7 @@ function matchCard(ev,isMain){
   if(gesperrt){
     const lk=document.createElement('div');lk.className='tiplock';
     const was=p.type==='exact'?`Genaues Ergebnis ${esc(p.side)}`:'';
-    lk.innerHTML=`<span class="v">${was?was+' · ':''}${ev.noStake?`Quote ${fq(p.q)}`:`<b>${p.stake} P</b> → ${fmt(p.stake*p.q)} P`}</span>
-      <button class="mini no">✎ Tipp bearbeiten</button>`;
-    lk.querySelector('button').onclick=()=>{S.editTips=S.editTips||{};S.editTips[editKey]=true;render();};
+    lk.innerHTML=`<span class="v">${was?was+' · ':''}${ev.noStake?`Quote ${fq(p.q)}`:`<b>${p.stake} P</b> → ${fmt(p.stake*p.q)} P`}</span>`;
     el.appendChild(lk);
   }
   if(p&&!zu&&!gesperrt&&!ev.noStake){
@@ -3429,7 +3429,7 @@ async function submitPicks(){
   if(btn){btn.disabled=true;btn.textContent='Einen Moment …';}
   for(const id of ids) await fsSyncPick(r,id);
   r.pendingSync={};
-  if(S.editTips) Object.keys(S.editTips).forEach(k=>{ if(k.startsWith(r.id+':')) delete S.editTips[k]; });
+  if(S.editTips) delete S.editTips[r.id];
   toast('Tipps abgegeben');
   render();
 }
@@ -4479,14 +4479,18 @@ function drawDock(){
   /* Noch offen: Tippen läuft */
   const frei=r.custom,offen=scopeEvs.filter(e=>!started(e)).length;
   const pend=Object.keys(r.pendingSync||{}).filter(id=>scopeEvs.some(e=>e.id===id)).length;
-  if(n&&pend){
+  const bearbeite=!!(S.editTips&&S.editTips[r.id]);
+  if(pend&&(n||bearbeite)){
     f.innerHTML=`<div class="dock">
-      <button class="btn" id="submitPicks">${frei?`${pend} von ${scopeEvs.length} Tipps abgeben`:`${pend} Tipp${pend>1?'s':''} abgeben`}</button>
+      <button class="btn" id="submitPicks">${bearbeite?'Änderungen speichern'
+        :frei?`${pend} von ${scopeEvs.length} Tipps abgeben`:`${pend} Tipp${pend>1?'s':''} abgeben`}</button>
       ${!frei&&r.modus==='regler'&&left()>0?`<p class="hint" style="text-align:center;margin-top:9px;font-size:11.5px">
         noch ${left()} P übrig</p>`:''}</div>`;
     f.querySelector('#submitPicks').onclick=submitPicks;
     return;
   }
+  /* Abgegebene Tipps sind gesperrt — einmal unten "Tipps bearbeiten" für alle. */
+  const aenderbar=n&&scopeEvs.some(e=>r.picks[e.id]&&!started(e));
   f.innerHTML=`<div class="dock">
     <div class="dockmsg">${n
       ?(frei?`${n} von ${scopeEvs.length} Tipps abgegeben`
@@ -4494,7 +4498,11 @@ function drawDock(){
       :offen?((r.custom||r.modus==='einzel')?'Tipp auf Sieg, Unentschieden oder Niederlage'
              :r.modus==='quotenfix'?'Tipp auf eine Quote — der Einsatz ist automatisch fest'
              :'Tipp auf eine Quote, dann Einsatz mit dem Regler wählen')
-             :(frei?'Die Tippfrist ist vorbei':'Für diesen Spieltag ist die Tippfrist vorbei')}</div></div>`;
+             :(frei?'Die Tippfrist ist vorbei':'Für diesen Spieltag ist die Tippfrist vorbei')}</div>
+    ${aenderbar?`<button class="btn ghost" id="editTips" style="margin-top:9px">${bearbeite?'Fertig':'✎ Tipps bearbeiten'}</button>`:''}</div>`;
+  const eb=f.querySelector('#editTips');
+  if(eb) eb.onclick=()=>{S.editTips=S.editTips||{};
+    if(bearbeite) delete S.editTips[r.id]; else S.editTips[r.id]=true; render();};
 }
 /* Punkte gutschreiben — einmal je Spieltag.
    Bei echten (Firestore-)Runden zählen die wirklich abgegebenen Tipps aller Mitglieder.

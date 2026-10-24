@@ -246,7 +246,7 @@ textarea{min-height:88px;resize:vertical;line-height:1.55}
   -webkit-mask-image:linear-gradient(270deg,#000 0%,transparent 100%);mask-image:linear-gradient(270deg,#000 0%,transparent 100%)}
 .edgeflag svg{width:100%;height:100%;display:block}
 .cornerflag{position:absolute;top:5px;right:-10px;width:64px;height:30px;transform:rotate(-78deg);pointer-events:none;
-  opacity:.62;filter:saturate(.7) brightness(.7);box-shadow:0 0 0 1px rgba(0,0,0,.5)}
+  opacity:.5;filter:saturate(.55) brightness(.5);box-shadow:0 0 0 1px rgba(0,0,0,.5)}
 .cornerflag svg{width:100%;height:100%;display:block}
 .opt{position:relative;overflow:hidden}
 .opt>*{position:relative;z-index:1}
@@ -440,6 +440,27 @@ textarea{min-height:88px;resize:vertical;line-height:1.55}
 .reqrow{display:flex;align-items:center;gap:11px;background:var(--card);border:1px solid var(--line);
   border-radius:13px;padding:12px;margin-bottom:9px}
 .reqrow .nm{flex:1;font-size:14px;font-weight:500}
+.livebox{background:linear-gradient(180deg,rgba(239,68,68,.07),rgba(255,255,255,.02));border:1px solid rgba(239,68,68,.22);
+  border-radius:16px;padding:10px 12px 6px;margin:0 0 18px}
+.lvhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+.lvtag{display:inline-flex;align-items:center;gap:7px;font-size:11px;font-weight:800;letter-spacing:.12em;color:#F87171}
+.lvtag i{width:8px;height:8px;border-radius:50%;background:#EF4444;box-shadow:0 0 0 0 rgba(239,68,68,.6);animation:lvpulse 1.6s infinite}
+@keyframes lvpulse{0%{box-shadow:0 0 0 0 rgba(239,68,68,.55)}70%{box-shadow:0 0 0 7px rgba(239,68,68,0)}100%{box-shadow:0 0 0 0 rgba(239,68,68,0)}}
+.lvtip{font-size:12px;font-weight:700;color:var(--blue);padding:6px 4px}
+.lvrow{width:100%;display:grid;grid-template-columns:34px 1fr auto 34px;align-items:center;gap:8px;padding:9px 0;
+  border-top:1px solid var(--line);text-align:left;color:var(--text)}
+.lvrow .lg{font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.04em}
+.lvrow .tm{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lvrow .sc{font-family:'Poppins';font-weight:800;font-size:15px;color:var(--live)}
+.lvrow .mn{font-size:11px;color:#F87171;font-weight:700;text-align:right}
+.lvsheet{display:flex;flex-direction:column;gap:8px;margin-bottom:6px}
+.lvopt{display:flex;justify-content:space-between;align-items:center;padding:13px 14px;border-radius:12px;background:var(--raise);
+  border:1px solid var(--line-2);color:var(--text);font-size:14px;text-align:left}
+.lvopt b{font-weight:600}
+.lvopt.neu{border-style:dashed;color:var(--blue)}
+.tiplock{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:13px;padding-top:13px;border-top:1px solid var(--line)}
+.tiplock .v{font-size:13px;color:var(--muted)}
+.tiplock .v b{color:var(--blue)}
 .mini{padding:8px 13px;border-radius:10px;font-size:12.5px;font-weight:600}
 .mini.ok{background:var(--blue);color:#04121F}
 .mini.no{background:var(--raise);border:1px solid var(--line-2);color:var(--muted)}
@@ -1006,12 +1027,15 @@ function startLiveTicker(){
   if(liveTimer) return;
   liveTimer=setInterval(async()=>{
     if(!S.ready) return;
-    if(S.screen!=='round'||S.tab!=='tabelle') return;
-    if(!livePhase()) return;
+    const tabelle=S.screen==='round'&&S.tab==='tabelle', start=S.screen==='home';
+    if(!tabelle&&!start) return;
+    if(tabelle?!livePhase():!livePhaseAlle()) return;
     const neu=await loadLive();
     if(!neu) return;
     autoSettle();          // gerade abgepfiffene Spiele sofort endgültig verbuchen
-    if(S.screen==='round'&&S.tab==='tabelle') render();
+    /* Nicht mitten in ein offenes Fenster (Menü, Auswahl) hineinzeichnen. */
+    if(document.querySelector('.xmodal,.drawer')) return;
+    if((S.screen==='round'&&S.tab==='tabelle')||S.screen==='home') render();
   },60000);
 }
 function genPlan(comp='bl1'){
@@ -1817,6 +1841,71 @@ async function logout(){
 }
 
 /* ═══════════ STARTSEITE ═══════════ */
+/* ══════════ LIVE AUF DER STARTSEITE ══════════
+   Höchstens 5 laufende Spiele. Läuft nur eine Liga, kommen bis zu 5 aus ihr;
+   laufen mehrere, abwechselnd je Liga, höchstens 2 pro Liga. Innerhalb einer
+   Liga zuerst die Spiele mit den bekanntesten Vereinen. */
+const LIVE_COMPS=['bl1','bl2','bl3','ucl','eng1','esp1','ita1'];
+const BIG_CLUBS={bayern:10,realmadrid:10,barcelona:10,manchestercity:9,liverpool:9,arsenal:9,parissaint:9,psg:9,
+  dortmund:8,atletico:8,chelsea:8,manchesterunited:8,juventus:8,inter:8,milan:8,leverkusen:7,tottenham:7,napoli:7,
+  leipzig:6,newcastle:6,roma:6,lazio:6,atalanta:6,aston:6,benfica:6,porto:6,ajax:6,sporting:5,
+  stuttgart:5,frankfurt:5,schalke:5,hamburg:5,sevilla:5,villarreal:5,fiorentina:5,koln:4,bremen:4,
+  gladbach:4,hertha:4,betis:4,sociedad:4,wolfsburg:3,union:3,freiburg:3,hannover:3,nurnberg:3,kaiserslautern:3,fortuna:3};
+function clubWert(n){
+  const k=String(n||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z]/g,'');
+  let best=0; for(const [c,v] of Object.entries(BIG_CLUBS)) if(k.includes(c)&&v>best) best=v;
+  return best;
+}
+function liveAuswahl(){
+  const proLiga=LIVE_COMPS.map(id=>({id,evs:evOf(id).filter(e=>e.live&&e.liveScore&&!e.finished)
+    .map(e=>({e,w:clubWert(e.home)+clubWert(e.away)})).sort((a,b)=>b.w-a.w)})).filter(x=>x.evs.length)
+    .sort((a,b)=>b.evs[0].w-a.evs[0].w);
+  if(!proLiga.length) return [];
+  if(proLiga.length===1) return proLiga[0].evs.slice(0,5).map(x=>({comp:proLiga[0].id,ev:x.e}));
+  const out=[];
+  for(let runde=0;runde<2&&out.length<5;runde++)
+    for(const L of proLiga){ if(out.length>=5) break; const x=L.evs[runde]; if(x) out.push({comp:L.id,ev:x.e}); }
+  return out;
+}
+function liveBoxHtml(){
+  const list=liveAuswahl();
+  if(!list.length) return '';
+  return `<div class="livebox">
+    <div class="lvhead"><span class="lvtag"><i></i>LIVE</span>
+      <button class="lvtip" data-livetip="">Jetzt tippen ›</button></div>
+    ${list.map(({comp,ev})=>`<button class="lvrow" data-livetip="${comp}">
+      <span class="lg">${esc(COMPS[comp]?.kurz||'')}</span>
+      <span class="tm">${esc(short(ev.home))} – ${esc(short(ev.away))}</span>
+      <span class="sc">${ev.liveScore.h}:${ev.liveScore.a}</span>
+      <span class="mn">${ev.minute?ev.minute+"'":''}</span></button>`).join('')}
+  </div>`;
+}
+/* "Jetzt tippen": in eine bestehende Runde der Liga springen oder eine neue anlegen. */
+function liveTipSheet(nurComp){
+  const comps=nurComp?[nurComp]:[...new Set(liveAuswahl().map(x=>x.comp))];
+  const card=xModal(`<div class="xm-h">Jetzt tippen</div>
+    ${comps.map(id=>{
+      const runden=myRounds().filter(r=>!r.custom&&r.compId===id);
+      return `<div class="xm-l">${esc(COMPS[id]?.name||id)}</div>
+        <div class="lvsheet">
+          ${runden.map(r=>`<button class="lvopt" data-goround="${r.id}"><b>In „${esc(r.name)}“ tippen</b><span>›</span></button>`).join('')}
+          <button class="lvopt neu" data-newcomp="${id}"><b>+ Neue ${esc(COMPS[id]?.name||'')}-Runde erstellen</b><span>›</span></button>
+        </div>`;}).join('')}`);
+  card.querySelectorAll('[data-goround]').forEach(b=>b.onclick=()=>{xClose();openRound(b.dataset.goround);});
+  card.querySelectorAll('[data-newcomp]').forEach(b=>b.onclick=()=>{
+    xClose();
+    const id=b.dataset.newcomp;
+    if(!needRoom()) return;
+    go('create',{flow:'official',draft:{teams:[],visibility:'private',compId:id,name:''}});
+  });
+}
+function livePhaseAlle(){
+  const now=Date.now();
+  return LIVE_COMPS.some(id=>evOf(id).some(e=>{
+    if(!e.start) return false; const t=e.start.getTime();
+    return t-5*60e3<=now&&now-t<=3.5*3600e3;}));
+}
+
 function vHome(){
   const rank=r=>{const L=xOn(r)?xLedger(r):null;return [...r.members].sort((a,b)=>totalPts(r,b,L)-totalPts(r,a,L)).findIndex(m=>m.id==='me')+1;};
   const mine=myRounds();
@@ -1840,6 +1929,7 @@ function vHome(){
       statt über die Web-Adresse — öffne die App über
       <b>dfsr19.github.io/tipoff</b>.</div>`:''}
 
+    ${liveBoxHtml()}
     <div class="sec">Worauf tippen?<span class="ln"></span></div>
     <div class="complist">
       ${(S.allComps?['bl1','bl2','ufc','bl3','ucl','eng1','esp1','ita1']:['bl1','bl2','ufc','bl3','ucl']).map(id=>{
@@ -1854,7 +1944,6 @@ function vHome(){
             ?`background-image:linear-gradient(100deg,rgba(3,5,12,.84) 30%,rgba(3,5,12,.66) 80%),url('${TOPBG[id]}');background-position:${posX} ${posY}`
             :'background-image:linear-gradient(110deg,#0e1b2e 0%,#17314f 55%,#1d3a5e 100%)'}">
           <span class="ctxt"><b>${esc(c.name)}</b></span>
-          ${edgeFlag(id)}
           ${locked?`<span class="ctag">${ICONS.lock}Premium</span>`:'<span class="arw">›</span>'}
         </button>`;}).join('')}
       <button class="morecomps${S.allComps?' open':''}" id="morecomps">${S.allComps?'Weniger anzeigen':'Alle anzeigen'} <i>⌄</i></button>
@@ -1957,6 +2046,8 @@ function vHome(){
     if(needRoom()) go('create',{flow:'comp',draft:{teams:[],visibility:'private',compId:'bl1'}});};
   app.querySelector('#newbtn').onclick=openCreate;
   app.querySelector('#quicknew').onclick=openCreate;
+  app.querySelectorAll('[data-livetip]').forEach(b=>b.onclick=()=>liveTipSheet(b.dataset.livetip||null));
+  startLiveTicker();
   const mc=app.querySelector('#morecomps');if(mc)mc.onclick=()=>{S.allComps=!S.allComps;render();};
   app.querySelectorAll('[data-comp]').forEach(b=>b.onclick=()=>{
     const id=b.dataset.comp;
@@ -3160,6 +3251,10 @@ function matchCard(ev,isMain){
      Unentschieden/Niederlage — bewusst getrennt vom sonstigen Spielmodus (Regler/
      Quotenfix/Einzel), der weiterhin bestimmt, wie die Punkte berechnet werden. */
   const nurExakt=!!r.exactOnly&&!ev.noOdds;
+  /* Abgegebener Tipp ist gesperrt — erst "Tipp bearbeiten" macht ihn wieder
+     änderbar. So verstellt man nichts aus Versehen beim Durchscrollen. */
+  const editKey=r.id+':'+ev.id;
+  const gesperrt=!!(p&&!zu&&!(r.pendingSync&&r.pendingSync[ev.id])&&!(S.editTips&&S.editTips[editKey]));
   el.innerHTML=`<div class="mtop">${ev.sport==='mma'?(isMain?'<span class="src headtag">Hauptkampf</span>':''):(ev.start?when(ev.start):'')}
     ${ev.noOdds||ev.source==='mkt'||ev.noQuote?'':'<span class="src">Modell</span>'}</div>
     <div class="who">${esc(nm[0])} <em>${ev.sport==='mma'?'vs':'—'}</em> ${esc(nm[1])}</div>
@@ -3194,15 +3289,16 @@ function matchCard(ev,isMain){
       :`<span class="sd">${esc(s.label)}</span><span class="q"${istSieger?' style="color:var(--win)"':''}>${
         s.qx?((R().picks[ev.id]&&R().picks[ev.id].side===s.key)?fq(R().picks[ev.id].q):'–'):fq(s.q)}</span>`)
       +(istSieger?'<span class="siegtag">Sieg</span>':'');
-    if(!zu) b.onclick=()=>pick(ev,s,'tendency');
+    if(!zu&&!gesperrt) b.onclick=()=>pick(ev,s,'tendency');
     else b.style.opacity=warMeinTipp?'1':'.5';
+    if(gesperrt) b.style.cursor='default';
     if(warMeinTipp&&istSieger) b.classList.add('win');
     if(verloren) b.classList.add('lose');
     od.appendChild(b);
   });
   }
 
-  if(ev.exact&&ev.exact.length&&!zu&&!ev.noOdds){
+  if(ev.exact&&ev.exact.length&&!zu&&!gesperrt&&!ev.noOdds){
     const w=document.createElement('div');w.className='exact';
     const best=fq(Math.max(...ev.exact.map(e=>e.q)));
     if(!S.premium){
@@ -3250,7 +3346,15 @@ function matchCard(ev,isMain){
     el.appendChild(w);
   }
 
-  if(p&&!zu&&!ev.noStake){
+  if(gesperrt){
+    const lk=document.createElement('div');lk.className='tiplock';
+    const was=p.type==='exact'?`Genaues Ergebnis ${esc(p.side)}`:'';
+    lk.innerHTML=`<span class="v">${was?was+' · ':''}${ev.noStake?`Quote ${fq(p.q)}`:`<b>${p.stake} P</b> → ${fmt(p.stake*p.q)} P`}</span>
+      <button class="mini no">✎ Tipp bearbeiten</button>`;
+    lk.querySelector('button').onclick=()=>{S.editTips=S.editTips||{};S.editTips[editKey]=true;render();};
+    el.appendChild(lk);
+  }
+  if(p&&!zu&&!gesperrt&&!ev.noStake){
     const s=document.createElement('div');s.className='stake';
     /* Skala bleibt fix bei CFG.budget — sonst rutscht der Punkt auf der Leiste optisch,
        sobald bei einem ANDEREN Tipp mehr Budget verbraucht wird, auch wenn der eigene
@@ -3325,6 +3429,7 @@ async function submitPicks(){
   if(btn){btn.disabled=true;btn.textContent='Einen Moment …';}
   for(const id of ids) await fsSyncPick(r,id);
   r.pendingSync={};
+  if(S.editTips) Object.keys(S.editTips).forEach(k=>{ if(k.startsWith(r.id+':')) delete S.editTips[k]; });
   toast('Tipps abgegeben');
   render();
 }
@@ -4776,6 +4881,9 @@ function vLegal(){
   const [d,fb]=await Promise.all([loadData(),initAuth()]);
   S.ev=d;S.ready=true;
   autoSettle();          // fertige Spieltage sofort verrechnen
+  /* Live-Stände gleich beim Start holen — sonst erscheint der Live-Kasten auf der
+     Startseite erst nach der ersten Minute. */
+  loadLive().then(n=>{ if(n&&S.ready&&!document.querySelector('.xmodal,.drawer')){ autoSettle(); render(); } });
 
   if(fb){
     FB=fb;let last;

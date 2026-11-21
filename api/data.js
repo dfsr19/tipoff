@@ -970,6 +970,10 @@ function ufcAusgabe(store){
       ...(f.res === 'D' ? {result: 'D'} : {}),
       ...(f.res === 'X' ? {result: 'X'} : {}),
       live: f.state === 'in' && !entschieden,
+      /* ESPN-Status je Kampf: 'pre' = noch nicht begonnen, 'in' = läuft, 'post' = vorbei.
+         Danach richtet sich die Tippsperre — die Startzeit allein taugt nicht, weil
+         ESPN allen Kämpfen des Hauptprogramms dieselbe Uhrzeit gibt. */
+      state: f.state || 'pre',
       sides: [
         {key:'A', label: f.a.split(' ').pop(), q: f.q ? f.q.A : null},
         {key:'B', label: f.b.split(' ').pop(), q: f.q ? f.q.B : null}
@@ -980,6 +984,29 @@ function ufcAusgabe(store){
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
+
+  /* Diagnose: /api/data?ufcdebug=1 zeigt, was ESPN für heute/morgen liefert und
+     was im Speicher steht — damit Fehler nicht mehr geraten werden müssen. */
+  if(req.query && req.query.ufcdebug){
+    res.setHeader('Cache-Control', 'no-store');
+    const heute = espnDate(Date.now());
+    const roh = [];
+    for(const ds of [tagAddieren(heute,-1), heute, tagAddieren(heute,1)]){
+      try{
+        const r = await holeMitTimeout(`https://site.api.espn.com/apis/site/v2/sports/mma/ufc/scoreboard?dates=${ds}`);
+        const d = r.ok ? await r.json() : {};
+        (d.events||[]).forEach(ev => roh.push({tag:ds, event:ev.name, id:ev.id, kaempfe:(ev.competitions||[]).map((c,nr)=>({
+          nr, id:c.id, date:c.date, status:c.status?.type?.name, state:c.status?.type?.state,
+          runden:c.format?.regulation?.periods, typ:c.type?.abbreviation||c.type?.text,
+          a:c.competitors?.[0]?.athlete?.fullName, b:c.competitors?.[1]?.athlete?.fullName,
+          extra:Object.keys(c).join(',')}))}));
+      }catch(e){ roh.push({tag:ds, fehler:String(e.message||e)}); }
+    }
+    const store = await kvGet(UFC_STORE_KEY);
+    const nah = Object.values(store?.fights||{}).filter(f => Math.abs(Date.parse(f.date)-Date.now()) < 3*864e5)
+      .map(f => ({id:f.id, k:f.k, a:f.a, b:f.b, date:f.date, state:f.state, res:f.res, weg:f.weg, fehlt:f.fehlt, nr:f.nr, runden:f.runden, ev:f.evName}));
+    return res.status(200).json({espn:roh, speicher:nah, geprueft:store?.geprueft, zurueckBis:store?.zurueckBis});
+  }
   const competitions = [];
 
   /* Gedächtnis der letzten Marktquote je Spiel — damit nach dem Anpfiff die

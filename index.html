@@ -982,6 +982,20 @@ let chatUnsub=null,chatUnsubRoundId=null;
 function stopChatSync(){ if(chatUnsub){ chatUnsub(); chatUnsub=null; chatUnsubRoundId=null; } }
 /* Lädt Spielplan/Quoten UND Live-Stand komplett neu — das, was beim
    Pull-to-Refresh (siehe unten) und über den Button im Menü angestoßen wird. */
+/* UFC-Kampfabend: Daten jede Minute neu holen, damit Tippsperre und Ergebnisse
+   Kampf für Kampf aktuell sind (nicht erst beim nächsten manuellen Neuladen). */
+setInterval(async()=>{
+  try{
+    if(!S.ready||document.visibilityState!=='visible') return;
+    const now=Date.now();
+    const abend=evOf('ufc').some(e=>e.start&&!e.finished&&e.start.getTime()-30*60e3<=now&&now-e.start.getTime()<10*3600e3);
+    if(!abend) return;
+    const d=await loadData(); if(!d||!Object.keys(d).length) return;
+    S.ev=d; autoSettle();
+    const tippt=document.activeElement&&/INPUT|TEXTAREA/.test(document.activeElement.tagName);
+    if(!tippt&&!document.querySelector('.xmodal,.drawer')) render();
+  }catch(e){}
+},60e3);
 async function refreshAll(){
   const d=await loadData();S.ev=d;
   await loadLive();
@@ -1530,7 +1544,12 @@ function allResults(evs,r){
 }
 /* Nach Anpfiff (bzw. bei eigenen datierten Ligen: ab dem Spieltag selbst) ist Schluss mit Tippen.
    lockAt überschreibt start, falls vorhanden — genutzt für den Vortags-Sperrzeitpunkt. */
-const started=ev=>{const t='lockAt' in ev?ev.lockAt:ev.start; return !!t&&t<=new Date();};
+const started=ev=>{
+  /* UFC: Gesperrt wird ein Kampf erst, wenn ESPN ihn als begonnen meldet. ESPN gibt
+     allen Kämpfen des Hauptprogramms dieselbe Startzeit — nach der Uhr wären
+     sonst alle Kämpfe gleichzeitig zu, obwohl die meisten noch gar nicht laufen. */
+  if(ev.sport==='mma'&&ev.state) return ev.state!=='pre'||!!ev.finished;
+  const t='lockAt' in ev?ev.lockAt:ev.start; return !!t&&t<=new Date();};
 const anyResult=(evs,r)=>evs.some(e=>eventResult(e,r));
 
 /* ══════════ RUNDENLIMIT ══════════ */

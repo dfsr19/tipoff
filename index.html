@@ -1570,11 +1570,25 @@ const orderEvents=evs=>{
   const s=evs.slice().sort((a,b)=>a.start-b.start);
   if(!(evs[0]&&evs[0].sport==='mma')) return s;
   s.reverse();
-  /* Hauptkampf ganz nach oben: Er steht im Namen der Card ("UFC Fight Night:
-     Procházka vs. Ulberg"). Die Startzeit allein reicht nicht — bei ESPN haben
-     oft alle Kämpfe des Hauptprogramms dieselbe Uhrzeit. */
+  /* UFC: Reihenfolge wie im echten Kampfprogramm — Hauptkampf oben, dann
+     Co-Hauptkampf, … bis zum ersten Kampf des Abends unten. Grundlage ist ESPNs
+     Kampf-Reihenfolge (nr), nicht die Uhrzeit (die ist bei ESPN für das ganze
+     Hauptprogramm gleich). Die Richtung ergibt sich aus der Lage des Hauptkampfs. */
   const haupt=new Set(ufcHauptkaempfe(evs).map(e=>e.id));
-  return [...s.filter(e=>haupt.has(e.id)),...s.filter(e=>!haupt.has(e.id))];
+  const proCard={};
+  s.forEach(e=>{ const k=e.cardId||'_'; (proCard[k]=proCard[k]||[]).push(e); });
+  const out=[];
+  Object.values(proCard).forEach(list=>{
+    if(list.every(e=>e.nr!=null)){
+      const h=list.find(e=>haupt.has(e.id));
+      const nrs=list.map(e=>e.nr);
+      let richtung=h?(h.nr===Math.max(...nrs)?1:h.nr===Math.min(...nrs)?-1:0):0;
+      if(!richtung) richtung=ufcRichtung()||1;
+      list.sort((a,b)=>richtung>0?b.nr-a.nr:a.nr-b.nr);
+    }
+    out.push(...list.filter(e=>haupt.has(e.id)),...list.filter(e=>!haupt.has(e.id)));
+  });
+  return out;
 };
 /* Hauptkampf jeder Card bestimmen — in dieser Reihenfolge:
    1. Beide Namen stehen im Card-Titel ("UFC Fight Night: Procházka vs. Ulberg").

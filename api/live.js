@@ -278,6 +278,10 @@ function liveInfo(m){
       minute = Number(best.matchMinute) || null;
     }
   }
+  /* OpenLigaDB kennt keine laufende Spielminute — die Minute am letzten Tor wäre
+     veraltet (z. B. 73' statt 83'). Darum hier KEINE Minute: lieber nur "live"
+     als eine falsche Zahl. */
+  minute = null;
   return {score:{h, a}, minute};
 }
 
@@ -304,25 +308,51 @@ export default async function handler(req, res) {
      höchstens 6 Stunden her) mit ESPN abgleichen. Fehlt der Spielplan im KV
      (noch nie geladen), gibt es für diese Liga einfach keinen Live-Stand — die
      Ergebnisse kommen dann nach dem Spiel regulär über api/data.js. */
+  const debug = {};
   await Promise.all(INTL.map(async L => {
+    const dbg = debug[L.id] = {};
     try{
-      const sched = await kvGet('fd-sched-v1-'+L.fd);
-      const spiele = sched && Array.isArray(sched.matches) ? sched.matches : [];
+      let sched = await kvGet('fd-sched-v1-'+L.fd);
+      let spiele = sched && Array.isArray(sched.matches) ? sched.matches : [];
+      dbg.kv = spiele.length;
+      /* Spielplan fehlt im Zwischenspeicher (z. B. frisch gelöscht oder noch nie
+         geladen): direkt bei football-data.org nur die letzten Tage holen. */
+      if(!spiele.length && process.env.FOOTBALL_DATA_KEY){
+        try{
+          const von = espnDay(jetzt-2*864e5), bis = espnDay(jetzt+864e5);
+          const iso = d => d.slice(0,4)+'-'+d.slice(4,6)+'-'+d.slice(6,8);
+          const r = await fetch(`https://api.football-data.org/v4/competitions/${L.fd}/matches?dateFrom=${iso(von)}&dateTo=${iso(bis)}`,
+            {headers:{'X-Auth-Token':process.env.FOOTBALL_DATA_KEY}});
+          dbg.fdHttp = r.status;
+          if(r.ok){
+            const d = await r.json();
+            spiele = (d.matches||[]).filter(m => m.homeTeam && m.awayTeam).map(m => ({
+              id:'fd'+m.id, start:m.utcDate, home:m.homeTeam.name||m.homeTeam.shortName,
+              away:m.awayTeam.name||m.awayTeam.shortName,
+              finished:(m.status==='FINISHED'||m.status==='AWARDED')}));
+          }
+        }catch(e){ dbg.fdFehler = String(e.message||e); }
+      }
       const laufend = spiele.filter(m => {
         const t = Date.parse(m.start);
         return !m.finished && isFinite(t) && t <= jetzt && jetzt - t <= 6*3600e3;
       });
+      dbg.laufend = laufend.length;
       if(!laufend.length) return;                       // nichts zu tun, ESPN gar nicht erst fragen
       const espn = await loadEspnSoccer(L.espn, [espnDay(jetzt-864e5), espnDay(jetzt)]);
+      dbg.espn = espn.length;
+      dbg.espnLive = espn.filter(x => x.live).length;
+      dbg.treffer = 0;
       for(const m of laufend){
         const t0 = Date.parse(m.start);
         const e = espn.find(x => sameTeamIntl(x.home, m.home) && sameTeamIntl(x.away, m.away) &&
           Math.abs(Date.parse(x.start) - t0) < 2*864e5);
-        if(!e) continue;
+        if(!e){ (dbg.ohneTreffer = dbg.ohneTreffer || []).push(m.home+' – '+m.away); continue; }
+        dbg.treffer++;
         if(e.finished && e.score) live[m.id] = {score:e.score, finished:true};
         else if(e.live && e.liveScore) live[m.id] = {score:e.liveScore, minute:e.minute ?? null, finished:false};
       }
-    }catch(e){ /* eine ausgefallene Liga reißt die anderen nicht mit */ }
+    }catch(e){ dbg.fehler = String(e.message||e); }
   }));
 
   await Promise.all(LEAGUES.map(async L => {
@@ -379,5 +409,5 @@ export default async function handler(req, res) {
      trotzdem nur einer wirklich bei OpenLigaDB nach. 25 Sekunden sind kurz
      genug, dass ein Tor spürbar schnell ankommt. */
   res.setHeader('Cache-Control', 'public, s-maxage=25, stale-while-revalidate=15');
-  res.status(200).json({updated:new Date().toISOString(), live});
+  res.status(200).json({updated:new Date().toISOString(), live, ...(req && req.query && req.query.debug ? {debug} : {})});
 }

@@ -795,6 +795,43 @@ function fallbackMatch(m){
 /* ══════════ DATEN ══════════ */
 const net={data:'lade',updated:null,comps:[]};
 /* Ergebnis: {bl1:[...], bl2:[...], ufc:[...]} — je Wettbewerb eine Liste. */
+/* ══════════ UFC: DOPPELTE KÄMPFE ZUSAMMENFÜHREN ══════════
+   Schreiben Quoten-Quelle und Ergebnis-Quelle einen Namen verschieden, kommt ein
+   Kampf zweimal an: einmal mit Quote (darauf wurde getippt, ohne Ergebnis) und
+   einmal beendet ohne Quote. Hier wird das Ergebnis auf den getippten Eintrag
+   übertragen und der Doppelgänger entfernt. Ein Kämpfer kämpft an einem Abend nur
+   einmal — stimmt EIN Name am selben Tag, ist es derselbe Kampf. */
+function nmLocker(a,b){
+  const n=v=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z]/g,'');
+  const x=n(a),y=n(b); if(!x||!y) return false;
+  if(x===y||x.includes(y)||y.includes(x)) return true;
+  const t=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z ]/g,' ').split(/\s+/).filter(Boolean);
+  const ta=t(a),tb=t(b); if(ta.length<2||tb.length<2) return false;
+  const la=ta[ta.length-1],lb=tb[tb.length-1];
+  const ein=(x,y)=>{ if(Math.abs(x.length-y.length)>1) return false; let i=0,j=0,f=0;
+    while(i<x.length&&j<y.length){ if(x[i]===y[j]){i++;j++;continue;} if(++f>1) return false;
+      if(x.length>y.length) i++; else if(y.length>x.length) j++; else {i++;j++;} }
+    return f+(x.length-i)+(y.length-j)<=1; };
+  if(!(la===lb||(la.length>=5&&lb.length>=5&&ein(la,lb)))) return false;
+  const fa=ta[0],fb=tb[0];
+  return fa.startsWith(fb)||fb.startsWith(fa)||(fa.length>=3&&fb.length>=3&&fa.slice(0,3)===fb.slice(0,3));
+}
+function ufcDoppelteZusammenfuehren(list){
+  const weg=new Set();
+  const zeit=e=>e.start instanceof Date?e.start.getTime():Date.parse(e.start);
+  list.forEach(e=>{
+    if(e.finished||weg.has(e)) return;
+    const t=zeit(e); if(!isFinite(t)||t>Date.now()) return;
+    const f=list.find(o=>o!==e&&o.finished&&o.winner&&!weg.has(o)&&isFinite(zeit(o))&&Math.abs(zeit(o)-t)<2*864e5&&
+      (nmLocker(o.home,e.home)||nmLocker(o.home,e.away)||nmLocker(o.away,e.home)||nmLocker(o.away,e.away)));
+    if(!f) return;
+    const sieger=f.winner==='A'?f.home:f.away, verlierer=f.winner==='A'?f.away:f.home;
+    const w=nmLocker(sieger,e.home)?'A':nmLocker(sieger,e.away)?'B':nmLocker(verlierer,e.home)?'B':nmLocker(verlierer,e.away)?'A':null;
+    if(!w) return;
+    e.finished=true; e.winner=w; weg.add(f);
+  });
+  return list.filter(e=>!weg.has(e));
+}
 async function loadData(){
   try{
     const r=await fetch(CFG.dataUrl+'?t='+Date.now(),{cache:'no-store'});
@@ -1343,6 +1380,7 @@ const R=()=>ROUNDS[S.roundId];
    noStake = KEIN Einsatz/Budget nötig (bei 'quotenfix' UND 'einzel')
    Kopien statt Mutation, damit die geteilten Original-Events anderer Runden
    auf demselben Wettbewerb unangetastet bleiben. */
+const ufcIrgendwerGetippt=(r,id)=>!!((r.picks&&r.picks[id])||Object.values(r.memberPicks||{}).some(mp=>mp&&mp[id]));
 const withModus=(r,list)=>{
   if(r.custom||r.modus==='regler'||!r.modus) return list;
   const noOdds=r.modus==='einzel';
@@ -1350,7 +1388,7 @@ const withModus=(r,list)=>{
 };
 const eventsOf=(r,d)=> withModus(r, r.custom ? r.events.filter(e=>e.day===d)
   : !COMPS[r.compId] ? []
-  : r.sport==='mma' ? evOf(r.compId)
+  : r.sport==='mma' ? evOf(r.compId).filter(e=>e.result!=='X'||ufcIrgendwerGetippt(r,e.id))
   : evOf(r.compId).filter(m=>m.day===d));
 
 /* ══════════ ECHTE ERGEBNISSE ══════════
@@ -1372,6 +1410,9 @@ function eventResult(ev,r){
   }
   if(!ev.finished) return null;
   if(ev.sport==='mma'){
+    /* Unentschieden / No Contest / abgesagt: kein Sieger — niemand bekommt Punkte. */
+    if(ev.result==='D') return{side:'-',text:'Unentschieden / No Contest',real:true,ohneSieger:true};
+    if(ev.result==='X') return{side:'-',text:'Abgesagt — keine Wertung',real:true,ohneSieger:true};
     if(!ev.winner) return null;
     const w=ev.sides.find(x=>x.key===ev.winner);
     return{side:ev.winner,text:(w?w.label:'Sieger')+' gewinnt',real:true};
@@ -1425,6 +1466,7 @@ function livePtsOf(r,m){
    dasselbe steht. Nach dem Verbuchen (settledEvents) fallen sie hier raus. */
 function unsettledPtsOf(r,m){
   if(!r||r.custom) return 0;
+  if(ufcAbgeleitet(r)) return 0;     // UFC: Punkte werden komplett aus den Ergebnissen berechnet
   const list=withModus(r, evOf(r.compId));
   r.settledEvents=r.settledEvents||{};
   const theirs=m.id==='me'?r.picks:((r.memberPicks&&r.memberPicks[m.id])||{});
@@ -1443,20 +1485,39 @@ function unsettledPtsOf(r,m){
    damit eine gerade erst beendete Card nicht sofort von der nächsten verdrängt wird. */
 const KARENZ_MS=2.5*864e5;
 function ufcCards(evs){
+  /* Gruppiert nach der echten Card (ESPN-Event), sonst nach Zeitabstand. */
   const mitDatum=evs.filter(e=>e.start).sort((a,b)=>a.start-b.start);
   const ohneDatum=evs.filter(e=>!e.start);
   const cards=[];
   const FENSTER=2*864e5;
   mitDatum.forEach(e=>{
-    const t=e.start.getTime(), last=cards[cards.length-1];
-    if(last&&t-last.lastStart<=FENSTER){ last.evs.push(e); last.lastStart=Math.max(last.lastStart,t); }
-    else cards.push({evs:[e], lastStart:t});
+    const t=e.start.getTime();
+    let c=e.cardId?cards.find(x=>x.id===e.cardId):null;
+    if(!c&&!e.cardId){ const last=cards[cards.length-1]; if(last&&!last.id&&t-last.lastStart<=FENSTER) c=last; }
+    if(c){ c.evs.push(e); c.lastStart=Math.max(c.lastStart,t); c.firstStart=Math.min(c.firstStart,t); }
+    else cards.push({id:e.cardId||null,name:e.cardName||'',evs:[e],lastStart:t,firstStart:t});
   });
+  cards.sort((a,b)=>a.firstStart-b.firstStart);
   if(ohneDatum.length){
     if(cards.length) cards[cards.length-1].evs.push(...ohneDatum);
-    else cards.push({evs:ohneDatum, lastStart:0});
+    else cards.push({id:null,name:'',evs:ohneDatum,lastStart:0,firstStart:0});
   }
+  cards.forEach(c=>{
+    const d=new Date(c.firstStart);
+    c.key=c.id||('t'+c.firstStart);
+    /* Stabile Kennung je Card (JJJJMMTT) — bleibt gleich, auch wenn ältere Cards dazukommen. */
+    c.d=c.firstStart?Number(d.toLocaleDateString('sv-SE',{timeZone:'Europe/Berlin'}).replace(/-/g,'')):1;
+    c.datum=c.firstStart?d.toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit'}):'';
+  });
   return cards;
+}
+/* Welche Card gerade angezeigt wird: die gewählte, sonst die aktuelle. */
+function ufcKarteWahl(r){
+  const cards=ufcCards(eventsOf(r,1));
+  if(!cards.length) return {cards,idx:-1};
+  let idx=S.ufcCard?cards.findIndex(c=>c.key===S.ufcCard):-1;
+  if(idx<0){ idx=cards.findIndex(c=>cardIstAktuell(c,r)); if(idx<0) idx=cards.length-1; }
+  return {cards,idx};
 }
 function cardIstAktuell(card,r){
   return card.evs.some(e=>!eventResult(e,r)) || (Date.now()-card.lastStart)<KARENZ_MS;
@@ -1481,7 +1542,9 @@ function needRoom(){
   go('premium'); return false;
 }
 const myRounds=()=>Object.values(ROUNDS).filter(r=>r.joined);
-const pool=()=>{const r=R(); return r?eventsOf(r,S.day):[];};
+const pool=()=>{const r=R(); if(!r) return [];
+  if(r.sport==='mma'&&!r.custom){ const {cards,idx}=ufcKarteWahl(r); return idx<0?[]:cards[idx].evs; }
+  return eventsOf(r,S.day);};
 /* Reihenfolge der Karten: Fußball nach Anstoß, UFC umgekehrt — der Hauptkampf
    steht in den Rohdaten zeitlich zuletzt, soll aber ganz oben erscheinen. */
 const orderEvents=evs=>{
@@ -3145,7 +3208,7 @@ function vRound(){
   <nav>${tabs.map(t=>`<button data-t="${t}" aria-selected="${S.tab===t}">${
     {tippen:'Tippen',ergebnis:'Ergebnis',tabelle:'Tabelle',chat:'Chat',info:'Runde'}[t]
     }</button>`).join('')}</nav>
-  ${(S.tab==='tippen'||S.tab==='ergebnis')&&fb?'<div class="days" id="days"></div>':''}
+  ${(S.tab==='tippen'||S.tab==='ergebnis')&&(fb||(r.sport==='mma'&&!r.custom))?'<div class="days" id="days"></div>':''}
   ${S.tab==='tippen'&&!r.custom&&r.modus==='regler'?'<div id="budgetbar"></div>':''}
   ${S.tab==='tippen'&&(r.custom||r.modus!=='regler')?'<div id="modushint"></div>':''}
   </div>
@@ -3154,6 +3217,7 @@ function vRound(){
   app.querySelector('#menu').onclick=()=>{S.menu=true;drawMenu();};
   app.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{S.tab=b.dataset.t;S.picker=false;render();});
   if((S.tab==='tippen'||S.tab==='ergebnis')&&fb) drawDays();
+  if((S.tab==='tippen'||S.tab==='ergebnis')&&r.sport==='mma'&&!r.custom) drawUfcCards();
   ({tippen:tabTip,ergebnis:tabEntry,tabelle:tabTable,chat:tabChat,info:tabInfo}[S.tab])();
 }
 /* Kleines, schlichtes Pokal-Symbol fürs Finale — bewusst kein Standard-Emoji. */
@@ -3180,6 +3244,23 @@ function drawDays(){
     if(c) el.scrollLeft=c.offsetLeft-155;});
 }
 
+/* UFC: eine Leiste mit allen Cards (Datum) — nach links wischen = ältere Cards. */
+function drawUfcCards(){
+  const el=app.querySelector('#days'),r=R(); if(!el) return;
+  const {cards,idx}=ufcKarteWahl(r);
+  el.innerHTML='';
+  cards.forEach((c,i)=>{
+    const b=document.createElement('button');
+    b.className='ufcchip';
+    b.textContent=c.datum||'–';
+    b.setAttribute('aria-current',i===idx);
+    if(c.evs.every(e=>eventResult(e,r))) b.classList.add('done');
+    b.onclick=()=>{S.ufcCard=c.key;render();};
+    el.appendChild(b);
+  });
+  requestAnimationFrame(()=>{const c=el.querySelector('[aria-current="true"]');
+    if(c) el.scrollLeft=c.offsetLeft-155;});
+}
 function tabTip(){
   const b=app.querySelector('#body'),evs=pool(),r=R();
   if(!S.ready&&!r.custom) return b.innerHTML='<div class="empty">Spielplan wird geladen …</div>';
@@ -3221,23 +3302,16 @@ function tabTip(){
   /* Bei UFC: vergangenes Event und aktuelle Karte klar mit eigener Überschrift trennen,
      statt sie einfach nur chronologisch durchlaufen zu lassen. Eine Card bleibt noch
      eine Karenzzeit lang "aktuell", auch wenn sie schon komplett entschieden ist. */
-  const mmaKarten=r.sport==='mma'?ufcCards(evs):[];
-  const aktuelleIds=new Set(mmaKarten.filter(c=>cardIstAktuell(c,r)).flatMap(c=>c.evs.map(e=>e.id)));
   const orderedEvs=orderEvents(evs);
-  const firstCurrentIdx=orderedEvs.findIndex(e=>!(e.sport==='mma'&&!aktuelleIds.has(e.id)));
-  let letzteGruppe=null;
-  orderedEvs.forEach((ev,i)=>{
-    if(ev.sport==='mma'){
-      const istVergangen=!aktuelleIds.has(ev.id);
-      const gruppe=istVergangen?'past':'current';
-      if(gruppe!==letzteGruppe){
-        b.insertAdjacentHTML('beforeend',`<div class="sec" style="margin:${letzteGruppe?'18px':'0'} 0 10px;
-          color:${istVergangen?'var(--muted)':'var(--blue)'}">${istVergangen?'Vergangenes Event':'Aktuelle Karte'}<span class="ln"></span></div>`);
-        letzteGruppe=gruppe;
-      }
+  if(r.sport==='mma'&&!r.custom){
+    const {cards,idx}=ufcKarteWahl(r), c=cards[idx];
+    if(c){
+      const vorbei=c.evs.every(e=>eventResult(e,r));
+      b.insertAdjacentHTML('beforeend',`<div class="sec" style="margin:0 0 10px;color:${vorbei?'var(--muted)':'var(--blue)'}">
+        ${esc(c.name||'Fight Night')} · ${esc(c.datum)}<span class="ln"></span></div>`);
     }
-    b.appendChild(matchCard(ev,ev.sport==='mma'&&i===firstCurrentIdx));
-  });
+  }
+  orderedEvs.forEach((ev,i)=>b.appendChild(matchCard(ev,ev.sport==='mma'&&i===0)));
   drawDock();
 }
 
@@ -3276,7 +3350,7 @@ function matchCard(ev,isMain){
     b.setAttribute('aria-pressed',!!(p&&p.type!=='exact'&&p.side===s.key));
     const istSieger=res&&res.side===s.key;
     const warMeinTipp=p&&p.side===s.key;
-    const verloren=warMeinTipp&&res&&!istSieger;
+    const verloren=!(res&&res.ohneSieger)&&(warMeinTipp&&res&&!istSieger);
     /* Ohne Quoten sind "1"/"2" als Beschriftung zu abstrakt — dort steht stattdessen
        der Mannschaftsname (bei MMA ist s.label schon der Kämpfername, bleibt also
        unverändert). "X" für Unentschieden bleibt in jedem Fall stehen. */
@@ -3384,7 +3458,7 @@ function matchCard(ev,isMain){
   if(res&&p){
     const pts=ptsFor(p,res,ev),hit=pts>0;
     const exactHit=p.type==='exact'&&res&&res.exact===p.side;
-    el.classList.add(hit?'hit':'miss');
+    if(!res.ohneSieger) el.classList.add(hit?'hit':'miss');   // Unentschieden/Absage: neutral
     const d=document.createElement('div');d.className='res';
     d.innerHTML=`<span style="color:var(--muted)">${esc(res?.text||'—')}
       ${hit&&p.type==='exact'&&!exactHit?'<span class="tend">Tendenz</span>':''}</span>
@@ -3572,14 +3646,9 @@ function tabTable(){
     /* Bei UFC gibt's kein "Spieltag N" — stattdessen: vergangene Kämpfe zuerst,
        farblich abgesetzt, dann die aktuelle Karte (bleibt noch eine Karenzzeit
        lang "aktuell", auch wenn sie schon komplett entschieden ist). */
-    const all=orderEvents(eventsOf(r,1));
-    const karten=ufcCards(all);
-    const aktuelleIds=new Set(karten.filter(c=>cardIstAktuell(c,r)).flatMap(c=>c.evs.map(e=>e.id)));
-    const aktuell=all.filter(e=>aktuelleIds.has(e.id));
-    const vergangen=all.filter(e=>!aktuelleIds.has(e.id));
-    days=[];
-    if(aktuell.length) days.push({evs:aktuell,stage:'Aktuelle Karte',past:false});
-    if(vergangen.length) days.push({evs:vergangen,stage:'Vergangene Kämpfe',past:true});
+    const {cards,idx}=ufcKarteWahl(r);
+    const akt=cards.findIndex(c=>cardIstAktuell(c,r));
+    days=cards.map((c,i)=>({evs:orderEvents(c.evs),stage:'Fight Night '+c.datum,past:akt<0?true:i<akt}));
   }else{
     const mx=maxDay(r),aktuellerTag=nextDayOf(r);
     days=[]; for(let d=1;d<=mx;d++){ const de=orderEvents(eventsOf(r,d)); if(de.length) days.push({d,evs:de,stage:de[0]&&de[0].stage,past:d<aktuellerTag}); }
@@ -3612,6 +3681,7 @@ function tabTable(){
       if(tend===lv.side) return `<span style="color:var(--live);font-weight:700">${label}</span>${ptsTag(ptsFor(p,lv,ev))}`;
       return `<span style="opacity:.45">${label}</span>`;
     }
+    if(res.ohneSieger) return `<span style="opacity:.45" title="${esc(res.text)}">${label}</span>`;
     if(tend===res.side) return `<span style="color:var(--win)">${label}</span>${ptsTag(ptsFor(p,res,ev))}`;
     return `<span style="color:var(--bad)">${label}</span>`;
   };
@@ -3744,9 +3814,8 @@ const xNewId=()=>'g'+Date.now().toString(36)+Math.random().toString(36).slice(2,
 function xDays(r){
   let raw=[];
   if(r.sport==='mma'){
-    ufcCards(orderEvents(eventsOf(r,1))).forEach((c,i)=>{
-      const s=c.evs.find(e=>e.start)?.start;
-      raw.push({d:i+1,evs:c.evs,label:s?'Fight Night '+s.toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit'}):'Fight Night'});
+    ufcCards(orderEvents(eventsOf(r,1))).forEach(c=>{
+      raw.push({d:c.d,evs:c.evs,label:c.datum?'Fight Night '+c.datum:'Fight Night'});
     });
   }else{
     const mx=maxDay(r);
@@ -3835,7 +3904,8 @@ function xLedger(r){
       else{ add(settled,g.by,-XG_DBL_LOSS); log.push({t:endT(e),ico:'🎲',text:`Nichts – ${xName(r,g.by)} verliert ${XG_DBL_LOSS} Punkte`}); }
     }
     else if(g.type==='pot'){
-      const x=days.find(v=>v.d===g.day); if(!x) return;
+      /* Ältere UFC-Pötte trugen "Tag 1" — die zugehörige Card über den Zeitpunkt finden. */
+      const x=days.find(v=>v.d===g.day)||(r.sport==='mma'&&g.day<1e7&&g.t?xDayAt(days,g.t):null); if(!x) return;
       const pl=Object.entries(g.players||{}).sort((a,b)=>a[1]-b[1]);
       log.push({t:g.t,ico:'💰',text:`${xName(r,g.by)} eröffnet einen Pott für den ${x.label}: ${g.stake} Punkte Einsatz`,pot:g});
       pl.forEach(([uid,t])=>{ if(uid!==g.by) log.push({t,ico:'💰',text:`${xName(r,uid)} steigt in den Pott ein`}); });
@@ -4208,6 +4278,7 @@ function ensureRoundSync(r){
     }
     if(d.settledEvents) cur.settledEvents=d.settledEvents;
     try{ rekeyPicks(cur); }catch(e){}
+    try{ if(ufcAbgeleitet(cur)&&S.ready) ufcPunkteAnwenden(cur,false); }catch(e){}
     if(S.screen!=='round'||S.roundId!==rid||document.querySelector('.xmodal')) return;
     if(S.tab==='chat'){
       const list=document.getElementById('chatList');
@@ -4574,7 +4645,7 @@ function rekeyPicks(r){
   const fix=(picks,eigen)=>Object.entries(picks||{}).forEach(([id,p])=>{
     const e=byId[id]; if(!e||!p||p.type==='exact') return;
     if(p.n){
-      const k=nmGleich(p.n,e.home)?'A':nmGleich(p.n,e.away)?'B':null;
+      const k=nmLocker(p.n,e.home)?'A':nmLocker(p.n,e.away)?'B':null;
       if(k&&k!==p.side) p.side=k;
     }else if(eigen&&(e.fest||!e.finished)){
       /* Alte eigene Tipps nachträglich mit Namen versehen — aber nur, wenn die
@@ -4585,6 +4656,72 @@ function rekeyPicks(r){
   });
   fix(r.picks,true);
   Object.values(r.memberPicks||{}).forEach(mp=>fix(mp,false));
+}
+
+/* ══════════ UFC: PUNKTE AUS DEN ERGEBNISSEN BERECHNEN ══════════
+   Früher wurden Punkte bei jeder Auswertung auf den Kontostand addiert. Werteten
+   zwei Handys gleichzeitig aus, oder wurde ein Ergebnis später korrigiert, war der
+   Stand dauerhaft falsch — und änderte sich Tage später "ohne Sinn".
+   Jetzt: Der Punktestand jedes Mitglieds ist die SUMME über alle seine Tipps,
+   jeweils Einsatz × Quote bei richtigem Sieger, sonst 0 (auch bei Unentschieden,
+   No Contest oder Absage). Das Ergebnis ist bei jedem Handy und bei jeder
+   Berechnung identisch — egal wer wann auswertet. */
+/* Nur mit den neuen Server-Daten (erkennbar an der Card-Kennung) — sonst bleibt alles beim Alten. */
+const ufcAbgeleitet=r=>!!(r&&!r.custom&&r.sport==='mma'&&r.fsId&&net.data==='live'&&evOf(r.compId).some(e=>e.cardId));
+function ufcTippFinden(byId,alle,id,p){
+  if(byId[id]) return byId[id];
+  /* Tipp mit unbekannter ID (stammt aus der alten Datenaufbereitung): über den
+     Kämpfernamen zuordnen — aber nur, wenn genau EIN Kampf passt. */
+  const nz=v=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z]/g,'');
+  let treffer=[];
+  if(p&&p.n) treffer=alle.filter(e=>nmLocker(p.n,e.home)||nmLocker(p.n,e.away));
+  /* Alte IDs enthalten beide Namen ("mma-<name>-<name>"). */
+  if(treffer.length!==1&&/^mma-/.test(id)) treffer=alle.filter(e=>id.includes(nz(e.home))&&id.includes(nz(e.away)));
+  return treffer.length===1?treffer[0]:null;
+}
+function ufcPunkte(r){
+  const alle=evOf(r.compId), byId={}; alle.forEach(e=>byId[e.id]=e);
+  r.settledEvents=r.settledEvents||{};
+  const out={}; let sicher=true; const entschieden=new Set();
+  r.members.forEach(m=>{
+    const uid=m.id==='me'?myUid():m.id;
+    const theirs=m.id==='me'?(r.picks||{}):((r.memberPicks&&r.memberPicks[uid])||null);
+    if(!theirs){ if(m.pts>0) sicher=false; out[m.id]=m.pts; return; }
+    let sum=0;
+    Object.entries(theirs).forEach(([id,p])=>{
+      if(!p) return;
+      const ev=ufcTippFinden(byId,alle,id,p);
+      if(!ev){
+        /* Schon einmal gewertet, Kampf aber nicht mehr auffindbar → lieber nichts
+           anfassen als Punkte zu verlieren. */
+        if(r.settledEvents[id]) sicher=false;
+        return;
+      }
+      const res=eventResult(ev,r);
+      if(!res) return;
+      entschieden.add(ev.id);
+      let pk=p;
+      if(p.n&&!res.ohneSieger){
+        const k=nmLocker(p.n,ev.home)?'A':nmLocker(p.n,ev.away)?'B':p.side;
+        if(k!==p.side) pk={...p,side:k};
+      }
+      sum+=ptsFor(pk,res,withModus(r,[ev])[0]);
+    });
+    out[m.id]=Math.round(sum*100)/100;
+  });
+  return {pts:out,sicher,entschieden};
+}
+function ufcPunkteAnwenden(r,schreiben=true){
+  const {pts,sicher,entschieden}=ufcPunkte(r);
+  if(!sicher){ console.warn('UFC-Punkte: Runde',r.id,'nicht sicher berechenbar — alter Stand bleibt'); return null; }
+  let anders=false; const gain={};
+  r.members.forEach(m=>{
+    const neu=pts[m.id]; if(neu==null) return;
+    if(Math.abs((m.pts||0)-neu)>0.004){ gain[m.id]=neu-(m.pts||0); m.pts=neu; anders=true; }
+  });
+  entschieden.forEach(id=>{ if(!r.settledEvents[id]){ r.settledEvents[id]=true; anders=true; } });
+  if(anders&&schreiben) fsSyncSettle(r);
+  return anders?gain:null;
 }
 
 /* ══════════ AUTOMATISCHE AUSWERTUNG ══════════
@@ -4603,6 +4740,7 @@ function autoSettle(){
     try{
       r.settledEvents=r.settledEvents||{};
       rekeyPicks(r);
+      if(ufcAbgeleitet(r)){ if(ufcPunkteAnwenden(r)) n++; return; }
       const list=withModus(r, r.custom?(r.events||[]):evOf(r.compId));
       const getippteIds=new Set([
         ...Object.keys(r.picks||{}),
@@ -4909,6 +5047,7 @@ function vLegal(){
           Object.keys(ROUNDS).forEach(k=>delete ROUNDS[k]);
           render();
           await fsLoadMyRounds();
+          if(S.ready){ try{ autoSettle(); }catch(e){} }   // Runden kamen nach den Daten: gleich auswerten
           await tryPendingJoin();
           if(S.premiumReturn==='success'){
             toast('Zahlung erhalten — Premium wird aktiviert …');

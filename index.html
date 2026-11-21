@@ -1549,8 +1549,75 @@ const pool=()=>{const r=R(); if(!r) return [];
    steht in den Rohdaten zeitlich zuletzt, soll aber ganz oben erscheinen. */
 const orderEvents=evs=>{
   const s=evs.slice().sort((a,b)=>a.start-b.start);
-  return evs[0]&&evs[0].sport==='mma'?s.reverse():s;
+  if(!(evs[0]&&evs[0].sport==='mma')) return s;
+  s.reverse();
+  /* Hauptkampf ganz nach oben: Er steht im Namen der Card ("UFC Fight Night:
+     Procházka vs. Ulberg"). Die Startzeit allein reicht nicht — bei ESPN haben
+     oft alle Kämpfe des Hauptprogramms dieselbe Uhrzeit. */
+  const haupt=new Set(ufcHauptkaempfe(evs).map(e=>e.id));
+  return [...s.filter(e=>haupt.has(e.id)),...s.filter(e=>!haupt.has(e.id))];
 };
+/* Hauptkampf jeder Card bestimmen — in dieser Reihenfolge:
+   1. Beide Namen stehen im Card-Titel ("UFC Fight Night: Procházka vs. Ulberg").
+   2. Kein/kein passender Titel (z. B. nur "UFC 335"): Hauptkämpfe gehen über
+      5 Runden, alle anderen über 3. Unter den 5-Runden-Kämpfen gewinnt einer mit
+      einem Namen aus dem Titel, sonst entscheidet ESPNs Reihenfolge.
+   3. In welcher Richtung ESPN den Hauptkampf listet (vorne oder hinten), lernt
+      die App selbst an allen Cards, bei denen der Titel den Hauptkampf eindeutig
+      verrät — sie rät das also nicht. */
+const ufcNz=v=>String(v||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/[^a-z0-9 ]/g,' ').trim();
+const ufcNach=v=>ufcNz(v).split(/\s+/).filter(Boolean).pop()||'';
+function ufcTitelNamen(cardName){
+  const t=String(cardName||'').split(':');
+  if(t.length<2) return [];
+  return ufcNz(t.slice(1).join(' ')).split(/\bvs\b/).map(x=>x.trim().split(/\s+/).filter(w=>!/^\d+$/.test(w)).pop()).filter(Boolean);
+}
+function ufcTitelTreffer(list){
+  const teile=ufcTitelNamen(list[0]&&list[0].cardName);
+  if(teile.length<2) return null;
+  const t=list.filter(e=>{const n=[ufcNach(e.home),ufcNach(e.away)];return n.includes(teile[0])&&n.includes(teile[1]);});
+  return t.length===1?t[0]:null;
+}
+let ufcRichtungCache=null;
+function ufcRichtung(){
+  /* +1 = Hauptkampf steht bei ESPN hinten, -1 = vorne, 0 = noch unbekannt */
+  const alle=(typeof evOf==='function'?evOf('ufc'):[])||[];
+  const key=alle.length; if(ufcRichtungCache&&ufcRichtungCache.k===key) return ufcRichtungCache.v;
+  const proCard={}; alle.forEach(e=>{ if(e.cardId&&e.nr!=null)(proCard[e.cardId]=proCard[e.cardId]||[]).push(e); });
+  let hinten=0,vorne=0;
+  Object.values(proCard).forEach(list=>{
+    if(list.length<3) return;
+    const h=ufcTitelTreffer(list); if(!h) return;
+    const nrs=list.map(e=>e.nr);
+    if(h.nr===Math.max(...nrs)) hinten++; else if(h.nr===Math.min(...nrs)) vorne++;
+  });
+  const v=hinten>vorne?1:vorne>hinten?-1:0;
+  ufcRichtungCache={k:key,v};
+  return v;
+}
+function ufcHauptkaempfe(evs){
+  const proCard={};
+  evs.forEach(e=>{ const k=e.cardId||'_'; (proCard[k]=proCard[k]||[]).push(e); });
+  const out=[];
+  Object.values(proCard).forEach(list=>{
+    const sicher=ufcTitelTreffer(list);
+    if(sicher){ out.push(sicher); return; }
+    let kand=list.filter(e=>e.runden===5);
+    if(!kand.length) kand=list;
+    const teile=ufcTitelNamen(list[0]&&list[0].cardName);
+    const einer=kand.filter(e=>teile.some(t=>[ufcNach(e.home),ufcNach(e.away)].includes(t)));
+    if(einer.length===1){ out.push(einer[0]); return; }
+    if(kand.length===1){ out.push(kand[0]); return; }
+    const r=ufcRichtung();
+    const mitNr=kand.filter(e=>e.nr!=null);
+    if(r!==0&&mitNr.length===kand.length){
+      out.push(kand.reduce((a,b)=>(r>0?b.nr>a.nr:b.nr<a.nr)?b:a)); return;
+    }
+    /* Letzter Ausweg: spätester Kampfbeginn. */
+    out.push(kand.reduce((a,b)=>(b.start||0)>(a.start||0)?b:a));
+  });
+  return out;
+}
 const dayKey=()=>R().sport==='mma'?1:S.day;
 const dayPicks=()=>{const ids=new Set(pool().map(e=>e.id));
   return Object.entries(R().picks).filter(([k])=>ids.has(k));};

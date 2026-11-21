@@ -795,12 +795,12 @@ async function espnUfcTag(ds){
       const evName = ev.name || ev.shortName || 'UFC';
       if(/contender series/i.test(evName)) continue;        // Dana White's Contender Series ist keine Card
       if(ev.id) events.push(String(ev.id));
-      for(const comp of ev.competitions || []){
+      (ev.competitions || []).forEach((comp, nr) => {
         const cs = comp.competitors || [];
-        if(cs.length < 2) continue;
+        if(cs.length < 2) return;
         const nm = c => c?.athlete?.fullName || c?.athlete?.displayName || c?.displayName || null;
         const id = c => String(c?.athlete?.id || c?.id || '');
-        if(!nm(cs[0]) || !nm(cs[1]) || !comp.id) continue;
+        if(!nm(cs[0]) || !nm(cs[1]) || !comp.id) return;
         const typ = comp.status?.type || {};
         const sieger = cs.find(c => c.winner === true);
         kaempfe.push({
@@ -810,9 +810,12 @@ async function espnUfcTag(ds){
           state: typ.state || 'pre',
           fertig: !!typ.completed,
           abgesagt: /CANCEL|POSTPON|FORFEIT/i.test(String(typ.name || '')),
-          siegerId: sieger ? id(sieger) : null, siegerName: sieger ? nm(sieger) : null
+          siegerId: sieger ? id(sieger) : null, siegerName: sieger ? nm(sieger) : null,
+          /* Für die Hauptkampf-Erkennung: Position in ESPNs Liste und Rundenzahl
+             (Hauptkämpfe gehen über 5 Runden, normale Kämpfe über 3). */
+          nr, runden: Number(comp.format?.regulation?.periods) || null
         });
-      }
+      });
     }
     return {ok:true, kaempfe, events};
   }catch(e){ return {ok:false, kaempfe:[], events:[]}; }
@@ -918,6 +921,7 @@ async function ufcAktualisieren(){
           if(qa && qb) f.q = {A:qa, B:qb};
         }
       }
+      f.nr = k.nr; f.runden = k.runden;
       f.ev = k.ev; f.evName = k.evName; f.evDate = k.evDate; f.date = k.date; f.state = k.state;
       f.fehlt = 0;
       if(f.weg){ f.weg = false; if(f.res === 'X') f.res = null; }   // doch wieder da
@@ -960,6 +964,7 @@ function ufcAusgabe(store){
       id: f.id, day: 1, sport: 'mma', source: 'mkt', fest: true,
       start: f.date, home: f.a, away: f.b,
       cardId: f.ev, cardName: f.evName, cardStart: f.evDate,
+      nr: f.nr ?? null, runden: f.runden ?? null,
       finished: entschieden,
       ...(f.res === 'A' || f.res === 'B' ? {winner: f.res} : {}),
       ...(f.res === 'D' ? {result: 'D'} : {}),
